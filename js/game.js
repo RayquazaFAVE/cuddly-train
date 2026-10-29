@@ -59,17 +59,24 @@
   };
 
   const ITEMS = {
-    stone: { name: 'Stone', color: '#98a4b2', value: 1 },
-    coal: { name: 'Coal', color: '#5d6675', value: 4 },
-    copper: { name: 'Copper', color: '#d58a4d', value: 12 },
+    stone: { name: 'Stone', color: '#98a4b2' },
+    coal: { name: 'Coal', color: '#5d6675' },
+    copper: { name: 'Copper', color: '#d58a4d' },
+    ingot: { name: 'Copper Ingot', color: '#e8a86a' },
   };
+
+  const MELT_COAL = 1; // coal burned per melt
+  const MELT_COPPER = 1; // copper fed into the top per melt
+  const UPGRADE_COST = 3; // ingots per tool upgrade
+  const MAX_TIER = 2;
 
   /* -------------------------------------------------------------- balance */
 
   const BALANCE = {
     playerMaxHp: 100,
     // A normal slime hits for 20, so five of them finish the player off.
-    swordDamage: 10, // 3 hits to kill a 30 HP slime
+    swordDamage: 10, // T1: 10 damage, so 3 hits to kill a 30 HP slime
+    swordDamageT2: 15, // T2: 2 hits
     pickaxeReach: 2.2 * TS,
     pickaxeCooldown: 0.3,
     swordCooldown: 0.36,
@@ -81,6 +88,8 @@
     slimeHp: 30,
     slimeDamage: 20,
     slimeSpeed: 54,
+    slimeDetect: 4 * TS, // slimes notice you from 4 tiles away
+    tinyDetect: 2 * TS, // tiny slimes are much shorter sighted
     slimeRadius: 14,
     tinyHp: 15,
     tinyDamage: 10,
@@ -108,6 +117,25 @@
     mute: document.getElementById('mute'),
     menu: document.getElementById('menu'),
     pause: document.getElementById('pause'),
+    station: document.getElementById('station'),
+    viewMelter: document.getElementById('view-melter'),
+    viewForge: document.getElementById('view-forge'),
+    slotFuel: document.getElementById('slot-fuel'),
+    slotInput: document.getElementById('slot-input'),
+    fuelGem: document.getElementById('fuel-gem'),
+    fuelCount: document.getElementById('fuel-count'),
+    inputGem: document.getElementById('input-gem'),
+    inputCount: document.getElementById('input-count'),
+    meltBtn: document.getElementById('melt-btn'),
+    melterHint: document.getElementById('melter-hint'),
+    forgeIngots: document.getElementById('forge-ingots'),
+    forgePickTier: document.getElementById('forge-pick-tier'),
+    forgeSwordTier: document.getElementById('forge-sword-tier'),
+    forgeHint: document.getElementById('forge-hint'),
+    upgradePickaxe: document.getElementById('upgrade-pickaxe'),
+    upgradeSword: document.getElementById('upgrade-sword'),
+    pickTier: document.getElementById('pickaxe-tier'),
+    swordTier: document.getElementById('sword-tier'),
     over: document.getElementById('over'),
     overLine: document.getElementById('over-line'),
     overOre: document.getElementById('over-ore'),
@@ -183,6 +211,16 @@
       this.blip(95, 0.18, { type: 'square', gain: 0.05, to: 50 });
     },
     stairs() { this.blip(400, 0.12, { type: 'triangle', gain: 0.06, to: 600 }); },
+    melt() {
+      this.blip(220, 0.3, { type: 'sawtooth', gain: 0.06, to: 120 });
+      this.blip(620, 0.18, { type: 'triangle', gain: 0.07, delay: 0.16, to: 880 });
+    },
+    forge() {
+      [392, 523.25, 659.25, 880].forEach((f, i) =>
+        this.blip(f, 0.2, { type: 'triangle', gain: 0.085, delay: i * 0.07 })
+      );
+      this.blip(140, 0.24, { type: 'square', gain: 0.05, to: 90 });
+    },
   };
 
   /* ---------------------------------------------------------------- state */
@@ -191,6 +229,7 @@
     mode: 'menu', // menu | playing | paused | dead
     time: 0,
     tool: 'pickaxe', // pickaxe | sword
+    tools: { pickaxe: 1, sword: 1 }, // tool tiers
     hp: BALANCE.playerMaxHp,
     invuln: 0,
     cooldown: 0,
@@ -224,6 +263,9 @@
 
   const levels = {};
   let level = null;
+
+  // What is currently loaded into the Melter.
+  const melter = { coal: 0, copper: 0 };
 
   let W = 0;
   let H = 0;
@@ -293,6 +335,11 @@
     lv.stairsDown = { tx: 9, ty: 9 };
     lv.tiles[idx(lv, 9, 9)] = STAIRS_DOWN;
     lv.spawn = { x: 9.5 * TS, y: 6.5 * TS };
+
+    lv.stations = [
+      { kind: 'melter', x: 4.2 * TS, y: 4.4 * TS },
+      { kind: 'forge', x: 14.8 * TS, y: 4.4 * TS },
+    ];
 
     lv.decor.push({ kind: 'lantern', x: 3.2 * TS, y: 3.1 * TS, phase: 0 });
     lv.decor.push({ kind: 'lantern', x: 15.8 * TS, y: 3.1 * TS, phase: 1.6 });
@@ -417,8 +464,51 @@
         left -= move;
       }
     }
-    if (left !== count) syncBag();
+    if (left !== count) {
+      syncBag();
+      refreshStation(); // the open Melter/Forge should see new stock immediately
+    }
     return left;
+  }
+
+  function countItem(itemKey) {
+    let n = 0;
+    for (const cell of inventory) if (cell && cell.item === itemKey) n += cell.count;
+    return n;
+  }
+
+  // Remove up to `n` of an item; returns how many were actually taken.
+  function removeItem(itemKey, n) {
+    let left = n;
+    for (let i = inventory.length - 1; i >= 0 && left > 0; i--) {
+      const cell = inventory[i];
+      if (!cell || cell.item !== itemKey) continue;
+      const take = Math.min(cell.count, left);
+      cell.count -= take;
+      left -= take;
+      if (cell.count <= 0) inventory[i] = null;
+    }
+    if (left !== n) {
+      syncBag();
+      refreshStation();
+    }
+    return n - left;
+  }
+
+  // Death costs you half of every resource stack in the bag.
+  function halveResources() {
+    let lost = 0;
+    for (let i = 0; i < inventory.length; i++) {
+      const cell = inventory[i];
+      if (!cell) continue;
+      const before = cell.count;
+      cell.count = Math.round(cell.count / 2);
+      lost += before - cell.count;
+      if (cell.count <= 0) inventory[i] = null;
+    }
+    syncBag();
+    refreshStation();
+    return lost;
   }
 
   const bagSlots = [];
@@ -480,6 +570,158 @@
     }
   }
 
+  /* --------------------------------------------------- Melter and Forge */
+
+  const STATION_LABELS = { melter: 'Melter', forge: 'Forge' };
+
+  function tierDamage() {
+    return state.tools.sword >= 2 ? BALANCE.swordDamageT2 : BALANCE.swordDamage;
+  }
+
+  // Hits required by the equipped pickaxe for a given rock.
+  function pickaxeHits(def) {
+    if (!def.hits) return null;
+    return state.tools.pickaxe >= 2 ? 1 : def.hits;
+  }
+
+  function refreshTierBadges() {
+    for (const [tool, node] of [['pickaxe', el.pickTier], ['sword', el.swordTier]]) {
+      if (!node) continue;
+      const tier = state.tools[tool];
+      node.textContent = 'T' + tier;
+      node.classList.toggle('is-max', tier >= MAX_TIER);
+    }
+  }
+
+  function stationAt(wx, wy) {
+    if (!level || !level.stations) return null;
+    for (const st of level.stations) {
+      if (Math.hypot(wx - st.x, wy - st.y) <= 34) return st;
+    }
+    return null;
+  }
+
+  function openStation(kind) {
+    if (!el.station) return;
+    state.mode = 'station';
+    state.openStation = kind;
+    keys.clear();
+    pointer.down = false;
+    stage.classList.remove('is-playing');
+
+    el.viewMelter.classList.toggle('is-hidden', kind !== 'melter');
+    el.viewForge.classList.toggle('is-hidden', kind !== 'forge');
+    el.station.classList.remove('is-hidden');
+    refreshStation();
+  }
+
+  function closeStation() {
+    if (state.mode !== 'station') return;
+    state.mode = 'playing';
+    state.openStation = null;
+    el.station.classList.add('is-hidden');
+    stage.classList.add('is-playing');
+    last = 0; // avoid a huge dt from the paused frames
+  }
+
+  // Keep the open menu's numbers in step with the bag.
+  function refreshStation() {
+    if (!el.viewMelter) return;
+
+    // --- melter ---
+    const fuelReady = melter.coal > 0;
+    const inputReady = melter.copper > 0;
+    el.slotFuel.classList.toggle('is-filled', fuelReady);
+    el.slotInput.classList.toggle('is-filled', inputReady);
+    el.fuelGem.style.setProperty('--gem', ITEMS.coal.color);
+    el.inputGem.style.setProperty('--gem', ITEMS.copper.color);
+    el.fuelGem.style.display = fuelReady ? 'block' : 'none';
+    el.inputGem.style.display = inputReady ? 'block' : 'none';
+    el.fuelCount.textContent = fuelReady ? String(melter.coal) : '';
+    el.inputCount.textContent = inputReady ? String(melter.copper) : '';
+
+    const canMelt = melter.coal >= MELT_COAL && melter.copper >= MELT_COPPER;
+    el.meltBtn.disabled = !canMelt;
+    if (canMelt) {
+      el.melterHint.textContent = 'Ready. One coal and one copper become one Copper Ingot.';
+    } else if (!fuelReady && !inputReady) {
+      el.melterHint.textContent = 'Click a slot to load it from your bag.';
+    } else if (!fuelReady) {
+      el.melterHint.textContent = 'Needs coal in the fuel slot.';
+    } else {
+      el.melterHint.textContent = 'Needs copper in the top slot.';
+    }
+
+    // --- forge ---
+    const ingots = countItem('ingot');
+    el.forgeIngots.textContent = String(ingots);
+    for (const [tool, tierNode, btn] of [
+      ['pickaxe', el.forgePickTier, el.upgradePickaxe],
+      ['sword', el.forgeSwordTier, el.upgradeSword],
+    ]) {
+      const tier = state.tools[tool];
+      tierNode.textContent = 'T' + tier;
+      tierNode.classList.toggle('is-max', tier >= MAX_TIER);
+      const maxed = tier >= MAX_TIER;
+      btn.disabled = maxed || ingots < UPGRADE_COST;
+      btn.textContent = maxed ? 'Maxed' : 'Upgrade · 3';
+    }
+    if (state.tools.pickaxe >= MAX_TIER && state.tools.sword >= MAX_TIER) {
+      el.forgeHint.textContent = 'Both tools are as good as this forge can make them.';
+    } else {
+      el.forgeHint.textContent = 'A T2 pickaxe cracks any rock in one hit. A T2 sword hits for 15.';
+    }
+
+    refreshTierBadges();
+  }
+
+  function loadSlot(kind) {
+    // Clicking a slot loads one item from the bag; clicking again adds more.
+    if (kind === 'coal') {
+      if (removeItem('coal', 1) === 1) melter.coal += 1;
+      else showToast('No coal in your bag.');
+    } else {
+      if (removeItem('copper', 1) === 1) melter.copper += 1;
+      else showToast('No copper in your bag.');
+    }
+    refreshStation();
+  }
+
+  function emptySlot(kind) {
+    // Shift-click sends the loaded items back to the bag.
+    if (kind === 'coal' && melter.coal > 0) {
+      addItem('coal', melter.coal);
+      melter.coal = 0;
+    } else if (kind === 'copper' && melter.copper > 0) {
+      addItem('copper', melter.copper);
+      melter.copper = 0;
+    }
+    refreshStation();
+  }
+
+  function melt() {
+    if (melter.coal < MELT_COAL || melter.copper < MELT_COPPER) return;
+    melter.coal -= MELT_COAL;
+    melter.copper -= MELT_COPPER;
+    addItem('ingot', 1);
+    Sound.melt();
+    showToast('One Copper Ingot poured.');
+    refreshStation();
+  }
+
+  function upgradeTool(tool) {
+    if (state.tools[tool] >= MAX_TIER) return;
+    if (countItem('ingot') < UPGRADE_COST) {
+      showToast('Needs 3 Copper Ingots.');
+      return;
+    }
+    removeItem('ingot', UPGRADE_COST);
+    state.tools[tool] += 1;
+    Sound.forge();
+    showToast(`${tool === 'pickaxe' ? 'Pickaxe' : 'Sword'} upgraded to T${state.tools[tool]}!`);
+    refreshStation();
+  }
+
   /* ---------------------------------------------------------------- input */
 
   const MOVE_KEYS = {
@@ -503,7 +745,8 @@
         else if (state.mode === 'paused') resumeGame();
         break;
       case 'Escape':
-        if (state.mode === 'playing') pauseGame();
+        if (state.mode === 'station') closeStation();
+        else if (state.mode === 'playing') pauseGame();
         else if (state.mode === 'paused') resumeGame();
         break;
       case 'KeyM':
@@ -533,7 +776,16 @@
     setPointer(e.clientX, e.clientY);
     pointer.down = true;
     Sound.init();
-    if (state.mode === 'playing' && e.button === 0) swing();
+    if (state.mode !== 'playing' || e.button !== 0) return;
+
+    // Clicking a station in Home Base opens its menu.
+    const w = screenToWorld(pointer.x, pointer.y);
+    const st = stationAt(w.x, w.y);
+    if (st) {
+      openStation(st.kind);
+      return;
+    }
+    swing();
   });
   window.addEventListener('pointerup', () => { pointer.down = false; });
   canvas.addEventListener('pointerleave', () => { pointer.inside = false; });
@@ -605,12 +857,13 @@
     const t = getTile(tx, ty);
     const def = TILES[t];
     const key = tx + ',' + ty;
+    const needed = pickaxeHits(def);
     const taken = (level.damage.get(key) || 0) + 1;
 
     shake(0.45);
     hitParticles((tx + 0.5) * TS, (ty + 0.5) * TS, def.base);
 
-    if (taken < def.hits) {
+    if (taken < needed) {
       level.damage.set(key, taken);
       Sound.pickHit();
       return;
@@ -659,7 +912,7 @@
       if (diff > BALANCE.swordArc) continue;
 
       hitAny = true;
-      damageSlime(s, BALANCE.swordDamage, ang);
+      damageSlime(s, tierDamage(), ang);
     }
 
     if (hitAny) Sound.swordHit();
@@ -756,8 +1009,12 @@
       attackCd: 0,
       knockX: 0,
       knockY: 0,
-      hop: rand(0, TAU),
+      hop: rand(0, TAU), // hop cycle for the bounce animation
       face: 1,
+      chasing: false,
+      wanderAngle: rand(0, TAU),
+      wanderTimer: rand(0.4, 2),
+      hopGround: 0, // 0..1, how far off the ground the hop is
     };
   }
 
@@ -799,19 +1056,33 @@
 
       if (s.flash > 0) s.flash -= dt;
       if (s.attackCd > 0) s.attackCd -= dt;
-      s.hop += dt * (s.tiny ? 7 : 4.5);
 
       const dx = player.x - s.x;
       const dy = player.y - s.y;
       const dist = Math.hypot(dx, dy) || 1;
       s.face = dx >= 0 ? 1 : -1;
 
-      // chase the player, with a little squishy hesitation
+      // Slimes have short sight: 4 tiles for a normal one, 2 for a tiny.
+      const detect = s.tiny ? BALANCE.tinyDetect : BALANCE.slimeDetect;
+      s.chasing = dist <= detect;
+
       let moveX = 0;
       let moveY = 0;
-      if (dist > 1) {
+
+      if (s.chasing) {
         moveX = (dx / dist) * s.speed;
         moveY = (dy / dist) * s.speed;
+        s.wanderTimer = 0;
+      } else {
+        // Out of sight they potter about at half speed in a random direction.
+        s.wanderTimer -= dt;
+        if (s.wanderTimer <= 0) {
+          s.wanderTimer = rand(1.1, 2.8);
+          s.wanderAngle = rand(0, TAU);
+        }
+        const amble = s.speed * 0.5;
+        moveX = Math.cos(s.wanderAngle) * amble;
+        moveY = Math.sin(s.wanderAngle) * amble;
       }
 
       const kx = s.knockX;
@@ -822,8 +1093,26 @@
       const nx = s.x + (moveX + kx) * dt;
       const ny = s.y + (moveY + ky) * dt;
 
+      const beforeX = s.x;
+      const beforeY = s.y;
       if (!collidesAt(nx, s.y, s.r)) s.x = nx;
       if (!collidesAt(s.x, ny, s.r)) s.y = ny;
+
+      // If a wanderer walks into a wall, pick a fresh direction instead of
+      // grinding along it forever.
+      if (!s.chasing) {
+        const blocked = Math.abs(s.x - beforeX) < 0.05 && Math.abs(s.y - beforeY) < 0.05;
+        if (blocked) {
+          s.wanderAngle = rand(0, TAU);
+          s.wanderTimer = rand(0.6, 1.6);
+        }
+      }
+
+      // Hopping: fast little hops when chasing, gentle ones when ambling.
+      const moving = Math.abs(s.x - beforeX) + Math.abs(s.y - beforeY) > 0.01;
+      const cadence = s.chasing ? (s.tiny ? 5.2 : 4.3) : 2.3;
+      s.hop += dt * cadence * (moving ? 1 : 0.45);
+      s.hopGround = Math.abs(Math.sin(s.hop));
 
       // contact damage
       if (dist < s.r + BALANCE.playerRadius + 1 && s.attackCd <= 0) {
@@ -1108,6 +1397,7 @@
     const ty1 = Math.min(level.h - 1, Math.ceil((camera.y + H / 2) / TS) + 1);
 
     drawTiles(tx0, ty0, tx1, ty1, ox, oy);
+    drawStations(ox, oy);
     drawDecor(ox, oy);
     drawSlimes(ox, oy);
     drawPlayer(ox, oy);
@@ -1304,6 +1594,106 @@
     ctx.restore();
   }
 
+  function drawStations(ox, oy) {
+    if (!level.stations) return;
+
+    for (const st of level.stations) {
+      const x = st.x + ox;
+      const y = st.y + oy;
+      const near = Math.hypot(player.x - st.x, player.y - st.y) < 100;
+      const pulse = 0.75 + Math.sin(state.time * 3) * 0.25;
+
+      // shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(x + 2, y + 16, 20, 7, 0, 0, TAU);
+      ctx.fill();
+
+      if (st.kind === 'melter') {
+        // squat furnace with a glowing mouth
+        const body = ctx.createLinearGradient(0, y - 24, 0, y + 16);
+        body.addColorStop(0, '#6b6259');
+        body.addColorStop(1, '#3b3630');
+        ctx.fillStyle = body;
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(x - 17, y - 22, 34, 38, 7);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x - 17, y - 22, 34, 38);
+        }
+
+        // brick lines
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.32)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 3; i++) {
+          ctx.beginPath();
+          ctx.moveTo(x - 17, y - 22 + i * 13);
+          ctx.lineTo(x + 17, y - 22 + i * 13);
+          ctx.stroke();
+        }
+
+        // chimney
+        ctx.fillStyle = '#4a443d';
+        ctx.fillRect(x + 4, y - 32, 9, 12);
+
+        // molten mouth
+        const mouth = ctx.createRadialGradient(x, y + 2, 1, x, y + 2, 13);
+        mouth.addColorStop(0, `rgba(255, 224, 150, ${pulse})`);
+        mouth.addColorStop(0.5, 'rgba(255, 150, 45, 0.85)');
+        mouth.addColorStop(1, 'rgba(150, 50, 10, 0.25)');
+        ctx.fillStyle = mouth;
+        ctx.beginPath();
+        ctx.ellipse(x, y + 2, 11, 8, 0, 0, TAU);
+        ctx.fill();
+
+        // copper spout
+        ctx.fillStyle = '#c98a52';
+        ctx.fillRect(x + 13, y - 4, 8, 4);
+      } else {
+        // forge: anvil over a fire
+        ctx.fillStyle = '#3a3630';
+        ctx.fillRect(x - 14, y + 8, 28, 8); // base
+        ctx.fillRect(x - 8, y + 2, 16, 7); // waist
+        ctx.fillStyle = '#565049';
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(x - 18, y - 8, 36, 11, 4);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x - 18, y - 8, 36, 11);
+        }
+
+        // fire beneath
+        for (let i = 0; i < 3; i++) {
+          const fl = Math.sin(state.time * 7 + i * 1.7) * 0.3 + 0.7;
+          ctx.fillStyle = i === 1 ? `rgba(255, 210, 110, ${0.85 * fl})` : `rgba(255, 130, 40, ${0.7 * fl})`;
+          ctx.beginPath();
+          ctx.moveTo(x - 9 + i * 9, y + 15);
+          ctx.quadraticCurveTo(x - 5 + i * 9, y + 2 - fl * 5, x + 18 - i * 9 - 9, y + 15);
+          ctx.fill();
+        }
+
+        // sparks
+        for (let i = 0; i < 2; i++) {
+          const t = (state.time * 0.9 + i * 0.5) % 1;
+          ctx.fillStyle = `rgba(255, 200, 120, ${(1 - t) * 0.8})`;
+          ctx.fillRect(x - 6 + i * 12 + Math.sin(t * 9) * 4, y - t * 22, 2, 2);
+        }
+      }
+
+      // label, brightening as you get close
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = '800 10px ui-rounded, "Segoe UI Rounded", system-ui, sans-serif';
+      ctx.fillStyle = near ? `rgba(255, 210, 130, ${0.75 + pulse * 0.25})` : 'rgba(180, 195, 210, 0.5)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(near ? STATION_LABELS[st.kind] + ' — click' : STATION_LABELS[st.kind], x, y + 34);
+      ctx.restore();
+    }
+  }
+
   function drawDecor(ox, oy) {
     for (const d of level.decor) {
       const x = d.x + ox;
@@ -1382,30 +1772,46 @@
       const y = s.y + oy;
       if (x < -60 || x > W + 60 || y < -60 || y > H + 60) continue;
 
-      const squish = Math.sin(s.hop) * 0.14;
-      const rx = s.r * (1 + squish);
-      const ry = s.r * (1 - squish * 0.85);
+      // Hop: lift off the ground, stretching up as it leaves and squashing
+      // as it lands. The shadow stays put and shrinks, which sells the bounce.
+      const lift = s.hopGround;
+      const rx = s.r * (1 - 0.13 * lift);
+      const ry = s.r * (1 + 0.16 * lift);
+      const hopY = y - lift * s.r * 0.62;
 
-      // shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.42 - 0.2 * lift})`;
       ctx.beginPath();
-      ctx.ellipse(x + 1, y + s.r * 0.75, rx * 0.85, s.r * 0.3, 0, 0, TAU);
+      ctx.ellipse(x + 1, y + s.r * 0.78, s.r * (0.85 - 0.3 * lift), s.r * (0.3 - 0.08 * lift), 0, 0, TAU);
       ctx.fill();
 
       // body
-      const g = ctx.createRadialGradient(x - rx * 0.3, y - ry * 0.4, rx * 0.15, x, y, rx * 1.2);
+      const g = ctx.createRadialGradient(x - rx * 0.3, hopY - ry * 0.4, rx * 0.15, x, hopY, rx * 1.2);
       g.addColorStop(0, shade(s.color, 1.45));
       g.addColorStop(0.6, s.color);
       g.addColorStop(1, shade(s.color, 0.6));
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+      ctx.ellipse(x, hopY, rx, ry, 0, 0, TAU);
       ctx.fill();
+
+      // a little pair of nubs for feet, tucked up while airborne
+      ctx.fillStyle = shade(s.color, 0.75);
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(
+          x + side * rx * 0.4,
+          y + s.r * 0.6 - lift * s.r * 0.25,
+          s.r * 0.16,
+          s.r * 0.1,
+          0, 0, TAU
+        );
+        ctx.fill();
+      }
 
       // gel highlight
       ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.beginPath();
-      ctx.ellipse(x - rx * 0.3, y - ry * 0.45, rx * 0.22, ry * 0.16, -0.5, 0, TAU);
+      ctx.ellipse(x - rx * 0.3, hopY - ry * 0.45, rx * 0.22, ry * 0.16, -0.5, 0, TAU);
       ctx.fill();
 
       // eyes
@@ -1413,13 +1819,13 @@
       ctx.fillStyle = '#1a2418';
       for (const side of [-1, 1]) {
         ctx.beginPath();
-        ctx.ellipse(x + side * ex, y - ry * 0.12, rx * 0.12, ry * 0.17, 0, 0, TAU);
+        ctx.ellipse(x + side * ex, hopY - ry * 0.12, rx * 0.12, ry * 0.17, 0, 0, TAU);
         ctx.fill();
       }
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       for (const side of [-1, 1]) {
         ctx.beginPath();
-        ctx.arc(x + side * ex + rx * 0.04, y - ry * 0.2, rx * 0.045, 0, TAU);
+        ctx.arc(x + side * ex + rx * 0.04, hopY - ry * 0.2, rx * 0.045, 0, TAU);
         ctx.fill();
       }
 
@@ -1428,7 +1834,7 @@
         ctx.globalAlpha = clamp(s.flash / 0.16, 0, 1) * 0.75;
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+        ctx.ellipse(x, hopY, rx, ry, 0, 0, TAU);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
@@ -1438,9 +1844,9 @@
         const w = s.r * 1.8;
         const pct = clamp(s.hp / s.maxHp, 0, 1);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(x - w / 2, y - s.r - 11, w, 3.4);
+        ctx.fillRect(x - w / 2, hopY - s.r - 11, w, 3.4);
         ctx.fillStyle = pct > 0.5 ? '#8ce09a' : pct > 0.25 ? '#ffd166' : '#ff7a7a';
-        ctx.fillRect(x - w / 2, y - s.r - 11, w * pct, 3.4);
+        ctx.fillRect(x - w / 2, hopY - s.r - 11, w * pct, 3.4);
       }
     }
   }
@@ -1709,6 +2115,15 @@
     for (let i = 0; i < inventory.length; i++) inventory[i] = null;
     syncBag();
 
+    state.tools.pickaxe = 1;
+    state.tools.sword = 1;
+    melter.coal = 0;
+    melter.copper = 0;
+    state.openStation = null;
+    if (el.station) el.station.classList.add('is-hidden');
+    refreshTierBadges();
+    refreshStation();
+
     slimes.length = 0;
     particles.length = 0;
     floaters.length = 0;
@@ -1762,6 +2177,9 @@
 
   function die() {
     state.mode = 'dead';
+    state.cooldown = 0;
+    keys.clear();
+    pointer.down = false;
     stage.classList.remove('is-playing');
     el.overOre.textContent = String(state.oreHauled);
     el.overSlimes.textContent = String(state.slimesSlain);
@@ -1772,6 +2190,29 @@
     el.over.classList.remove('is-hidden');
   }
 
+  // Wake up in Home Base: half of every resource stack is gone, the tools you
+  // earned are not.
+  function respawnAtBase() {
+    halveResources();
+    slimes.length = 0;
+    particles.length = 0;
+    floaters.length = 0;
+    state.hp = BALANCE.playerMaxHp;
+    state.invuln = 0;
+    state.cooldown = 0;
+    state.shack = 0;
+    syncVitals();
+
+    el.over.classList.add('is-hidden');
+    el.hud.classList.remove('is-hidden');
+    el.dock.classList.remove('is-hidden');
+    stage.classList.add('is-playing');
+    state.mode = 'playing';
+    state.transitionLock = 0.3;
+    enterLevel('home', 'You wake up at Home Base. Half your haul is gone.');
+    last = 0;
+  }
+
   function toggleMute() {
     Sound.init();
     Sound.setMuted(!Sound.muted);
@@ -1779,8 +2220,24 @@
     el.mute.setAttribute('aria-pressed', Sound.muted ? 'true' : 'false');
   }
 
+  // Wire the station menu. Null-guarded on purpose: a missing element should
+  // never be able to stop the whole game from booting.
+  const bind = (node, event, handler) => {
+    if (node && node.addEventListener) node.addEventListener(event, handler);
+  };
+  bind(el.slotFuel, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)('coal'); });
+  bind(el.slotInput, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)('copper'); });
+  bind(el.meltBtn, 'click', melt);
+  bind(el.upgradePickaxe, 'click', () => upgradeTool('pickaxe'));
+  bind(el.upgradeSword, 'click', () => upgradeTool('sword'));
+  if (document.querySelectorAll) {
+    for (const btn of document.querySelectorAll('[data-close-station]')) {
+      bind(btn, 'click', closeStation);
+    }
+  }
+
   el.play.addEventListener('click', startGame);
-  el.again.addEventListener('click', startGame);
+  el.again.addEventListener('click', respawnAtBase);
   el.resume.addEventListener('click', resumeGame);
   el.mute.addEventListener('click', toggleMute);
 
@@ -1820,6 +2277,8 @@
     camera.y = player.y;
     el.stageName.textContent = level.name;
     syncVitals();
+    refreshTierBadges();
+    refreshStation();
     requestAnimationFrame(frame);
   }
 
@@ -1843,9 +2302,25 @@
     selectTool,
     addItem,
     enterLevel,
+    melter,
+    openStation,
+    closeStation,
+    melt,
+    upgradeTool,
+    loadSlot,
+    emptySlot,
+    halveResources,
+    countItem,
+    removeItem,
+    tierDamage,
+    pickaxeHits,
+    respawnAtBase,
+    get melterState() { return melter; },
     spawnSlimeAwayFromPlayer,
     buildStage1,
     makeSlime,
+    pointer,
+    pickaxeTarget,
     start: startGame,
   };
 

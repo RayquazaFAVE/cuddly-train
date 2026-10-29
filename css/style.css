@@ -486,3 +486,167 @@ kbd {
   .tagline { margin-bottom: 14px; }
   .panel { padding: 20px; }
 }
+
+/* ==========================================================================
+   Melter / Forge stations
+   ========================================================================== */
+
+.tool-tier {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #7d8c9c;
+  line-height: 1;
+}
+
+.tool.is-active .tool-tier { color: var(--amber); }
+
+.tool-tier.is-max { color: #8ce09a; }
+
+.station-panel { width: min(410px, 100%); }
+
+.station-view.is-hidden { display: none; }
+
+.melter-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 20px;
+}
+
+.station-slot {
+  position: relative;
+  width: 118px;
+  height: 62px;
+  border-radius: 13px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, rgba(34, 44, 57, 0.6), rgba(17, 23, 31, 0.85));
+  cursor: pointer;
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.station-slot:hover { border-color: rgba(255, 200, 97, 0.5); transform: translateY(-1px); }
+
+.station-slot.is-filled {
+  border-style: solid;
+  border-color: rgba(255, 200, 97, 0.45);
+  background: linear-gradient(180deg, rgba(66, 54, 28, 0.7), rgba(28, 23, 14, 0.9));
+}
+
+.station-slot-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  line-height: 1;
+}
+
+.station-slot .gem {
+  position: static;
+  transform: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 5px;
+}
+
+.station-slot-count {
+  position: absolute;
+  right: 7px;
+  bottom: 5px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.melter-flow {
+  font-size: 11px;
+  color: #56636f;
+  line-height: 1;
+}
+
+.btn-quiet {
+  margin-top: 9px;
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  font-size: 13.5px;
+  padding: 10px 18px;
+}
+
+.btn-quiet:hover { background: rgba(255, 255, 255, 0.06); color: var(--cream); }
+
+.btn:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7) brightness(0.75);
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-small { padding: 10px 12px; font-size: 13.5px; width: 100%; margin-top: 8px; }
+
+.forge-bank {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.forge-bank .gem { position: static; transform: none; width: 16px; height: 16px; display: block; --gem: #e8a86a; }
+
+.forge-of { font-size: 12px; font-weight: 700; color: var(--dim); }
+
+.forge-row { display: flex; gap: 10px; margin-bottom: 4px; }
+
+.forge-card {
+  flex: 1;
+  padding: 12px 10px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.forge-name { font-size: 13px; font-weight: 800; }
+
+.forge-tier {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--amber);
+  letter-spacing: 0.08em;
+  margin-top: 1px;
+}
+
+.forge-tier.is-max { color: #8ce09a; }
+
+.loss-note {
+  margin: -8px 0 18px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #ffb3b3;
+  background: rgba(120, 30, 34, 0.28);
+  border: 1px solid rgba(255, 120, 120, 0.22);
+  border-radius: 11px;
+  padding: 9px 12px;
+}
+
+.loss-note strong { color: #ffd6d6; }

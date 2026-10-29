@@ -23,6 +23,7 @@ copy: hard-reload with `Ctrl+Shift+R` (`Cmd+Shift+R` on macOS).
 | `Q` | Equip the **pickaxe** |
 | `E` | Equip the **sword** |
 | Left click / `Space` | Swing the equipped tool toward the cursor |
+| Left click a station | Open the Melter or the Forge (in Home Base) |
 | `Esc` | Pause · `M` mute |
 
 ## How a run works
@@ -57,6 +58,41 @@ Slimes spawn around the cave and chase you. A normal slime:
 
 Tiny Slimes have exactly **half** of everything: **15 HP** (2 sword hits), **10 damage**,
 and they move faster and are smaller, so they are easier to underestimate.
+
+**They have short sight.** A normal slime notices you within **4 tiles**, a Tiny Slime only
+within **2**. Outside that radius a slime loses interest and wanders in a random direction
+at **half speed**, picking a new heading whenever it walks into a wall. Slimes hop as they
+move — quick little bounces while chasing, a slower amble when wandering.
+
+### The Melter and the Forge
+
+Home Base has two workstations. Click either one to open its menu; `Esc` or **Close** to
+leave. The game pauses while a menu is open.
+
+**The Melter** turns copper into ingots:
+
+1. Click the **fuel slot** to load **1 Coal** from your bag.
+2. Click the **top slot** to load **1 Copper**.
+3. Click **Melt** → **1 Copper Ingot**.
+
+Shift-click a loaded slot to send its contents back to the bag.
+
+**The Forge** spends ingots on permanent tool upgrades:
+
+| Upgrade | Cost | Effect |
+| --- | --- | --- |
+| Pickaxe → T2 | 3 Copper Ingots | Cracks **any** rock (stone, coal, copper) in **one** hit |
+| Sword → T2 | 3 Copper Ingots | **15** damage per hit instead of 10 — a normal slime dies in 2 hits |
+
+Your current tiers show on the tool belt (`T1`/`T2`) and in the Forge. Upgrades are kept
+through death; only resources are lost.
+
+### Dying
+
+When your health runs out you wake up in **Home Base** at full health, and **half of every
+resource stack** in your bag is gone (rounded to the nearest whole item — `round(7/2)` is 4,
+`round(5/2)` is 3). Tool upgrades, and the Melter's currently loaded coal and copper, are
+untouched.
 
 ### Health
 
@@ -117,6 +153,11 @@ Notes on the implementation:
   tool belt is the right place to show it.
 - **More enemies** — `makeSlime()` plus `updateSlimes()` is a compact template; a new
   enemy type is a new factory and a branch in the update loop.
+- **More stations** — `level.stations` is just data (`{ kind, x, y }`); `openStation()`
+  swaps which panel is visible, so a shop or a chest is a new panel and a branch on `kind`.
+- **Higher tiers** — `state.tools` holds a tier per tool. `pickaxeHits()` maps a rock to
+  the hits your current pickaxe needs, and `tierDamage()` maps the sword tier to damage,
+  so T3 is a table entry rather than a rewrite.
 
 ## Poking at it
 
@@ -127,4 +168,8 @@ MiningSim.slimes           // live slime list
 MiningSim.BALANCE          // all the tuning numbers in one object
 MiningSim.addItem('copper', 5)
 MiningSim.enterLevel('stage1', 'debug')
+MiningSim.melter           // what is loaded into the Melter
+MiningSim.melt()           // force a melt
+MiningSim.upgradeTool('pickaxe')
+MiningSim.halveResources() // the death penalty, on demand
 ```
