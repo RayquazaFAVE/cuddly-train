@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Deep Dig</title>
+<meta name="description" content="A top-down mining game. Dig, haul ore, go deeper." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main id="stage">
+    <canvas id="game" aria-label="Mining game field"></canvas>
+
+    <!-- top-left readouts -->
+    <div id="hud" class="hud is-hidden">
+      <div class="stat-block">
+        <span class="stat-label">Depth</span>
+        <span class="stat-value"><span id="depth">0</span><span class="unit">m</span></span>
+      </div>
+      <div class="stat-block">
+        <span class="stat-label">Haul value</span>
+        <span class="stat-value">$<span id="value">0</span></span>
+      </div>
+      <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
+    </div>
+
+    <!-- 10-slot inventory -->
+    <div id="hotbar" class="hotbar is-hidden" aria-label="Inventory"></div>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <!-- title card -->
+    <section id="menu" class="overlay">
+      <div class="panel">
+        <h1>Deep Dig</h1>
+        <p class="tagline">There is ore down there. Bring a bigger bag.</p>
+        <ul class="howto">
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Walk through the tunnels</span></li>
+          <li><span class="mouse-ico"></span><span>Hold the left mouse button to mine the tile you point at</span></li>
+          <li><kbd class="wide">Space</kbd><span>Mine the tile you are facing (no mouse needed)</span></li>
+          <li><kbd>1</kbd><span class="dots">–</span><kbd>0</kbd><span>Select an inventory slot</span></li>
+        </ul>
+        <button id="play" class="btn" type="button">Start digging</button>
+        <p class="hint">Press <kbd>Esc</kbd> to pause · deeper rock hides better ore</p>
+      </div>
+    </section>
+
+    <section id="pause" class="overlay is-hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <p class="tagline">The lantern is still lit.</p>
+        <button id="resume" class="btn" type="button">Keep digging</button>
+        <p class="hint">Press <kbd>Esc</kbd> to continue</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/game.js"></script>
+</body>
+</html>
