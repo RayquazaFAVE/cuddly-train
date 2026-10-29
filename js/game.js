@@ -129,12 +129,19 @@
         if (this.ctx.state === 'suspended') this.ctx.resume();
         return;
       }
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
-      this.ctx = new AC();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.4;
-      this.master.connect(this.ctx.destination);
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = this.muted ? 0 : 0.4;
+        this.master.connect(this.ctx.destination);
+      } catch (err) {
+        // No audio available (blocked, sandboxed, or out of contexts). The game
+        // carries on silently rather than refusing to start.
+        this.ctx = null;
+        this.master = null;
+      }
     },
 
     setMuted(muted) {
@@ -1736,6 +1743,9 @@
 
   function pauseGame() {
     if (state.mode !== 'playing') return;
+    // Ignore focus blips in the first moment of a run, otherwise clicking the
+    // start button inside an iframe can pause the game before you see it.
+    if (state.time < 1) return;
     state.mode = 'paused';
     keys.clear();
     stage.classList.remove('is-playing');

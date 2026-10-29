@@ -3,7 +3,17 @@
 A top-down dungeon mining game. You start safe in **Home Base**, take the stairs down to
 **Stage 1**, and work the cave for ore while slimes try to eat you.
 
-No dependencies, no build step. Open `index.html` and play.
+No dependencies, no build step. Open `index.html` and play, or serve the folder:
+
+```bash
+python3 serve.py          # http://localhost:8000
+```
+
+`serve.py` sends `Cache-Control: no-store` on purpose. Plain `python3 -m http.server`
+sends no cache headers, so browsers happily cache `js/game.js` and you end up running
+yesterday's script against today's HTML — which looks exactly like a dead start button.
+If you ever do see the page without a working start button, it is almost always a cached
+copy: hard-reload with `Ctrl+Shift+R` (`Cmd+Shift+R` on macOS).
 
 ## Controls
 

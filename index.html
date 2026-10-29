@@ -6,7 +6,7 @@
 <title>Mining Simulator</title>
 <meta name="description" content="A dungeon mining game. Dig for ore, fight the slimes, go deeper." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/style.css?v=3" />
 </head>
 <body>
   <main id="stage">
@@ -98,6 +98,49 @@
     </section>
   </main>
 
-  <script src="js/game.js"></script>
+  <!-- If the game script fails to load or boot, say so instead of leaving a
+       dead button on screen. A stale cached script is the usual culprit. -->
+  <script>
+  (function () {
+    function showWarning(detail) {
+      if (document.getElementById('boot-warning')) return;
+      var wrap = document.createElement('div');
+      wrap.id = 'boot-warning';
+      wrap.setAttribute('role', 'alert');
+      wrap.style.cssText = [
+        'position:fixed', 'left:50%', 'bottom:24px', 'transform:translateX(-50%)',
+        'max-width:min(420px,92vw)', 'padding:14px 18px', 'border-radius:14px',
+        'background:rgba(52,16,18,0.96)', 'border:1px solid rgba(255,120,120,0.5)',
+        'color:#ffe9e9', 'font:600 13px/1.5 system-ui,sans-serif', 'z-index:9999',
+        'box-shadow:0 18px 40px -14px rgba(0,0,0,0.9)', 'text-align:center'
+      ].join(';');
+      wrap.innerHTML =
+        '<strong style="display:block;margin-bottom:4px">The game didn\'t start</strong>' +
+        'This is usually a cached copy of an older version. ' +
+        '<a href="" style="color:#ffc861">Reload the page</a>';
+      if (detail) {
+        var pre = document.createElement('div');
+        pre.style.cssText = 'margin-top:8px;font:400 11px/1.4 ui-monospace,monospace;opacity:.7;word-break:break-word';
+        pre.textContent = detail;
+        wrap.appendChild(pre);
+      }
+      document.body.appendChild(wrap);
+    }
+
+    // Only speak up if the game never came up at all. An error thrown later,
+    // once the game is running, is not a boot failure.
+    window.addEventListener('error', function (e) {
+      if (window.MiningSim) return;
+      showWarning(e && e.message ? String(e.message) : '');
+    });
+
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        if (!window.MiningSim) showWarning('js/game.js did not finish loading.');
+      }, 500);
+    });
+  })();
+  </script>
+  <script src="js/game.js?v=3"></script>
 </body>
 </html>
