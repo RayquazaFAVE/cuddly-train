@@ -1,8 +1,7 @@
-# Deep Dig ⛏️
+# Mining Simulator ⛏️
 
-A top-down 2D mining game that runs in the browser. You are dropped at the top of a
-mountain of rock with a lantern on your helmet, and there is ore below. Dig, haul it up,
-and go deeper for the good stuff.
+A top-down dungeon mining game. You start safe in **Home Base**, take the stairs down to
+**Stage 1**, and work the cave for ore while slimes try to eat you.
 
 No dependencies, no build step. Open `index.html` and play.
 
@@ -10,91 +9,112 @@ No dependencies, no build step. Open `index.html` and play.
 
 | Input | Action |
 | --- | --- |
-| `W` `A` `S` `D` (or arrow keys) | Walk |
-| Left mouse button (hold) | Mine the tile you are pointing at |
-| `Space` | Mine the tile you are facing — no mouse needed |
-| `1` … `9`, then `0` | Select inventory slot 1 … 10 |
-| `Esc` | Pause / resume |
-| `M` | Mute |
+| `W` `A` `S` `D` (or arrows) | Move |
+| `Q` | Equip the **pickaxe** |
+| `E` | Equip the **sword** |
+| Left click / `Space` | Swing the equipped tool toward the cursor |
+| `Esc` | Pause · `M` mute |
 
-Slots can also be clicked, and they stay in sync with the number keys.
+## How a run works
 
-## The inventory
+You begin in Home Base, a warm little room with lanterns, crates, a bedroll and a set of
+stairs down. Walking onto the stairs takes you to Stage 1; walking onto the stairs there
+takes you back home. Your inventory and health carry between the two.
 
-Ten slots along the bottom of the screen. The key above each slot is its hotkey:
+### Stage 1 · Weeping Hollow
 
-```
- [1]  [2]  [3]  [4]  [5]  [6]  [7]  [8]  [9]  [0]
-```
+The cave layout is preset — seven rooms joined by corridors — but the rock seeded into its
+walls is randomised on every run, so no two digs are the same. Three things live in the
+rock:
 
-Slot 1 sits under the `1` key and slot 10 sits under the `0` key. Ore you dig up is
-sucked toward you and stacked into the first slot that has room, up to 99 per stack.
-Each slot shows the ore's colour as a little gem and its count in the corner. Mining with
-a full bag leaves the ore on the floor and tells you about it.
+| Rock | Pickaxe hits (T1) | Yields |
+| --- | --- | --- |
+| Stone | 1 | Stone ×1–2 |
+| Coal | 1 | Coal ×1 |
+| Copper | 2 | Copper ×1 |
 
-## What's down there
+Copper becomes more common the further you get from the entrance, so pushing away from the
+stairs pays better. Cracked tiles stay cracked, so a half-mined copper vein is easy to spot
+and finish later.
 
-Ore is placed with value noise, so it forms clusters you can follow rather than
-confetti. The deeper you go, the better the odds:
+### Slimes
 
-| Ore | First appears | Value | Rock per tile |
-| --- | --- | --- | --- |
-| Coal | 3 m | $6 | ~0.62 s |
-| Iron | 11 m | $18 | ~0.86 s |
-| Gold | 26 m | $55 | ~1.05 s |
-| Diamond | 46 m | $180 | ~1.5 s |
+Slimes spawn around the cave and chase you. A normal slime:
 
-Roughly 11% of the rock below the surface is ore and 81% is plain rock, which keeps
-mining a decision rather than a formality. Natural caverns open up as you go down, and
-bedrock at the bottom of the world cannot be broken.
+- has **30 HP** and dies to **3 sword hits** (10 damage each)
+- bites for **20 damage**
+- **splits into two Tiny Slimes** when killed
 
-Your helmet lantern is the only light source — that is what the darkness gradient is —
-and ore drops glint faintly in the dark before you pick them up.
+Tiny Slimes have exactly **half** of everything: **15 HP** (2 sword hits), **10 damage**,
+and they move faster and are smaller, so they are easier to underestimate.
+
+### Health
+
+The player has **100 HP**. A normal slime kills you in **5 hits** exactly
+(100 ÷ 20), and a Tiny Slime takes 10 of them. After being hit you get 0.9 seconds of
+invulnerability so a pack cannot delete you in one frame.
+
+Sword damage is deliberately lower than slime damage: trading blows loses, so you have to
+use the reach of your swing (a bit over two tiles wide) rather than standing still.
+
+## The interface
+
+Health and the current area are top-left. The **tool belt** is bottom-centre with the
+pickaxe (`Q`) and sword (`E` — clicking either one works too), and the **inventory** sits
+just below it.
+
+The inventory is ten slots, display only — there is no slot selection and no 1–0 hotkeys.
+Ore is stacked automatically into the first slot with room, 99 per stack, and each slot
+shows the ore's colour and count.
 
 ## How it is built
 
 ```
-index.html        canvas, HUD, hotbar container, title and pause cards
-css/style.css     all styling, including the hotbar slot states
-js/game.js        the whole game: world generation, mining, physics, renderer
+index.html        canvas, HUD, tool belt, inventory, title/pause/death cards
+css/style.css     all styling
+js/game.js        levels, mining, combat, physics, renderer, audio
 ```
 
-A few implementation notes:
+Notes on the implementation:
 
-- **World** is an infinite grid of 32 px tiles, generated lazily from a deterministic
-  hash. Every tile the player digs is stored in an `overrides` map, so terrain is stable
-  but costs nothing to remember. Because it is procedural, there is no save file to grow.
-- **Tiles are the walls.** Rock, ore and bedrock are solid; the tunnels you carve are the
-  only walkable space. Movement is axis-separated collision against the tile grid, so you
-  slide along walls instead of catching on them.
-- **Mining** tracks a target tile, accumulates progress against that tile's hardness, and
-  resets if you switch targets. Cracks appear as it weakens. Ore pops out as a physical
-  drop that is pulled toward you, and only enters the bag when it reaches you.
-- **Rendering** is Canvas 2D. Lighting is a second offscreen canvas filled with darkness
-  and then punched through with radial gradients at the player and each lantern
-  (`destination-out`), which is cheap and gives soft falloff.
-- **Sound** is synthesised with Web Audio — a pick hitting rock, rock breaking, and the
-  pickup chime — so there are no audio files.
+- **Levels** are tile grids (32 px tiles). `buildHome()` and `buildStage1()` lay out rooms
+  and corridors as data, so adding Stage 2 is a matter of adding a room list.
+- **Ore seeding** floods outward from every walkable tile and converts walls within two
+  tiles into rock: Stone, Coal or Copper, with copper odds rising with distance from the
+  entrance. Cave walls beyond that ring stay indestructible, so you can dig into the rock
+  but never wander off the level.
+- **Mining** is hit-based rather than time-based, which is what makes the T1 pickaxe's
+  1-hit Stone / 2-hit Copper behaviour exact. Partial damage is remembered per tile.
+- **Combat** is an arc test: a swing hits everything inside the sword's range whose angle
+  is within the arc of your aim. Damage numbers and slime health bars are drawn in world
+  space.
+- **Splitting** copies the parent into two half-strength slimes. A swing snapshots the
+  slime list first, so the tinies created by a kill cannot be damaged by the blow that
+  made them.
+- **Lighting** is an offscreen darkness layer punched through with radial gradients at the
+  player and each lantern. Home Base is lit softly; the cave is not.
+- **Audio** is synthesised with Web Audio, so there are no asset files.
 
 ## Where to take it next
 
-The pieces are deliberately small and separate, so the obvious extensions are:
-
-- **Tools that wear out** — give each slot a durability and gate hardness on the tool in
-  the selected slot (the hotbar is already the right shape for this).
-- **Selling the haul** — the haul value is already tracked; add a lift or a shop at the
-  surface that converts the bag to money.
-- **Deeper rock types** — add a tile to the `TILES` table and an entry to `ORE_DEFS`; the
-  renderer and inventory pick it up automatically.
-- **Hazards** — gas pockets or collapsing ceilings on the same tile grid.
+- **Stage 2** — add a room list and lower `stairsDown` through it; the tile, mining and
+  combat systems are level-agnostic already.
+- **Selling the haul** — the inventory is populated and stacked; a shop at Home Base that
+  converts ore to gold is the natural sink, and the total is already tracked in
+  `state.oreHauled`.
+- **Tool tiers** — `TILES` holds a `hits` value per rock, currently read as "T1 pickaxe
+  hits". Turning that into a per-tier table is the obvious next step for upgrades, and the
+  tool belt is the right place to show it.
+- **More enemies** — `makeSlime()` plus `updateSlimes()` is a compact template; a new
+  enemy type is a new factory and a branch in the update loop.
 
 ## Poking at it
 
 ```js
-DeepDig.state              // mode, haul value, selected slot
-DeepDig.player             // x, y, facing
-DeepDig.inventory          // the ten slots
-DeepDig.addItem('gold', 5) // stuff a slot
-DeepDig.tileAt(tx, ty)     // inspect the world
-DeepDig.setTile(0, 0, 0)   // carve a tile
+MiningSim.state            // mode, hp, tool, counts
+MiningSim.level            // the current level, its tiles and stairs
+MiningSim.slimes           // live slime list
+MiningSim.BALANCE          // all the tuning numbers in one object
+MiningSim.addItem('copper', 5)
+MiningSim.enterLevel('stage1', 'debug')
 ```

@@ -3,46 +3,70 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Deep Dig</title>
-<meta name="description" content="A top-down mining game. Dig, haul ore, go deeper." />
+<title>Mining Simulator</title>
+<meta name="description" content="A dungeon mining game. Dig for ore, fight the slimes, go deeper." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
   <main id="stage">
-    <canvas id="game" aria-label="Mining game field"></canvas>
+    <canvas id="game" aria-label="Mining Simulator game field"></canvas>
 
-    <!-- top-left readouts -->
+    <!-- ------------------------------------------------------------ HUD -->
     <div id="hud" class="hud is-hidden">
-      <div class="stat-block">
-        <span class="stat-label">Depth</span>
-        <span class="stat-value"><span id="depth">0</span><span class="unit">m</span></span>
-      </div>
-      <div class="stat-block">
-        <span class="stat-label">Haul value</span>
-        <span class="stat-value">$<span id="value">0</span></span>
+      <div class="vitals">
+        <div class="hp-row">
+          <span class="hp-label">HP</span>
+          <div class="hp-track"><div id="hp-fill" class="hp-fill"></div></div>
+          <span id="hp-text" class="hp-text">100</span>
+        </div>
+        <div class="location">
+          <span id="stage-name" class="stage-name">Home Base</span>
+        </div>
       </div>
       <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
     </div>
 
-    <!-- 10-slot inventory -->
-    <div id="hotbar" class="hotbar is-hidden" aria-label="Inventory"></div>
+    <!-- ------------------------------------------------- tool belt + bag -->
+    <div id="dock" class="dock is-hidden">
+      <div id="toolbelt" class="toolbelt" aria-label="Tool belt">
+        <button class="tool" type="button" data-tool="pickaxe" aria-label="Pickaxe">
+          <span class="tool-key">Q</span>
+          <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4.5 19.5 14 10" stroke="#8a6a44" stroke-width="2.6" stroke-linecap="round" />
+            <path d="M9.5 6.2c3-2.4 8-2.2 11 1.1-3.4-.6-6.2.2-8.2 2.2-2 2-2.8 4.8-2.2 8.2-3.3-3-3.5-8-1.1-11Z"
+                  fill="#c8d2dd" stroke="#8d99a6" stroke-width=".8" />
+          </svg>
+        </button>
+        <button class="tool" type="button" data-tool="sword" aria-label="Sword">
+          <span class="tool-key">E</span>
+          <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18.5 3.5 21 3l-.5 2.5-9 9-1.5-1.5 8.5-8.5Z" fill="#dfe7ef" stroke="#93a1b0" stroke-width=".8" />
+            <path d="M9 12.5 11.5 15" stroke="#8a6a44" stroke-width="2.4" stroke-linecap="round" />
+            <path d="M6 15.5 8.5 18" stroke="#b08a55" stroke-width="2.2" stroke-linecap="round" />
+            <path d="M4.5 19.5 7 17" stroke="#6b5535" stroke-width="2.4" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="bag" class="bag" aria-label="Inventory"></div>
+    </div>
 
     <div id="toast" class="toast" aria-live="polite"></div>
 
-    <!-- title card -->
+    <!-- --------------------------------------------------------- screens -->
     <section id="menu" class="overlay">
       <div class="panel">
-        <h1>Deep Dig</h1>
-        <p class="tagline">There is ore down there. Bring a bigger bag.</p>
+        <h1>Mining Simulator</h1>
+        <p class="tagline">Your base is safe. The cave below is not.</p>
         <ul class="howto">
-          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Walk through the tunnels</span></li>
-          <li><span class="mouse-ico"></span><span>Hold the left mouse button to mine the tile you point at</span></li>
-          <li><kbd class="wide">Space</kbd><span>Mine the tile you are facing (no mouse needed)</span></li>
-          <li><kbd>1</kbd><span class="dots">–</span><kbd>0</kbd><span>Select an inventory slot</span></li>
+          <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></li>
+          <li><kbd>Q</kbd><span>Pickaxe — mine rock and ore</span></li>
+          <li><kbd>E</kbd><span>Sword — fight whatever is down there</span></li>
+          <li><span class="mouse-ico"></span><span>Left click to swing the equipped tool</span></li>
         </ul>
-        <button id="play" class="btn" type="button">Start digging</button>
-        <p class="hint">Press <kbd>Esc</kbd> to pause · deeper rock hides better ore</p>
+        <button id="play" class="btn" type="button">Enter the base</button>
+        <p class="hint">Find the stairs to reach Stage 1 · <kbd>Esc</kbd> to pause</p>
       </div>
     </section>
 
@@ -50,8 +74,26 @@
       <div class="panel">
         <h2>Paused</h2>
         <p class="tagline">The lantern is still lit.</p>
-        <button id="resume" class="btn" type="button">Keep digging</button>
+        <button id="resume" class="btn" type="button">Keep going</button>
         <p class="hint">Press <kbd>Esc</kbd> to continue</p>
+      </div>
+    </section>
+
+    <section id="over" class="overlay is-hidden">
+      <div class="panel">
+        <h2>You were overwhelmed</h2>
+        <p class="tagline" id="over-line">The slimes got you.</p>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Ore hauled</span>
+            <span class="stat-value" id="over-ore">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Slimes slain</span>
+            <span class="stat-value" id="over-slimes">0</span>
+          </div>
+        </div>
+        <button id="again" class="btn" type="button">Back to base</button>
       </div>
     </section>
   </main>
