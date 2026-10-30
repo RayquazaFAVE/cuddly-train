@@ -8,10 +8,9 @@
      E                  equip the sword
      Left click / Space swing the equipped tool
 
-   You begin in Home Base. The stairs lead down to Stage 1, a preset cave whose
-   rock is seeded randomly on every run: Stone and Coal break in one pickaxe hit,
-   Copper takes two. Slimes live down there — three sword hits kill one, and it
-   splits into two Tiny Slimes with half the health and half the bite.
+   Begin in Home Base, then descend through Cave Entrance, Dreadful Tunnels,
+   Auag Cavern and Stalag Cavern. Smelt copper and iron and forge better tools;
+   beware slimes, moles, spiders and treasure-hunting Prospectors.
 
    No dependencies, no build step.
    ========================================================================== */
@@ -46,6 +45,11 @@
   const COPPER = 4;
   const STAIRS_DOWN = 5;
   const STAIRS_UP = 6;
+  const IRON = 7;
+  const GOLD = 8;
+  const SILVER = 9;
+  // Stalagmites are separate, mineable objects on FLOOR tiles, not wall tiles.
+  const STALAGMITE = 10;
 
   // hits = pickaxe hits needed with the T1 pickaxe; null means indestructible
   const TILES = {
@@ -54,6 +58,10 @@
     [STONE]: { solid: true, hits: 1, drop: 'stone', base: '#4a525e' },
     [COAL]: { solid: true, hits: 1, drop: 'coal', base: '#3c434e' },
     [COPPER]: { solid: true, hits: 2, drop: 'copper', base: '#4d4a4a' },
+    [IRON]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'iron', base: '#4a5660' },
+    [GOLD]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'gold', base: '#5b5344' },
+    [SILVER]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'silver', base: '#4d535a' },
+    [STALAGMITE]: { solid: true, hits: 2, drop: 'calcite', base: '#b5c3b7' },
     [STAIRS_DOWN]: { solid: false },
     [STAIRS_UP]: { solid: false },
   };
@@ -62,13 +70,19 @@
     stone: { name: 'Stone', color: '#98a4b2' },
     coal: { name: 'Coal', color: '#5d6675' },
     copper: { name: 'Copper', color: '#d58a4d' },
-    ingot: { name: 'Copper Ingot', color: '#e8a86a' },
+    iron: { name: 'Iron', color: '#a9c4d1' },
+    gold: { name: 'Gold', color: '#f5c650' },
+    silver: { name: 'Silver', color: '#e1e8ee' },
+    ingot: { name: 'Copper Ingot', color: '#e8a86a', isIngot: true },
+    ironIngot: { name: 'Iron Ingot', color: '#d4e7ef', isIngot: true },
+    calcite: { name: 'Calcite', color: '#d9e4c9' },
   };
 
   const MELT_COAL = 1; // coal burned per melt
-  const MELT_COPPER = 1; // copper fed into the top per melt
-  const UPGRADE_COST = 3; // ingots per tool upgrade
-  const MAX_TIER = 2;
+  const MELT_ORE = 1; // copper or iron fed into the top per melt
+  const INGOT_FOR_ORE = { copper: 'ingot', iron: 'ironIngot' };
+  const UPGRADE_COST = 3; // matching ingots per tool upgrade
+  const MAX_TIER = 3;
 
   /* -------------------------------------------------------------- balance */
 
@@ -77,6 +91,7 @@
     // A normal slime hits for 20, so five of them finish the player off.
     swordDamage: 10, // T1: 10 damage, so 3 hits to kill a 30 HP slime
     swordDamageT2: 15, // T2: 2 hits
+    swordDamageT3: 30, // T3: 1 hit against a normal slime or mole
     pickaxeReach: 2.2 * TS,
     pickaxeCooldown: 0.3,
     swordCooldown: 0.36,
@@ -95,8 +110,42 @@
     tinyDamage: 10,
     tinySpeed: 82,
     tinyRadius: 9,
+    largeSlimeHp: 60,
+    largeSlimeDamage: 40,
+    largeSlimeSpeed: 27,
+    largeSlimeDetect: 6 * TS,
+    largeSlimeRadius: 20,
     maxSlimes: 7,
     slimeSpawnEvery: 3.4,
+    maxLargeSlimes: 3,
+    largeSlimeSpawnEvery: 6,
+    spiderHp: 15,
+    spiderDamage: 5,
+    spiderSpeed: 120,
+    spiderDetect: 5 * TS,
+    spiderRadius: 10,
+    spiderAttackEvery: 0.4,
+    spiderHitInvulnerability: 0.3,
+    maxSpiders: 5,
+    spiderSpawnEvery: 4,
+    moleHp: 30,
+    moleDamage: 20,
+    moleSpeed: 63,
+    moleDetect: 5 * TS,
+    moleRadius: 13,
+    maxMoles: 3,
+    moleSpawnEvery: 6,
+    moleBreakChance: 0.1,
+    prospectorHp: 45,
+    prospectorRadius: 11,
+    prospectorDetect: 4 * TS,
+    prospectorMineTime: 1.1,
+    prospectorMeleeRange: 32,
+    maxProspectors: 4,
+    prospectorSpawnEvery: 6,
+    dynamiteFuse: 2, // seconds on the ground before detonation
+    dynamiteFlight: 0.38,
+    dynamiteThrowCooldown: 8,
   };
 
   /* ------------------------------------------------------------- elements */
@@ -110,6 +159,9 @@
     hpFill: document.getElementById('hp-fill'),
     hpText: document.getElementById('hp-text'),
     stageName: document.getElementById('stage-name'),
+    areaBanner: document.getElementById('area-banner'),
+    areaKicker: document.getElementById('area-kicker'),
+    areaSubtitle: document.getElementById('area-subtitle'),
     dock: document.getElementById('dock'),
     toolbelt: document.getElementById('toolbelt'),
     bag: document.getElementById('bag'),
@@ -118,10 +170,19 @@
     menu: document.getElementById('menu'),
     pause: document.getElementById('pause'),
     station: document.getElementById('station'),
+    stationPanel: document.getElementById('station-panel'),
     viewMelter: document.getElementById('view-melter'),
     viewForge: document.getElementById('view-forge'),
+    viewStorage: document.getElementById('view-storage'),
+    storageRows: document.getElementById('storage-rows'),
+    storageHint: document.getElementById('storage-hint'),
+    depositAll: document.getElementById('deposit-all'),
+    withdrawAll: document.getElementById('withdraw-all'),
     slotFuel: document.getElementById('slot-fuel'),
     slotInput: document.getElementById('slot-input'),
+    inputLabel: document.getElementById('input-label'),
+    oreCopper: document.getElementById('ore-copper'),
+    oreIron: document.getElementById('ore-iron'),
     fuelGem: document.getElementById('fuel-gem'),
     fuelCount: document.getElementById('fuel-count'),
     inputGem: document.getElementById('input-gem'),
@@ -129,6 +190,7 @@
     meltBtn: document.getElementById('melt-btn'),
     melterHint: document.getElementById('melter-hint'),
     forgeIngots: document.getElementById('forge-ingots'),
+    forgeIronIngots: document.getElementById('forge-iron-ingots'),
     forgePickTier: document.getElementById('forge-pick-tier'),
     forgeSwordTier: document.getElementById('forge-sword-tier'),
     forgeHint: document.getElementById('forge-hint'),
@@ -140,6 +202,9 @@
     overLine: document.getElementById('over-line'),
     overOre: document.getElementById('over-ore'),
     overSlimes: document.getElementById('over-slimes'),
+    overMoles: document.getElementById('over-moles'),
+    overProspectors: document.getElementById('over-prospectors'),
+    overSpiders: document.getElementById('over-spiders'),
     play: document.getElementById('play'),
     resume: document.getElementById('resume'),
     again: document.getElementById('again'),
@@ -206,11 +271,18 @@
       this.blip(300, 0.16, { type: 'sine', gain: 0.07, to: 90 });
       this.blip(180, 0.2, { type: 'triangle', gain: 0.05, to: 70, delay: 0.03 });
     },
+    moleDie() { this.blip(180, 0.18, { type: 'triangle', gain: 0.07, to: 65 }); },
+    throwDynamite() { this.blip(430, 0.12, { type: 'triangle', gain: 0.045, to: 230 }); },
+    explosion() {
+      this.blip(110, 0.35, { type: 'sawtooth', gain: 0.13, to: 40 });
+      this.blip(70, 0.3, { type: 'square', gain: 0.07, to: 35 });
+    },
     hurt() {
       this.blip(200, 0.22, { type: 'sawtooth', gain: 0.1, to: 70 });
       this.blip(95, 0.18, { type: 'square', gain: 0.05, to: 50 });
     },
     stairs() { this.blip(400, 0.12, { type: 'triangle', gain: 0.06, to: 600 }); },
+    pickup() { this.blip(680, 0.1, { type: 'sine', gain: 0.035, to: 920 }); },
     melt() {
       this.blip(220, 0.3, { type: 'sawtooth', gain: 0.06, to: 120 });
       this.blip(620, 0.18, { type: 'triangle', gain: 0.07, delay: 0.16, to: 880 });
@@ -226,8 +298,9 @@
   /* ---------------------------------------------------------------- state */
 
   const state = {
-    mode: 'menu', // menu | playing | paused | dead
+    mode: 'menu', // menu | playing | paused | station | dead
     time: 0,
+    areaIntro: 0,
     tool: 'pickaxe', // pickaxe | sword
     tools: { pickaxe: 1, sword: 1 }, // tool tiers
     hp: BALANCE.playerMaxHp,
@@ -236,6 +309,9 @@
     shack: 0,
     oreHauled: 0,
     slimesSlain: 0,
+    molesSlain: 0,
+    prospectorsSlain: 0,
+    spidersSlain: 0,
     transitionLock: 0,
     swingDir: 0,
   };
@@ -257,15 +333,20 @@
   const keys = new Set();
 
   const inventory = new Array(10).fill(null); // { item, count }
+  // The chest belongs to Home Base, not the bag, so death never halves it.
+  const storage = Object.fromEntries(Object.keys(ITEMS).map((item) => [item, 0]));
   const slimes = [];
+  const moles = [];
+  const spiders = [];
   const particles = [];
   const floaters = [];
+  const melterBursts = [];
 
   const levels = {};
   let level = null;
 
-  // What is currently loaded into the Melter.
-  const melter = { coal: 0, copper: 0 };
+  // The top slot holds one ore type at a time; the bottom slot holds coal.
+  const melter = { coal: 0, copper: 0, iron: 0, selectedOre: 'copper' };
 
   let W = 0;
   let H = 0;
@@ -280,13 +361,31 @@
       h,
       isBase,
       tiles: new Uint8Array(w * h).fill(WALL),
+      stalagmites: new Set(), // "x,y" -> a mineable formation on a FLOOR tile
       damage: new Map(), // "x,y" -> hits already taken
       decor: [],
+      pickups: [], // uncollected drops stay in their own level
+      prospectors: [], // their collected ore remains with them between visits
+      dynamites: [],
+      explosions: [],
       spawn: { x: 0, y: 0 },
       stairsDown: null,
       stairsUp: null,
+      downTarget: null,
+      upTarget: null,
       slimeTimer: 0,
+      moleTimer: 0,
+      spiderTimer: 0,
+      prospectorTimer: 0,
     };
+  }
+
+  // Keep the layout and this run's random ore distribution as the area's
+  // baseline. Re-entry restores these tiles without resetting inventory or loot.
+  function captureOriginalTiles(lv) {
+    lv.originalTiles = lv.tiles.slice();
+    lv.originalStalagmites = new Set(lv.stalagmites);
+    return lv;
   }
 
   const idx = (lv, tx, ty) => ty * lv.w + tx;
@@ -302,9 +401,15 @@
     level.tiles[idx(level, tx, ty)] = id;
   }
 
+  const tileKey = (tx, ty) => `${tx},${ty}`;
+
+  function isSolidInLevel(lv, tx, ty) {
+    if (!inBounds(lv, tx, ty)) return true;
+    return !!TILES[lv.tiles[idx(lv, tx, ty)]].solid || lv.stalagmites.has(tileKey(tx, ty));
+  }
+
   function isSolid(tx, ty) {
-    const t = getTile(tx, ty);
-    return !!TILES[t].solid;
+    return isSolidInLevel(level, tx, ty);
   }
 
   function carveRect(lv, x, y, w, h, id = FLOOR) {
@@ -333,11 +438,13 @@
     carveRect(lv, 2, 2, 15, 9, FLOOR);
 
     lv.stairsDown = { tx: 9, ty: 9 };
+    lv.downTarget = 'stage1';
     lv.tiles[idx(lv, 9, 9)] = STAIRS_DOWN;
     lv.spawn = { x: 9.5 * TS, y: 6.5 * TS };
 
     lv.stations = [
       { kind: 'melter', x: 4.2 * TS, y: 4.4 * TS },
+      { kind: 'storage', x: 9.5 * TS, y: 4.4 * TS },
       { kind: 'forge', x: 14.8 * TS, y: 4.4 * TS },
     ];
 
@@ -347,7 +454,7 @@
     lv.decor.push({ kind: 'crate', x: 5.4 * TS, y: 9.1 * TS });
     lv.decor.push({ kind: 'bedroll', x: 13.6 * TS, y: 8.6 * TS });
     lv.decor.push({ kind: 'lantern', x: 16 * TS, y: 8 * TS, phase: 3.1 });
-    return lv;
+    return captureOriginalTiles(lv);
   }
 
   // ---- Stage 1 -------------------------------------------------------------
@@ -364,7 +471,7 @@
   ];
 
   function buildStage1() {
-    const lv = makeLevel('stage1', 'Stage 1 · Weeping Hollow', 48, 36, false);
+    const lv = makeLevel('stage1', 'Cave Entrance', 48, 36, false);
 
     for (const r of STAGE1_ROOMS) carveRect(lv, r.x, r.y, r.w, r.h, FLOOR);
 
@@ -383,8 +490,17 @@
     const sax = Math.floor(entry.x + entry.w / 2);
     const say = Math.floor(entry.y + entry.h / 2);
     lv.stairsUp = { tx: sax, ty: say };
+    lv.upTarget = 'home';
     lv.tiles[idx(lv, sax, say)] = STAIRS_UP;
     lv.spawn = { x: (sax + 0.5) * TS, y: (say + 1.6) * TS };
+
+    // The far chamber contains the way down to the next stage.
+    const exit = STAGE1_ROOMS[STAGE1_ROOMS.length - 1];
+    const exitX = Math.floor(exit.x + exit.w / 2);
+    const exitY = Math.floor(exit.y + exit.h / 2);
+    lv.stairsDown = { tx: exitX, ty: exitY };
+    lv.downTarget = 'stage2';
+    lv.tiles[idx(lv, exitX, exitY)] = STAIRS_DOWN;
 
     seedOre(lv, sax, say);
 
@@ -392,11 +508,245 @@
     lv.decor.push({ kind: 'lantern', x: (sax + 3) * TS, y: (say - 2) * TS, phase: 2.2 });
     lv.decor.push({ kind: 'bones', x: (sax + 5) * TS, y: (say + 1) * TS, phase: 1.1 });
 
-    return lv;
+    return captureOriginalTiles(lv);
   }
 
-  // Fill the cave walls with rock: everything within two tiles of open floor
-  // becomes Stone, Coal or Copper, weighted so the better ore sits further in.
+  // ---- Stage 2 -------------------------------------------------------------
+
+  // Long, straight galleries intersect at a few wider chambers. The outline is
+  // fixed, while the ore around it is freshly seeded for each run.
+  const STAGE2_HALLS = [
+    { x: 4, y: 6, w: 48, h: 3 },
+    { x: 12, y: 6, w: 3, h: 28 },
+    { x: 28, y: 6, w: 3, h: 33 },
+    { x: 47, y: 6, w: 3, h: 28 },
+    { x: 10, y: 19, w: 40, h: 3 },
+    { x: 5, y: 31, w: 47, h: 3 },
+    { x: 28, y: 36, w: 13, h: 3 },
+  ];
+  const STAGE2_OPENINGS = [
+    { x: 3, y: 3, w: 8, h: 9 },
+    { x: 24, y: 16, w: 9, h: 9 },
+    { x: 43, y: 27, w: 10, h: 9 },
+    { x: 7, y: 28, w: 8, h: 9 },
+  ];
+
+  function buildStage2() {
+    const lv = makeLevel('stage2', 'Dreadful Tunnels', 58, 42, false);
+    for (const area of [...STAGE2_HALLS, ...STAGE2_OPENINGS]) {
+      carveRect(lv, area.x, area.y, area.w, area.h, FLOOR);
+    }
+    const sax = 6;
+    const say = 6;
+    lv.stairsUp = { tx: sax, ty: say };
+    lv.upTarget = 'stage1';
+    lv.tiles[idx(lv, sax, say)] = STAIRS_UP;
+    lv.spawn = { x: (sax + 0.5) * TS, y: (say + 1.6) * TS };
+    lv.stairsDown = { tx: 38, ty: 37 };
+    lv.downTarget = 'stage3';
+    lv.tiles[idx(lv, 38, 37)] = STAIRS_DOWN;
+    seedOre(lv, sax, say);
+
+    lv.decor.push({ kind: 'lantern', x: 4.3 * TS, y: 4.5 * TS, phase: 0.8 });
+    lv.decor.push({ kind: 'lantern', x: 9.4 * TS, y: 5 * TS, phase: 2.3 });
+    lv.decor.push({ kind: 'lantern', x: 25.5 * TS, y: 18 * TS, phase: 1.3 });
+    lv.decor.push({ kind: 'lantern', x: 48 * TS, y: 30 * TS, phase: 3.2 });
+    lv.decor.push({ kind: 'bones', x: 14.5 * TS, y: 31.7 * TS, phase: 0 });
+    return captureOriginalTiles(lv);
+  }
+
+  // ---- Stage 3 -------------------------------------------------------------
+
+  // Broad, rounded chambers and connecting galleries make the mineral-rich
+  // cavern feel distinct from Stage 2's long, straight tunnels.
+  const STAGE3_CAVERNS = [
+    { x: 8, y: 8, rx: 6, ry: 5 },
+    { x: 23, y: 8, rx: 7, ry: 5 },
+    { x: 42, y: 9, rx: 8, ry: 6 },
+    { x: 50, y: 24, rx: 6, ry: 6 },
+    { x: 31, y: 23, rx: 9, ry: 7 },
+    { x: 12, y: 23, rx: 7, ry: 6 },
+    { x: 19, y: 36, rx: 7, ry: 5 },
+    { x: 39, y: 36, rx: 8, ry: 5 },
+  ];
+
+  function buildStage3() {
+    const lv = makeLevel('stage3', 'Auag Cavern', 60, 44, false);
+    for (const room of STAGE3_CAVERNS) {
+      for (let ty = Math.floor(room.y - room.ry); ty <= room.y + room.ry; ty++) {
+        for (let tx = Math.floor(room.x - room.rx); tx <= room.x + room.rx; tx++) {
+          const dx = (tx + 0.5 - room.x) / room.rx;
+          const dy = (ty + 0.5 - room.y) / room.ry;
+          if (dx * dx + dy * dy <= 1) carveRect(lv, tx, ty, 1, 1);
+        }
+      }
+    }
+    const links = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 3]];
+    for (const [from, to] of links) {
+      const a = STAGE3_CAVERNS[from];
+      const b = STAGE3_CAVERNS[to];
+      carveRect(lv, Math.min(a.x, b.x), a.y - 1, Math.abs(b.x - a.x) + 1, 3);
+      carveRect(lv, b.x - 1, Math.min(a.y, b.y), 3, Math.abs(b.y - a.y) + 1);
+    }
+
+    const sx = 6;
+    const sy = 8;
+    lv.stairsUp = { tx: sx, ty: sy };
+    lv.upTarget = 'stage2';
+    lv.tiles[idx(lv, sx, sy)] = STAIRS_UP;
+    lv.spawn = { x: (sx + 0.5) * TS, y: (sy + 1.6) * TS };
+    // The far cavern leads down to Stalag Cavern.
+    lv.stairsDown = { tx: 39, ty: 36 };
+    lv.downTarget = 'stage4';
+    lv.tiles[idx(lv, lv.stairsDown.tx, lv.stairsDown.ty)] = STAIRS_DOWN;
+    seedOre(lv, sx, sy);
+    lv.decor.push({ kind: 'lantern', x: 4.7 * TS, y: 6.1 * TS, phase: 0.5 });
+    lv.decor.push({ kind: 'lantern', x: 11 * TS, y: 6.8 * TS, phase: 2.1 });
+    lv.decor.push({ kind: 'lantern', x: 22 * TS, y: 6 * TS, phase: 1.4 });
+    lv.decor.push({ kind: 'lantern', x: 42 * TS, y: 8 * TS, phase: 2.8 });
+    lv.decor.push({ kind: 'lantern', x: 30 * TS, y: 20 * TS, phase: 0.8 });
+    lv.decor.push({ kind: 'lantern', x: 19 * TS, y: 34 * TS, phase: 1.9 });
+    lv.decor.push({ kind: 'bones', x: 45.5 * TS, y: 35.5 * TS, phase: 0 });
+    return captureOriginalTiles(lv);
+  }
+
+  // ---- Stage 4 -------------------------------------------------------------
+
+  const STAGE4_CHAMBERS = [
+    { x: 8, y: 8, rx: 6, ry: 5 },
+    { x: 24, y: 8, rx: 7, ry: 6 },
+    { x: 44, y: 10, rx: 8, ry: 6 },
+    { x: 51, y: 23, rx: 7, ry: 7 },
+    { x: 32, y: 22, rx: 9, ry: 7 },
+    { x: 13, y: 23, rx: 8, ry: 7 },
+    { x: 18, y: 37, rx: 8, ry: 6 },
+    { x: 40, y: 36, rx: 9, ry: 6 },
+  ];
+
+  function buildStage4() {
+    const lv = makeLevel('stage4', 'Stalag Cavern', 64, 46, false);
+    for (const room of STAGE4_CHAMBERS) {
+      for (let ty = Math.floor(room.y - room.ry); ty <= room.y + room.ry; ty++) {
+        for (let tx = Math.floor(room.x - room.rx); tx <= room.x + room.rx; tx++) {
+          const dx = (tx + 0.5 - room.x) / room.rx;
+          const dy = (ty + 0.5 - room.y) / room.ry;
+          if (dx * dx + dy * dy <= 1) carveRect(lv, tx, ty, 1, 1);
+        }
+      }
+    }
+    // Broad galleries leave room to dodge even the larger slimes.
+    const links = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 3], [1, 4]];
+    for (const [from, to] of links) {
+      const a = STAGE4_CHAMBERS[from];
+      const b = STAGE4_CHAMBERS[to];
+      carveRect(lv, Math.min(a.x, b.x) - 1, a.y - 2, Math.abs(b.x - a.x) + 3, 5);
+      carveRect(lv, b.x - 2, Math.min(a.y, b.y) - 1, 5, Math.abs(b.y - a.y) + 3);
+    }
+    const sx = 6, sy = 8;
+    lv.stairsUp = { tx: sx, ty: sy };
+    lv.upTarget = 'stage3';
+    lv.tiles[idx(lv, sx, sy)] = STAIRS_UP;
+    lv.spawn = { x: (sx + 0.5) * TS, y: (sy + 1.6) * TS };
+    seedOre(lv, sx, sy);
+    lv.decor.push({ kind: 'lantern', x: 4.8 * TS, y: 6.2 * TS, phase: 0.6 });
+    lv.decor.push({ kind: 'lantern', x: 11 * TS, y: 6.6 * TS, phase: 2.1 });
+    lv.decor.push({ kind: 'lantern', x: 24 * TS, y: 8 * TS, phase: 1.1 });
+    lv.decor.push({ kind: 'lantern', x: 42 * TS, y: 10 * TS, phase: 2.6 });
+    lv.decor.push({ kind: 'lantern', x: 31 * TS, y: 22 * TS, phase: 0.9 });
+    lv.decor.push({ kind: 'lantern', x: 19 * TS, y: 37 * TS, phase: 1.8 });
+    lv.decor.push({ kind: 'lantern', x: 40 * TS, y: 36 * TS, phase: 3.2 });
+    lv.decor.push({ kind: 'bones', x: 48.5 * TS, y: 24.5 * TS, phase: 0 });
+    placeStalagmites(lv);
+    return captureOriginalTiles(lv);
+  }
+
+  function placeStalagmites(lv) {
+    const byWall = [], inOpen = [];
+    for (let ty = 1; ty < lv.h - 1; ty++) {
+      for (let tx = 1; tx < lv.w - 1; tx++) {
+        // Only put formations on existing floor, never replace a rock or wall.
+        if (lv.tiles[idx(lv, tx, ty)] !== FLOOR) continue;
+        if (Math.hypot(tx - lv.stairsUp.tx, ty - lv.stairsUp.ty) < 4) continue;
+        if (lv.decor.some((d) => Math.hypot(tx + 0.5 - d.x / TS, ty + 0.5 - d.y / TS) < 0.9)) continue;
+        const openSides = FOUR_WAYS.filter(([dx, dy]) => !TILES[lv.tiles[idx(lv, tx + dx, ty + dy)]].solid).length;
+        if (openSides < 3) continue; // leave narrow passages clear
+        if (openSides === 4 && FOUR_WAYS.some(([dx, dy]) => {
+          const nx = tx + dx * 3, ny = ty + dy * 3;
+          return !inBounds(lv, nx, ny) || TILES[lv.tiles[idx(lv, nx, ny)]].solid;
+        })) continue; // a free-standing spike needs room on every side
+        (openSides < 4 ? byWall : inOpen).push({ tx, ty });
+      }
+    }
+
+    // Seed a mix of wall-side and free-standing spikes without closing off
+    // any floor. Formations are spaced apart so the passages stay navigable.
+    for (const candidates of [byWall, inOpen]) {
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = randInt(0, i);
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+      let placed = 0;
+      for (const { tx, ty } of candidates) {
+        let tooClose = false;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (lv.stalagmites.has(tileKey(tx + dx, ty + dy))) tooClose = true;
+        }
+        if (tooClose) continue;
+        const key = tileKey(tx, ty);
+        lv.stalagmites.add(key);
+        const reachable = reachableOnEntry(lv);
+        let connected = true;
+        for (let y = 0; y < lv.h && connected; y++) {
+          for (let x = 0; x < lv.w; x++) {
+            if (!isSolidInLevel(lv, x, y) && !reachable[idx(lv, x, y)]) { connected = false; break; }
+          }
+        }
+        if (!connected || !largeSlimeRoutesOpen(lv)) lv.stalagmites.delete(key);
+        else if (++placed >= 24) break;
+      }
+    }
+  }
+
+  // A large slime's collision box is wider than a single tile. Keep a route
+  // between chambers that accommodates its full body, not just its centre.
+  function largeSlimeRoutesOpen(lv) {
+    const radius = BALANCE.largeSlimeRadius;
+    const fits = (tx, ty) => {
+      const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+      const x0 = Math.floor((x - radius) / TS), x1 = Math.floor((x + radius - 0.001) / TS);
+      const y0 = Math.floor((y - radius) / TS), y1 = Math.floor((y + radius - 0.001) / TS);
+      for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+        if (isSolidInLevel(lv, xx, yy)) return false;
+      }
+      return true;
+    };
+    const sx = Math.floor(lv.spawn.x / TS), sy = Math.floor(lv.spawn.y / TS);
+    if (!fits(sx, sy)) return false;
+    const seen = new Uint8Array(lv.w * lv.h);
+    const start = idx(lv, sx, sy), queue = [start];
+    seen[start] = 1;
+    for (let head = 0; head < queue.length; head++) {
+      const current = queue[head], tx = current % lv.w, ty = Math.floor(current / lv.w);
+      for (const [dx, dy] of FOUR_WAYS) {
+        const nx = tx + dx, ny = ty + dy;
+        if (!inBounds(lv, nx, ny)) continue;
+        const next = idx(lv, nx, ny);
+        if (seen[next] || !fits(nx, ny)) continue;
+        seen[next] = 1;
+        queue.push(next);
+      }
+    }
+    return STAGE4_CHAMBERS.every((room) => {
+      for (let y = room.y - 3; y <= room.y + 3; y++) {
+        for (let x = room.x - 4; x <= room.x + 4; x++) {
+          if (inBounds(lv, x, y) && seen[idx(lv, x, y)]) return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  // Seed walls within two tiles of open floor. Each stage has its own ores.
   function seedOre(lv, spawnTx, spawnTy) {
     const dist = new Int16Array(lv.w * lv.h).fill(-1);
     const queue = [];
@@ -433,12 +783,43 @@
         if (dist[i] < 1 || dist[i] > 2) continue;
 
         const away = Math.hypot(tx - spawnTx, ty - spawnTy);
-        const copperChance = clamp(0.08 + away / 220, 0.08, 0.26);
         const r = Math.random();
+        if (lv.id === 'stage4') {
+          if (r < 0.22) lv.tiles[i] = GOLD;
+          else if (r < 0.53) lv.tiles[i] = IRON;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage3') {
+          if (r < 0.32) lv.tiles[i] = GOLD;
+          else if (r < 0.68) lv.tiles[i] = SILVER;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage2') {
+          const ironChance = clamp(0.13 + away / 400, 0.13, 0.24);
+          const copperChance = clamp(0.12 + away / 300, 0.12, 0.26);
+          if (r < ironChance) lv.tiles[i] = IRON;
+          else if (r < ironChance + copperChance) lv.tiles[i] = COPPER;
+          else if (r < ironChance + copperChance + 0.28) lv.tiles[i] = COAL;
+          else lv.tiles[i] = STONE;
+        } else {
+          const copperChance = clamp(0.08 + away / 220, 0.08, 0.26);
+          if (r < copperChance) lv.tiles[i] = COPPER;
+          else if (r < copperChance + 0.3) lv.tiles[i] = COAL;
+          else lv.tiles[i] = STONE;
+        }
+      }
+    }
 
-        if (r < copperChance) lv.tiles[i] = COPPER;
-        else if (r < copperChance + 0.3) lv.tiles[i] = COAL;
-        else lv.tiles[i] = STONE;
+    if (lv.id === 'stage4') {
+      // Even an unlucky random seed leaves at least one accessible vein of
+      // each requested rock. Only edge rock can be selected for the fallback.
+      for (const wanted of [STONE, IRON, GOLD]) {
+        if (lv.tiles.includes(wanted)) continue;
+        for (let i = 0; i < lv.tiles.length; i++) {
+          const current = lv.tiles[i];
+          if (dist[i] !== 1 || (current !== STONE && current !== IRON && current !== GOLD)) continue;
+          if (lv.tiles.filter((tile) => tile === current).length <= 1) continue;
+          lv.tiles[i] = wanted;
+          break;
+        }
       }
     }
   }
@@ -477,6 +858,15 @@
     return n;
   }
 
+  function inventorySpace(itemKey) {
+    let space = 0;
+    for (const cell of inventory) {
+      if (!cell) space += STACK_MAX;
+      else if (cell.item === itemKey) space += Math.max(0, STACK_MAX - cell.count);
+    }
+    return space;
+  }
+
   // Remove up to `n` of an item; returns how many were actually taken.
   function removeItem(itemKey, n) {
     let left = n;
@@ -495,16 +885,16 @@
     return n - left;
   }
 
-  // Death costs you half of every resource stack in the bag.
+  // Halve each resource's total, not each stack independently. The chest and
+  // the Melter are separate from the bag and are never part of the penalty.
   function halveResources() {
+    const totals = new Map();
+    for (const cell of inventory) {
+      if (cell) totals.set(cell.item, (totals.get(cell.item) || 0) + cell.count);
+    }
     let lost = 0;
-    for (let i = 0; i < inventory.length; i++) {
-      const cell = inventory[i];
-      if (!cell) continue;
-      const before = cell.count;
-      cell.count = Math.round(cell.count / 2);
-      lost += before - cell.count;
-      if (cell.count <= 0) inventory[i] = null;
+    for (const [item, total] of totals) {
+      lost += removeItem(item, total - Math.round(total / 2));
     }
     syncBag();
     refreshStation();
@@ -537,15 +927,125 @@
       const item = inventory[i];
       if (item && ITEMS[item.item]) {
         cell.slot.classList.add('has-item');
+        cell.slot.classList.toggle('is-ingot', !!ITEMS[item.item].isIngot);
         cell.gem.style.setProperty('--gem', ITEMS[item.item].color);
         cell.count.textContent = item.count > 1 ? String(item.count) : '';
         cell.slot.title = ITEMS[item.item].name;
       } else {
-        cell.slot.classList.remove('has-item');
+        cell.slot.classList.remove('has-item', 'is-ingot');
         cell.count.textContent = '';
         cell.slot.removeAttribute('title');
       }
     }
+  }
+
+  /* ------------------------------------------------------------ storage */
+
+  const storageRows = {};
+
+  function buildStorage() {
+    if (!el.storageRows) return;
+    el.storageRows.innerHTML = '';
+    for (const [item, def] of Object.entries(ITEMS)) {
+      const row = document.createElement('div');
+      row.className = 'storage-row';
+      const resource = document.createElement('span');
+      resource.className = 'storage-resource';
+      const gem = document.createElement('span');
+      gem.className = def.isIngot ? 'gem is-ingot' : 'gem';
+      gem.setAttribute('aria-hidden', 'true');
+      gem.style.setProperty('--gem', def.color);
+      const name = document.createElement('span');
+      name.className = 'storage-resource-name';
+      name.textContent = def.name;
+      resource.appendChild(gem);
+      resource.appendChild(name);
+
+      const bag = document.createElement('span');
+      bag.className = 'storage-amount';
+      const stored = document.createElement('span');
+      stored.className = 'storage-amount is-stored';
+      const actions = document.createElement('span');
+      actions.className = 'storage-actions';
+      const deposit = document.createElement('button');
+      deposit.type = 'button';
+      deposit.className = 'storage-action';
+      deposit.textContent = 'Store';
+      deposit.setAttribute('aria-label', 'Store ' + def.name);
+      deposit.title = 'Store one; Shift-click to store all';
+      deposit.addEventListener('click', (e) => depositToStorage(item, e.shiftKey ? countItem(item) : 1));
+      const withdraw = document.createElement('button');
+      withdraw.type = 'button';
+      withdraw.className = 'storage-action is-take';
+      withdraw.textContent = 'Take';
+      withdraw.setAttribute('aria-label', 'Take ' + def.name);
+      withdraw.title = 'Take one; Shift-click to take all';
+      withdraw.addEventListener('click', (e) => withdrawFromStorage(item, e.shiftKey ? storage[item] : 1));
+      actions.appendChild(deposit);
+      actions.appendChild(withdraw);
+      row.appendChild(resource);
+      row.appendChild(bag);
+      row.appendChild(stored);
+      row.appendChild(actions);
+      el.storageRows.appendChild(row);
+      storageRows[item] = { row, bag, stored, deposit, withdraw };
+    }
+  }
+
+  function refreshStorage() {
+    if (!el.storageRows) return;
+    let canDeposit = false;
+    let canWithdraw = false;
+    let hasStored = false;
+    for (const [item, row] of Object.entries(storageRows)) {
+      const inBag = countItem(item);
+      const inStorage = storage[item];
+      const space = inventorySpace(item);
+      row.bag.textContent = String(inBag);
+      row.stored.textContent = String(inStorage);
+      row.row.setAttribute('aria-label', `${ITEMS[item].name}: ${inBag} in bag, ${inStorage} stored`);
+      row.deposit.disabled = inBag === 0;
+      row.withdraw.disabled = inStorage === 0 || space === 0;
+      canDeposit ||= inBag > 0;
+      canWithdraw ||= inStorage > 0 && space > 0;
+      hasStored ||= inStorage > 0;
+    }
+    el.depositAll.disabled = !canDeposit;
+    el.withdrawAll.disabled = !canWithdraw;
+    el.storageHint.textContent = hasStored && !canWithdraw
+      ? 'Your bag is full. Stored resources will stay safe here.'
+      : 'Store or take one at a time · Shift-click for all.';
+  }
+
+  // Every transfer only removes what the other side can actually hold.
+  function depositToStorage(item, amount) {
+    if (!Object.hasOwn(storage, item) || amount <= 0) return 0;
+    const moved = removeItem(item, amount);
+    storage[item] += moved;
+    refreshStation();
+    return moved;
+  }
+
+  function withdrawFromStorage(item, amount) {
+    if (!Object.hasOwn(storage, item) || amount <= 0) return 0;
+    const wanted = Math.min(storage[item], amount);
+    const left = addItem(item, wanted);
+    const moved = wanted - left;
+    storage[item] -= moved;
+    if (moved > 0) {
+      const chest = level.stations && level.stations.find((st) => st.kind === 'storage');
+      if (chest) spawnPickup(item, moved, chest.x, chest.y - 12, { alreadyCollected: true });
+    }
+    refreshStation();
+    return moved;
+  }
+
+  function depositEverything() {
+    for (const item of Object.keys(storage)) depositToStorage(item, countItem(item));
+  }
+
+  function withdrawEverything() {
+    for (const item of Object.keys(storage)) withdrawFromStorage(item, storage[item]);
   }
 
   /* ------------------------------------------------------------- tool belt */
@@ -570,18 +1070,26 @@
     }
   }
 
-  /* --------------------------------------------------- Melter and Forge */
+  /* ------------------------------------------------ Home Base stations */
 
-  const STATION_LABELS = { melter: 'Melter', forge: 'Forge' };
+  const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage' };
 
   function tierDamage() {
+    if (state.tools.sword >= 3) return BALANCE.swordDamageT3;
     return state.tools.sword >= 2 ? BALANCE.swordDamageT2 : BALANCE.swordDamage;
   }
 
   // Hits required by the equipped pickaxe for a given rock.
   function pickaxeHits(def) {
     if (!def.hits) return null;
+    if (def.hitsByTier) return def.hitsByTier[clamp(state.tools.pickaxe, 1, MAX_TIER) - 1];
     return state.tools.pickaxe >= 2 ? 1 : def.hits;
+  }
+
+  function upgradeMaterial(tier) {
+    if (tier === 1) return 'ingot';
+    if (tier === 2) return 'ironIngot';
+    return null;
   }
 
   function refreshTierBadges() {
@@ -602,7 +1110,7 @@
   }
 
   function openStation(kind) {
-    if (!el.station) return;
+    if (!el.station || !Object.hasOwn(STATION_LABELS, kind)) return;
     state.mode = 'station';
     state.openStation = kind;
     keys.clear();
@@ -611,6 +1119,9 @@
 
     el.viewMelter.classList.toggle('is-hidden', kind !== 'melter');
     el.viewForge.classList.toggle('is-hidden', kind !== 'forge');
+    el.viewStorage.classList.toggle('is-hidden', kind !== 'storage');
+    el.stationPanel.classList.toggle('is-storage', kind === 'storage');
+    el.station.setAttribute('aria-label', STATION_LABELS[kind]);
     el.station.classList.remove('is-hidden');
     refreshStation();
   }
@@ -629,97 +1140,139 @@
     if (!el.viewMelter) return;
 
     // --- melter ---
+    const ore = melter.selectedOre;
+    const result = INGOT_FOR_ORE[ore];
     const fuelReady = melter.coal > 0;
-    const inputReady = melter.copper > 0;
+    const inputReady = melter[ore] > 0;
     el.slotFuel.classList.toggle('is-filled', fuelReady);
     el.slotInput.classList.toggle('is-filled', inputReady);
+    el.inputLabel.textContent = `Top · ${ITEMS[ore].name} ore`;
     el.fuelGem.style.setProperty('--gem', ITEMS.coal.color);
-    el.inputGem.style.setProperty('--gem', ITEMS.copper.color);
+    el.inputGem.style.setProperty('--gem', ITEMS[ore].color);
     el.fuelGem.style.display = fuelReady ? 'block' : 'none';
     el.inputGem.style.display = inputReady ? 'block' : 'none';
     el.fuelCount.textContent = fuelReady ? String(melter.coal) : '';
-    el.inputCount.textContent = inputReady ? String(melter.copper) : '';
+    el.inputCount.textContent = inputReady ? String(melter[ore]) : '';
+    for (const [kind, button] of [['copper', el.oreCopper], ['iron', el.oreIron]]) {
+      button.classList.toggle('is-active', kind === ore);
+      button.setAttribute('aria-pressed', kind === ore ? 'true' : 'false');
+    }
 
-    const canMelt = melter.coal >= MELT_COAL && melter.copper >= MELT_COPPER;
-    el.meltBtn.disabled = !canMelt;
-    if (canMelt) {
-      el.melterHint.textContent = 'Ready. One coal and one copper become one Copper Ingot.';
+    const ingredientsReady = melter.coal >= MELT_COAL && melter[ore] >= MELT_ORE;
+    const roomForIngot = inventorySpace(result) > 0;
+    el.meltBtn.disabled = !ingredientsReady || !roomForIngot;
+    if (ingredientsReady && !roomForIngot) {
+      el.melterHint.textContent = 'Your bag is full. Make room for the ingot first.';
+    } else if (ingredientsReady) {
+      el.melterHint.textContent = `Ready! One coal and one ${ore} make one ${ITEMS[result].name}.`;
     } else if (!fuelReady && !inputReady) {
-      el.melterHint.textContent = 'Click a slot to load it from your bag.';
+      el.melterHint.textContent = 'Choose an ore, then click a slot to load it · Shift-click to return items.';
     } else if (!fuelReady) {
-      el.melterHint.textContent = 'Needs coal in the fuel slot.';
+      el.melterHint.textContent = 'Needs coal in the bottom fuel slot.';
     } else {
-      el.melterHint.textContent = 'Needs copper in the top slot.';
+      el.melterHint.textContent = `Needs ${ore} ore in the top slot.`;
     }
 
     // --- forge ---
-    const ingots = countItem('ingot');
-    el.forgeIngots.textContent = String(ingots);
+    el.forgeIngots.textContent = String(countItem('ingot'));
+    el.forgeIronIngots.textContent = String(countItem('ironIngot'));
     for (const [tool, tierNode, btn] of [
       ['pickaxe', el.forgePickTier, el.upgradePickaxe],
       ['sword', el.forgeSwordTier, el.upgradeSword],
     ]) {
       const tier = state.tools[tool];
+      const material = upgradeMaterial(tier);
       tierNode.textContent = 'T' + tier;
       tierNode.classList.toggle('is-max', tier >= MAX_TIER);
-      const maxed = tier >= MAX_TIER;
-      btn.disabled = maxed || ingots < UPGRADE_COST;
-      btn.textContent = maxed ? 'Maxed' : 'Upgrade · 3';
+      btn.disabled = !material || countItem(material) < UPGRADE_COST;
+      btn.textContent = material ? `Upgrade · 3 ${material === 'ingot' ? 'copper' : 'iron'}` : 'Maxed';
     }
     if (state.tools.pickaxe >= MAX_TIER && state.tools.sword >= MAX_TIER) {
       el.forgeHint.textContent = 'Both tools are as good as this forge can make them.';
     } else {
-      el.forgeHint.textContent = 'A T2 pickaxe cracks any rock in one hit. A T2 sword hits for 15.';
+      el.forgeHint.textContent = 'Iron takes 5 / 3 / 2 pickaxe hits at T1 / T2 / T3.';
     }
 
     refreshTierBadges();
+    refreshStorage();
+  }
+
+  function selectMelterOre(ore) {
+    if (!Object.hasOwn(INGOT_FOR_ORE, ore)) return false;
+    const other = ore === 'iron' ? 'copper' : 'iron';
+    if (melter[other] > 0) {
+      el.melterHint.textContent = `Shift-click the top slot to return its ${other} before switching.`;
+      return false;
+    }
+    melter.selectedOre = ore;
+    refreshStation();
+    return true;
   }
 
   function loadSlot(kind) {
     // Clicking a slot loads one item from the bag; clicking again adds more.
-    if (kind === 'coal') {
-      if (removeItem('coal', 1) === 1) melter.coal += 1;
-      else showToast('No coal in your bag.');
-    } else {
-      if (removeItem('copper', 1) === 1) melter.copper += 1;
-      else showToast('No copper in your bag.');
-    }
+    if (kind !== 'coal' && !Object.hasOwn(INGOT_FOR_ORE, kind)) return;
+    if (kind !== 'coal' && kind !== melter.selectedOre && !selectMelterOre(kind)) return;
+    const loaded = removeItem(kind, 1) === 1;
+    if (loaded) melter[kind] += 1;
     refreshStation();
+    if (!loaded) el.melterHint.textContent = `No ${kind} in your bag.`;
   }
 
   function emptySlot(kind) {
-    // Shift-click sends the loaded items back to the bag.
-    if (kind === 'coal' && melter.coal > 0) {
-      addItem('coal', melter.coal);
-      melter.coal = 0;
-    } else if (kind === 'copper' && melter.copper > 0) {
-      addItem('copper', melter.copper);
-      melter.copper = 0;
+    // Shift-click returns what fits. Anything else stays safely in the slot.
+    if ((kind !== 'coal' && !Object.hasOwn(INGOT_FOR_ORE, kind)) || melter[kind] <= 0) return;
+    const loaded = melter[kind];
+    const left = addItem(kind, loaded);
+    const returned = loaded - left;
+    melter[kind] = left;
+    if (returned > 0) {
+      const furnace = level.stations && level.stations.find((st) => st.kind === 'melter');
+      if (furnace) spawnPickup(kind, returned, furnace.x, furnace.y - 20, { alreadyCollected: true });
     }
     refreshStation();
+    if (left > 0) el.melterHint.textContent = 'Your bag is full. The rest stays in the Melter.';
   }
 
   function melt() {
-    if (melter.coal < MELT_COAL || melter.copper < MELT_COPPER) return;
+    const ore = melter.selectedOre;
+    const result = INGOT_FOR_ORE[ore];
+    if (melter.coal < MELT_COAL || melter[ore] < MELT_ORE) return false;
+    if (inventorySpace(result) < 1) {
+      refreshStation();
+      return false;
+    }
+    const furnace = level.stations && level.stations.find((st) => st.kind === 'melter');
+    if (!furnace) return false;
+
     melter.coal -= MELT_COAL;
-    melter.copper -= MELT_COPPER;
-    addItem('ingot', 1);
-    Sound.melt();
-    showToast('One Copper Ingot poured.');
+    melter[ore] -= MELT_ORE;
     refreshStation();
+    closeStation();
+
+    // The menu closes first, so the flame and the flying ingot are visible.
+    const mouthX = furnace.x + 8.5;
+    const mouthY = furnace.y - 32;
+    melterBursts.push({ x: mouthX, y: mouthY, age: 0, duration: 1.25 });
+    spawnPickup(result, 1, mouthX, mouthY, { delay: 0.16, rise: 46, source: 'melter' });
+    Sound.melt();
+    return true;
   }
 
   function upgradeTool(tool) {
-    if (state.tools[tool] >= MAX_TIER) return;
-    if (countItem('ingot') < UPGRADE_COST) {
-      showToast('Needs 3 Copper Ingots.');
-      return;
+    if (!Object.hasOwn(state.tools, tool)) return false;
+    const material = upgradeMaterial(state.tools[tool]);
+    if (!material) return false;
+    if (countItem(material) < UPGRADE_COST) {
+      el.forgeHint.textContent = `Needs 3 ${ITEMS[material].name}s.`;
+      return false;
     }
-    removeItem('ingot', UPGRADE_COST);
+    removeItem(material, UPGRADE_COST);
     state.tools[tool] += 1;
     Sound.forge();
     showToast(`${tool === 'pickaxe' ? 'Pickaxe' : 'Sword'} upgraded to T${state.tools[tool]}!`);
     refreshStation();
+    return true;
   }
 
   /* ---------------------------------------------------------------- input */
@@ -820,7 +1373,7 @@
       ty = p.ty + Math.round(player.faceY);
     }
     if (!inBounds(level, tx, ty)) return null;
-    const t = getTile(tx, ty);
+    const t = level.stalagmites.has(tileKey(tx, ty)) ? STALAGMITE : getTile(tx, ty);
     if (!TILES[t].solid || TILES[t].hits === null) return null;
 
     const cx = (tx + 0.5) * TS;
@@ -854,9 +1407,10 @@
     if (!target) return;
 
     const { tx, ty } = target;
-    const t = getTile(tx, ty);
+    const key = tileKey(tx, ty);
+    const stalagmite = level.stalagmites.has(key);
+    const t = stalagmite ? STALAGMITE : getTile(tx, ty);
     const def = TILES[t];
-    const key = tx + ',' + ty;
     const needed = pickaxeHits(def);
     const taken = (level.damage.get(key) || 0) + 1;
 
@@ -870,22 +1424,13 @@
     }
 
     level.damage.delete(key);
-    setTile(tx, ty, FLOOR);
+    if (stalagmite) level.stalagmites.delete(key);
+    else setTile(tx, ty, FLOOR);
 
     if (def.drop) {
       const amount = def.drop === 'stone' ? randInt(1, 2) : 1;
-      addItem(def.drop, amount);
-      state.oreHauled += amount;
+      spawnPickup(def.drop, amount, (tx + 0.5) * TS, (ty + 0.5) * TS, { source: 'mining' });
       Sound.oreBreak();
-      floaters.push({
-        x: (tx + 0.5) * TS,
-        y: (ty + 0.5) * TS,
-        text: '+' + amount + ' ' + ITEMS[def.drop].name,
-        color: ITEMS[def.drop].color,
-        life: 1,
-        maxLife: 1,
-        vy: -34,
-      });
     } else {
       Sound.rockBreak();
     }
@@ -897,9 +1442,9 @@
     const aim = state.swingDir;
     let hitAny = false;
 
-    // Snapshot the list: killing a slime spawns two more, and those must not be
-    // hit by the very swing that created them.
-    for (const s of slimes.slice()) {
+    // Snapshot all enemies: a slime's newly split children cannot be hit by
+    // the same swing, and a prospector's loot is dropped exactly once.
+    for (const s of [...slimes, ...moles, ...spiders, ...level.prospectors]) {
       if (s.dead) continue;
       const dx = s.x - player.x;
       const dy = s.y - player.y;
@@ -912,7 +1457,10 @@
       if (diff > BALANCE.swordArc) continue;
 
       hitAny = true;
-      damageSlime(s, tierDamage(), ang);
+      if (s.kind === 'mole') damageMole(s, tierDamage(), ang);
+      else if (s.kind === 'spider') damageSpider(s, tierDamage(), ang);
+      else if (s.kind === 'prospector') damageProspector(s, tierDamage(), ang);
+      else damageSlime(s, tierDamage(), ang);
     }
 
     if (hitAny) Sound.swordHit();
@@ -938,6 +1486,68 @@
     if (s.hp <= 0) killSlime(s);
   }
 
+  function damageMole(mole, amount, angle) {
+    mole.hp -= amount;
+    mole.flash = 0.16;
+    mole.knockX += Math.cos(angle) * 150;
+    mole.knockY += Math.sin(angle) * 150;
+    shake(0.3);
+    floaters.push({
+      x: mole.x, y: mole.y - mole.r - 4, text: String(amount),
+      color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
+    });
+    if (mole.hp <= 0) {
+      mole.dead = true;
+      state.molesSlain += 1;
+      Sound.moleDie();
+      burst(mole.x, mole.y, 14, ['#9b765d', '#d8bc96', '#d2e2e7'], 150, 0.5, 0.12);
+    }
+  }
+
+  function damageSpider(spider, amount, angle) {
+    if (spider.dead) return;
+    spider.hp -= amount;
+    spider.flash = 0.16;
+    spider.knockX += Math.cos(angle) * 150;
+    spider.knockY += Math.sin(angle) * 150;
+    shake(0.3);
+    floaters.push({
+      x: spider.x, y: spider.y - spider.r - 8, text: String(amount),
+      color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
+    });
+    if (spider.hp > 0) return;
+    spider.dead = true;
+    state.spidersSlain += 1;
+    Sound.slimeDie();
+    burst(spider.x, spider.y, 12, ['#59465f', '#a88192', '#dfc9c0'], 140, 0.45, 0.1);
+  }
+
+  function damageProspector(prospector, amount, angle) {
+    if (prospector.dead) return;
+    prospector.hp -= amount;
+    prospector.flash = 0.16;
+    prospector.knockX += Math.cos(angle) * 150;
+    prospector.knockY += Math.sin(angle) * 150;
+    shake(0.3);
+    floaters.push({
+      x: prospector.x, y: prospector.y - prospector.r - 12, text: String(amount),
+      color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
+    });
+    if (prospector.hp > 0) return;
+
+    prospector.dead = true;
+    state.prospectorsSlain += 1;
+    Sound.moleDie();
+    burst(prospector.x, prospector.y, 14, ['#d4a465', '#f5cf61', '#d9e2e7'], 150, 0.5, 0.12);
+    // The haul is not credited directly: it becomes level-owned ground loot,
+    // so full bags and level transitions cannot erase or duplicate it.
+    for (const [item, offset] of [['gold', -6], ['silver', 6]]) {
+      const amountHeld = prospector.haul[item];
+      if (amountHeld > 0) spawnPickup(item, amountHeld, prospector.x + offset, prospector.y, { startOnGround: true, source: 'prospector' });
+      prospector.haul[item] = 0;
+    }
+  }
+
   function killSlime(s) {
     s.dead = true;
     state.slimesSlain += 1;
@@ -945,10 +1555,15 @@
     burst(s.x, s.y, 14, [s.color, shade(s.color, 1.25), '#ffffff'], 170, 0.55, 0.14);
 
     if (!s.tiny) {
-      // A slain slime splits into two half-size copies of itself.
+      // Large slimes split into two regular slimes; regulars split into tinies.
       for (let i = 0; i < 2; i++) {
         const a = rand(0, TAU);
-        slimes.push(makeSlime(s.x + Math.cos(a) * 10, s.y + Math.sin(a) * 10, true));
+        const tiny = !s.large;
+        const radius = tiny ? BALANCE.tinyRadius : BALANCE.slimeRadius;
+        let x = s.x + Math.cos(a) * 10;
+        let y = s.y + Math.sin(a) * 10;
+        if (collidesAt(x, y, radius)) { x = s.x; y = s.y; }
+        slimes.push(makeSlime(x, y, tiny));
       }
       floaters.push({
         x: s.x,
@@ -962,10 +1577,10 @@
     }
   }
 
-  function hurtPlayer(amount, fromAngle) {
-    if (state.invuln > 0 || state.mode !== 'playing') return;
+  function hurtPlayer(amount, fromAngle, ignoreInvulnerability = false, invulnerabilityTime = BALANCE.invulnerableTime) {
+    if (state.mode !== 'playing' || (state.invuln > 0 && !ignoreInvulnerability)) return;
     state.hp = Math.max(0, state.hp - amount);
-    state.invuln = BALANCE.invulnerableTime;
+    state.invuln = invulnerabilityTime;
     player.hurtFlash = 0.35;
     shake(0.8);
     Sound.hurt();
@@ -993,17 +1608,20 @@
 
   /* ---------------------------------------------------------------- slimes */
 
-  function makeSlime(x, y, tiny) {
+  function makeSlime(x, y, tiny, large = false) {
+    const hp = large ? BALANCE.largeSlimeHp : tiny ? BALANCE.tinyHp : BALANCE.slimeHp;
     return {
       x,
       y,
-      r: tiny ? BALANCE.tinyRadius : BALANCE.slimeRadius,
-      hp: tiny ? BALANCE.tinyHp : BALANCE.slimeHp,
-      maxHp: tiny ? BALANCE.tinyHp : BALANCE.slimeHp,
-      dmg: tiny ? BALANCE.tinyDamage : BALANCE.slimeDamage,
-      speed: tiny ? BALANCE.tinySpeed : BALANCE.slimeSpeed,
-      tiny: !!tiny,
-      color: tiny ? '#a8e88b' : '#5fbf6e',
+      r: large ? BALANCE.largeSlimeRadius : tiny ? BALANCE.tinyRadius : BALANCE.slimeRadius,
+      hp,
+      maxHp: hp,
+      dmg: large ? BALANCE.largeSlimeDamage : tiny ? BALANCE.tinyDamage : BALANCE.slimeDamage,
+      speed: large ? BALANCE.largeSlimeSpeed : tiny ? BALANCE.tinySpeed : BALANCE.slimeSpeed,
+      detect: large ? BALANCE.largeSlimeDetect : tiny ? BALANCE.tinyDetect : BALANCE.slimeDetect,
+      tiny: !!tiny && !large,
+      large: !!large,
+      color: large ? '#419b78' : tiny ? '#a8e88b' : '#5fbf6e',
       dead: false,
       flash: 0,
       attackCd: 0,
@@ -1024,10 +1642,13 @@
       const tx = randInt(1, level.w - 2);
       const ty = randInt(1, level.h - 2);
       if (isSolid(tx, ty)) continue;
-      if (getTile(tx, ty) === STAIRS_UP) continue;
+      if (getTile(tx, ty) === STAIRS_UP || getTile(tx, ty) === STAIRS_DOWN) continue;
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
 
-      const s = makeSlime((tx + 0.5) * TS, (ty + 0.5) * TS, false);
+      const large = level.id === 'stage4';
+      const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+      if (collidesAt(x, y, large ? BALANCE.largeSlimeRadius : BALANCE.slimeRadius)) continue;
+      const s = makeSlime(x, y, false, large);
       slimes.push(s);
       burst(s.x, s.y, 8, ['#8ce09a', '#4f9e5c'], 90, 0.45, 0.1);
       return s;
@@ -1036,13 +1657,14 @@
   }
 
   function updateSlimes(dt) {
-    if (level.id !== 'stage1') return;
+    if (level.isBase || level.id === 'stage3') return;
 
     const alive = slimes.filter((s) => !s.dead).length;
-    if (alive < BALANCE.maxSlimes) {
+    const inStalag = level.id === 'stage4';
+    if (alive < (inStalag ? BALANCE.maxLargeSlimes : BALANCE.maxSlimes)) {
       level.slimeTimer -= dt;
       if (level.slimeTimer <= 0) {
-        level.slimeTimer = BALANCE.slimeSpawnEvery;
+        level.slimeTimer = inStalag ? BALANCE.largeSlimeSpawnEvery : BALANCE.slimeSpawnEvery;
         spawnSlimeAwayFromPlayer();
       }
     }
@@ -1062,9 +1684,8 @@
       const dist = Math.hypot(dx, dy) || 1;
       s.face = dx >= 0 ? 1 : -1;
 
-      // Slimes have short sight: 4 tiles for a normal one, 2 for a tiny.
-      const detect = s.tiny ? BALANCE.tinyDetect : BALANCE.slimeDetect;
-      s.chasing = dist <= detect;
+      // Large slimes see 6 tiles, regulars 4, and tiny slimes 2.
+      s.chasing = dist <= s.detect;
 
       let moveX = 0;
       let moveY = 0;
@@ -1118,6 +1739,596 @@
       if (dist < s.r + BALANCE.playerRadius + 1 && s.attackCd <= 0) {
         s.attackCd = 1;
         hurtPlayer(s.dmg, Math.atan2(s.y - player.y, s.x - player.x));
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------ Drill Moles */
+
+  function makeMole(x, y) {
+    return {
+      kind: 'mole', x, y,
+      r: BALANCE.moleRadius,
+      hp: BALANCE.moleHp, maxHp: BALANCE.moleHp,
+      dmg: BALANCE.moleDamage, speed: BALANCE.moleSpeed,
+      dead: false, flash: 0, attackCd: 0, knockX: 0, knockY: 0,
+      angle: 0, drillSpin: 0, chasing: false, inWall: false,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.5, 2),
+      lastTile: `${Math.floor(x / TS)},${Math.floor(y / TS)}`,
+    };
+  }
+
+  function spawnMoleAwayFromPlayer() {
+    if (level.id !== 'stage2') return null;
+    const p = playerTile();
+    for (let attempt = 0; attempt < 90; attempt++) {
+      const tx = randInt(1, level.w - 2);
+      const ty = randInt(1, level.h - 2);
+      if (isSolid(tx, ty) || getTile(tx, ty) === STAIRS_UP) continue;
+      if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
+      const mole = makeMole((tx + 0.5) * TS, (ty + 0.5) * TS);
+      moles.push(mole);
+      burst(mole.x, mole.y, 8, ['#a08269', '#d3b493', '#c9dbe1'], 85, 0.4, 0.08);
+      return mole;
+    }
+    return null;
+  }
+
+  function moleEnteredTile(mole) {
+    const tx = Math.floor(mole.x / TS);
+    const ty = Math.floor(mole.y / TS);
+    const key = `${tx},${ty}`;
+    if (key === mole.lastTile) return;
+    mole.lastTile = key;
+    const tile = getTile(tx, ty);
+    if (!TILES[tile].solid || tx <= 0 || ty <= 0 || tx >= level.w - 1 || ty >= level.h - 1) return;
+
+    // Roll once per entered block, not once per frame spent inside it. The
+    // outer boundary is always protected, but interior rock and walls can break.
+    if (Math.random() >= BALANCE.moleBreakChance) return;
+    const def = TILES[tile];
+    level.damage.delete(key);
+    setTile(tx, ty, FLOOR);
+    const x = (tx + 0.5) * TS;
+    const y = (ty + 0.5) * TS;
+    // A mole destroys the block outright; only player-mined blocks drop items.
+    hitParticles(x, y, def.base);
+    if (Math.hypot(player.x - x, player.y - y) < 8 * TS) Sound.rockBreak();
+  }
+
+  function updateMoles(dt) {
+    if (level.id !== 'stage2') return;
+    const alive = moles.filter((mole) => !mole.dead).length;
+    if (alive < BALANCE.maxMoles) {
+      level.moleTimer -= dt;
+      if (level.moleTimer <= 0) {
+        level.moleTimer = BALANCE.moleSpawnEvery;
+        spawnMoleAwayFromPlayer();
+      }
+    }
+
+    for (let i = moles.length - 1; i >= 0; i--) {
+      const mole = moles[i];
+      if (mole.dead) {
+        moles.splice(i, 1);
+        continue;
+      }
+      mole.flash = Math.max(0, mole.flash - dt);
+      mole.attackCd = Math.max(0, mole.attackCd - dt);
+      const dx = player.x - mole.x;
+      const dy = player.y - mole.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      mole.chasing = dist <= BALANCE.moleDetect;
+      let moveX;
+      let moveY;
+      if (mole.chasing) {
+        moveX = dx / dist * mole.speed;
+        moveY = dy / dist * mole.speed;
+        mole.wanderTimer = 0;
+      } else {
+        mole.wanderTimer -= dt;
+        if (mole.wanderTimer <= 0) {
+          mole.wanderTimer = rand(1.1, 2.8);
+          mole.wanderAngle = rand(0, TAU);
+        }
+        moveX = Math.cos(mole.wanderAngle) * mole.speed * 0.5;
+        moveY = Math.sin(mole.wanderAngle) * mole.speed * 0.5;
+      }
+      if (Math.hypot(moveX, moveY) > 0.01) mole.angle = Math.atan2(moveY, moveX);
+      mole.drillSpin += dt * 18;
+
+      // Unlike slimes and the player, moles ignore interior tile collisions.
+      const nx = mole.x + (moveX + mole.knockX) * dt;
+      const ny = mole.y + (moveY + mole.knockY) * dt;
+      mole.knockX *= Math.max(0, 1 - 8 * dt);
+      mole.knockY *= Math.max(0, 1 - 8 * dt);
+      mole.x = clamp(nx, TS + mole.r, (level.w - 1) * TS - mole.r);
+      mole.y = clamp(ny, TS + mole.r, (level.h - 1) * TS - mole.r);
+      if (!mole.chasing && (mole.x !== nx || mole.y !== ny)) mole.wanderTimer = 0;
+      moleEnteredTile(mole);
+      mole.inWall = isSolid(Math.floor(mole.x / TS), Math.floor(mole.y / TS));
+
+      if (Math.hypot(player.x - mole.x, player.y - mole.y) < mole.r + BALANCE.playerRadius + 1 && mole.attackCd <= 0) {
+        mole.attackCd = 1;
+        hurtPlayer(mole.dmg, Math.atan2(mole.y - player.y, mole.x - player.x));
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------------- spiders */
+
+  function makeSpider(x, y) {
+    return {
+      kind: 'spider', x, y, r: BALANCE.spiderRadius,
+      hp: BALANCE.spiderHp, maxHp: BALANCE.spiderHp,
+      dmg: BALANCE.spiderDamage, speed: BALANCE.spiderSpeed,
+      detect: BALANCE.spiderDetect, dead: false, flash: 0,
+      attackCd: 0, bite: 0, knockX: 0, knockY: 0,
+      facing: 0, walk: 0, chasing: false,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.6, 1.8),
+      chaseRoute: [], chaseRouteIndex: 0, chaseGoal: '', chasePathTimer: 0,
+      stuckTime: 0,
+    };
+  }
+
+  function spawnSpiderAwayFromPlayer() {
+    if (level.id !== 'stage4') return null;
+    const p = playerTile();
+    for (let attempt = 0; attempt < 90; attempt++) {
+      const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
+      const tile = getTile(tx, ty);
+      if (isSolid(tx, ty) || tile === STAIRS_UP || tile === STAIRS_DOWN) continue;
+      if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
+      const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+      if (collidesAt(x, y, BALANCE.spiderRadius)) continue;
+      const spider = makeSpider(x, y);
+      spiders.push(spider);
+      burst(x, y, 7, ['#58465f', '#a78191', '#d6c6b6'], 65, 0.35, 0.07);
+      return spider;
+    }
+    return null;
+  }
+
+  function updateSpiders(dt) {
+    if (level.id !== 'stage4') return;
+    if (spiders.filter((spider) => !spider.dead).length < BALANCE.maxSpiders) {
+      level.spiderTimer -= dt;
+      if (level.spiderTimer <= 0) {
+        level.spiderTimer = BALANCE.spiderSpawnEvery;
+        spawnSpiderAwayFromPlayer();
+      }
+    }
+
+    for (let i = spiders.length - 1; i >= 0; i--) {
+      const spider = spiders[i];
+      if (spider.dead) { spiders.splice(i, 1); continue; }
+      spider.flash = Math.max(0, spider.flash - dt);
+      spider.attackCd = Math.max(0, spider.attackCd - dt);
+      spider.bite = Math.max(0, spider.bite - dt);
+      const dx = player.x - spider.x, dy = player.y - spider.y;
+      const dist = Math.hypot(dx, dy);
+      spider.chasing = dist <= spider.detect;
+      let direction;
+      let speed = spider.speed;
+      if (spider.chasing) {
+        direction = chaseDirection(spider, dt);
+        spider.wanderTimer = 0;
+      } else {
+        spider.wanderTimer -= dt;
+        if (spider.wanderTimer <= 0) {
+          spider.wanderTimer = rand(0.8, 1.8);
+          spider.wanderAngle = rand(0, TAU);
+        }
+        direction = { x: Math.cos(spider.wanderAngle), y: Math.sin(spider.wanderAngle) };
+        speed *= 0.5;
+      }
+      if (direction) spider.facing = Math.atan2(direction.y, direction.x);
+      const vx = (direction ? direction.x * speed : 0) + spider.knockX;
+      const vy = (direction ? direction.y * speed : 0) + spider.knockY;
+      spider.knockX *= Math.max(0, 1 - 8 * dt);
+      spider.knockY *= Math.max(0, 1 - 8 * dt);
+      const oldX = spider.x, oldY = spider.y;
+      if (!collidesAt(spider.x + vx * dt, spider.y, spider.r)) spider.x += vx * dt;
+      if (!collidesAt(spider.x, spider.y + vy * dt, spider.r)) spider.y += vy * dt;
+      if (Math.hypot(spider.x - oldX, spider.y - oldY) > 0.01) {
+        spider.walk += dt * 18;
+        spider.stuckTime = 0;
+      } else {
+        spider.stuckTime += dt;
+        if (spider.stuckTime > 0.5) {
+          spider.stuckTime = 0;
+          spider.wanderTimer = 0;
+          spider.chasePathTimer = 0;
+        }
+      }
+      if (Math.hypot(player.x - spider.x, player.y - spider.y) <= spider.r + BALANCE.playerRadius + 1 && spider.attackCd <= 1e-9) {
+        spider.attackCd = BALANCE.spiderAttackEvery;
+        spider.bite = 0.18;
+        // A short recovery from a spider bite lets its rapid, low-damage
+        // attacks land while retaining normal protection after other enemies.
+        hurtPlayer(spider.dmg, Math.atan2(player.y - spider.y, player.x - spider.x), false, BALANCE.spiderHitInvulnerability);
+        if (state.mode !== 'playing') return;
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------ Prospectors */
+
+  const FOUR_WAYS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  function makeProspector(x, y) {
+    return {
+      kind: 'prospector', x, y, r: BALANCE.prospectorRadius,
+      hp: BALANCE.prospectorHp, maxHp: BALANCE.prospectorHp,
+      dmg: BALANCE.slimeDamage, speed: BALANCE.slimeSpeed,
+      haul: { gold: 0, silver: 0 },
+      dead: false, flash: 0, attackCd: 0, throwCd: 0,
+      knockX: 0, knockY: 0, facing: 0, walk: 0, swingTime: 0,
+      chasing: false, mining: false, mineProgress: 0, mineTick: 0,
+      oreTarget: null, scanTimer: 0, stuckTime: 0,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.8, 2.8),
+      chaseRoute: [], chaseRouteIndex: 0, chaseGoal: '', chasePathTimer: 0,
+    };
+  }
+
+  function spawnProspectorAwayFromPlayer() {
+    if (level.id !== 'stage3' && level.id !== 'stage4') return null;
+    const p = playerTile();
+    for (let attempt = 0; attempt < 90; attempt++) {
+      const tx = randInt(1, level.w - 2);
+      const ty = randInt(1, level.h - 2);
+      if (isSolid(tx, ty) || getTile(tx, ty) === STAIRS_UP || getTile(tx, ty) === STAIRS_DOWN) continue;
+      if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
+      const x = (tx + 0.5) * TS;
+      const y = (ty + 0.5) * TS;
+      if (collidesAt(x, y, BALANCE.prospectorRadius)) continue;
+      const prospector = makeProspector(x, y);
+      level.prospectors.push(prospector);
+      burst(x, y, 8, ['#9b876a', '#d4b980', '#f8dc85'], 75, 0.4, 0.08);
+      return prospector;
+    }
+    return null;
+  }
+
+  // A breadth-first walk tree lets Prospectors reach a vein around corners
+  // rather than trying to walk through stone. Ore itself remains solid until
+  // the prospector reaches a walkable tile next to it.
+  function walkTree(tx, ty) {
+    if (!inBounds(level, tx, ty) || isSolid(tx, ty)) return null;
+    const size = level.w * level.h;
+    const previous = new Int32Array(size).fill(-1);
+    const distance = new Int16Array(size).fill(-1);
+    const queue = new Int32Array(size);
+    const start = idx(level, tx, ty);
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    previous[start] = start;
+    distance[start] = 0;
+    while (head < tail) {
+      const current = queue[head++];
+      const x = current % level.w;
+      const y = Math.floor(current / level.w);
+      for (const [dx, dy] of FOUR_WAYS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!inBounds(level, nx, ny) || isSolid(nx, ny)) continue;
+        const next = idx(level, nx, ny);
+        if (previous[next] !== -1) continue;
+        previous[next] = current;
+        distance[next] = distance[current] + 1;
+        queue[tail++] = next;
+      }
+    }
+    return { previous, distance, start };
+  }
+
+  function routeTo(tree, tx, ty) {
+    if (!tree || !inBounds(level, tx, ty)) return null;
+    let cursor = idx(level, tx, ty);
+    if (tree.previous[cursor] < 0) return null;
+    const route = [];
+    while (cursor !== tree.start) {
+      route.push({ tx: cursor % level.w, ty: Math.floor(cursor / level.w) });
+      cursor = tree.previous[cursor];
+    }
+    route.reverse();
+    return route;
+  }
+
+  function findProspectorOre(prospector) {
+    const sx = Math.floor(prospector.x / TS);
+    const sy = Math.floor(prospector.y / TS);
+    const ores = [];
+    for (let ty = sy - 4; ty <= sy + 4; ty++) {
+      for (let tx = sx - 4; tx <= sx + 4; tx++) {
+        const tile = getTile(tx, ty);
+        if (tile !== GOLD && tile !== SILVER) continue;
+        const distance = Math.hypot((tx + 0.5) * TS - prospector.x, (ty + 0.5) * TS - prospector.y);
+        if (distance <= BALANCE.prospectorDetect) ores.push({ tx, ty, tile, distance });
+      }
+    }
+    if (!ores.length) return null;
+    ores.sort((a, b) => a.distance - b.distance);
+    const tree = walkTree(sx, sy);
+    if (!tree) return null;
+    function accessibleSide(tx, ty) {
+      let best = null;
+      for (const [dx, dy] of FOUR_WAYS) {
+        const sideX = tx + dx;
+        const sideY = ty + dy;
+        if (!inBounds(level, sideX, sideY) || isSolid(sideX, sideY)) continue;
+        const distance = tree.distance[idx(level, sideX, sideY)];
+        if (distance < 0) continue;
+        if (!best || distance < best.distance) best = { tx: sideX, ty: sideY, distance };
+      }
+      return best;
+    }
+    const approach = (tile, best) => ({
+      ...tile, goalTx: best.tx, goalTy: best.ty,
+      route: routeTo(tree, best.tx, best.ty), routeIndex: 0,
+    });
+    for (const ore of ores) {
+      const best = accessibleSide(ore.tx, ore.ty);
+      if (best) return approach(ore, best);
+    }
+    // A vein can sit one layer behind the visible rock. Clear an accessible
+    // obstruction first instead of giving up on nearby buried ore.
+    let obstruction = null;
+    for (const ore of ores) {
+      for (const [dx, dy] of FOUR_WAYS) {
+        const tx = ore.tx + dx;
+        const ty = ore.ty + dy;
+        const tile = getTile(tx, ty);
+        if (tile !== STONE && tile !== GOLD && tile !== SILVER) continue;
+        const best = accessibleSide(tx, ty);
+        if (best && (!obstruction || best.distance < obstruction.best.distance)) {
+          obstruction = { tile: { tx, ty, tile }, best };
+        }
+      }
+    }
+    return obstruction ? approach(obstruction.tile, obstruction.best) : null;
+  }
+
+  function followRoute(prospector, target, reach = 2) {
+    while (target.routeIndex < target.route.length) {
+      const next = target.route[target.routeIndex];
+      const dx = (next.tx + 0.5) * TS - prospector.x;
+      const dy = (next.ty + 0.5) * TS - prospector.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < reach) { target.routeIndex++; continue; }
+      return { x: dx / distance, y: dy / distance };
+    }
+    return null;
+  }
+
+  function clearWalkTo(prospector, x, y) {
+    const distance = Math.hypot(x - prospector.x, y - prospector.y);
+    const steps = Math.max(1, Math.ceil(distance / 8));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (collidesAt(lerp(prospector.x, x, t), lerp(prospector.y, y, t), prospector.r)) return false;
+    }
+    return true;
+  }
+
+  function chaseDirection(prospector, dt) {
+    const dx = player.x - prospector.x;
+    const dy = player.y - prospector.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    if (clearWalkTo(prospector, player.x, player.y)) {
+      prospector.chaseRoute.length = 0;
+      return { x: dx / distance, y: dy / distance };
+    }
+    const tx = Math.floor(player.x / TS);
+    const ty = Math.floor(player.y / TS);
+    const goal = `${tx},${ty}`;
+    prospector.chasePathTimer -= dt;
+    if (prospector.chasePathTimer <= 0 || prospector.chaseGoal !== goal) {
+      const tree = walkTree(Math.floor(prospector.x / TS), Math.floor(prospector.y / TS));
+      prospector.chaseRoute = routeTo(tree, tx, ty) || [];
+      prospector.chaseRouteIndex = 0;
+      prospector.chaseGoal = goal;
+      prospector.chasePathTimer = 0.6;
+    }
+    const route = { route: prospector.chaseRoute, routeIndex: prospector.chaseRouteIndex };
+    const direction = followRoute(prospector, route, Math.max(2, prospector.speed * dt));
+    prospector.chaseRouteIndex = route.routeIndex;
+    return direction || { x: dx / distance, y: dy / distance };
+  }
+
+  function throwDynamite(prospector) {
+    const tx = Math.floor(player.x / TS);
+    const ty = Math.floor(player.y / TS);
+    const dynamite = {
+      fromX: prospector.x, fromY: prospector.y,
+      x: prospector.x, y: prospector.y,
+      targetX: (tx + 0.5) * TS, targetY: (ty + 0.5) * TS,
+      age: 0,
+    };
+    level.dynamites.push(dynamite);
+    prospector.throwCd = BALANCE.dynamiteThrowCooldown;
+    prospector.swingTime = 0.3;
+    Sound.throwDynamite();
+    return dynamite;
+  }
+
+  function updateProspectors(dt) {
+    if (level.id !== 'stage3' && level.id !== 'stage4') return;
+    const alive = level.prospectors.filter((prospector) => !prospector.dead).length;
+    if (alive < BALANCE.maxProspectors) {
+      level.prospectorTimer -= dt;
+      if (level.prospectorTimer <= 0) {
+        level.prospectorTimer = BALANCE.prospectorSpawnEvery;
+        spawnProspectorAwayFromPlayer();
+      }
+    }
+
+    const carriesTreasure = countItem('gold') > 0 || countItem('silver') > 0;
+    for (let i = level.prospectors.length - 1; i >= 0; i--) {
+      const prospector = level.prospectors[i];
+      if (prospector.dead) { level.prospectors.splice(i, 1); continue; }
+      prospector.flash = Math.max(0, prospector.flash - dt);
+      prospector.attackCd = Math.max(0, prospector.attackCd - dt);
+      prospector.throwCd = Math.max(0, prospector.throwCd - dt);
+      prospector.swingTime = Math.max(0, prospector.swingTime - dt);
+      prospector.mineTick = Math.max(0, prospector.mineTick - dt);
+      prospector.mining = false;
+
+      const dx = player.x - prospector.x;
+      const dy = player.y - prospector.y;
+      const distance = Math.hypot(dx, dy);
+      prospector.chasing = carriesTreasure && distance <= BALANCE.prospectorDetect;
+      let direction = null;
+      let speed = prospector.speed * 0.5; // the same amble as a wandering slime
+
+      if (prospector.chasing) {
+        // A visible player carrying treasure always interrupts ore mining.
+        prospector.oreTarget = null;
+        prospector.mineProgress = 0;
+        prospector.scanTimer = 0;
+        prospector.facing = Math.atan2(dy, dx);
+        speed = prospector.speed;
+        if (distance > BALANCE.prospectorMeleeRange) {
+          if (prospector.throwCd <= 1e-9) throwDynamite(prospector);
+          direction = chaseDirection(prospector, dt);
+        } else if (distance > prospector.r + BALANCE.playerRadius - 2) {
+          direction = { x: dx / (distance || 1), y: dy / (distance || 1) };
+        }
+      } else {
+        const target = prospector.oreTarget;
+        if (target && getTile(target.tx, target.ty) !== target.tile) {
+          prospector.oreTarget = null;
+          prospector.mineProgress = 0;
+          prospector.scanTimer = 0;
+        }
+        prospector.scanTimer -= dt;
+        if (!prospector.oreTarget && prospector.scanTimer <= 0) {
+          prospector.oreTarget = findProspectorOre(prospector);
+          prospector.scanTimer = 0.6;
+        }
+        if (prospector.oreTarget) {
+          const ore = prospector.oreTarget;
+          const px = Math.floor(prospector.x / TS);
+          const py = Math.floor(prospector.y / TS);
+          const oreX = (ore.tx + 0.5) * TS;
+          const oreY = (ore.ty + 0.5) * TS;
+          const adjacent = Math.abs(px - ore.tx) + Math.abs(py - ore.ty) === 1;
+          if (adjacent && Math.hypot(oreX - prospector.x, oreY - prospector.y) <= TS * 1.6) {
+            prospector.mining = true;
+            prospector.facing = Math.atan2(oreY - prospector.y, oreX - prospector.x);
+            prospector.mineProgress += dt;
+            if (prospector.mineTick <= 0) {
+              prospector.mineTick = 0.35;
+              prospector.swingTime = 0.24;
+              hitParticles(oreX, oreY, TILES[ore.tile].base);
+              if (Math.hypot(player.x - prospector.x, player.y - prospector.y) < 8 * TS) Sound.pickHit();
+            }
+            if (prospector.mineProgress >= BALANCE.prospectorMineTime && getTile(ore.tx, ore.ty) === ore.tile) {
+              const item = ore.tile === GOLD ? 'gold' : ore.tile === SILVER ? 'silver' : null;
+              level.damage.delete(`${ore.tx},${ore.ty}`);
+              setTile(ore.tx, ore.ty, FLOOR);
+              hitParticles(oreX, oreY, TILES[ore.tile].base);
+              if (item) {
+                prospector.haul[item] += 1;
+                if (Math.hypot(player.x - prospector.x, player.y - prospector.y) < 8 * TS) Sound.oreBreak();
+                floaters.push({ x: prospector.x, y: prospector.y - 25, text: '+1 ' + ITEMS[item].name,
+                  color: ITEMS[item].color, life: 0.8, maxLife: 0.8, vy: -35 });
+              } else if (Math.hypot(player.x - prospector.x, player.y - prospector.y) < 8 * TS) {
+                Sound.rockBreak();
+              }
+              prospector.oreTarget = null;
+              prospector.mineProgress = 0;
+              prospector.scanTimer = 0;
+            }
+          } else {
+            direction = followRoute(prospector, ore);
+            if (!direction) {
+              const gx = (ore.goalTx + 0.5) * TS - prospector.x;
+              const gy = (ore.goalTy + 0.5) * TS - prospector.y;
+              const length = Math.hypot(gx, gy);
+              if (length > 1) direction = { x: gx / length, y: gy / length };
+            }
+          }
+        } else {
+          prospector.wanderTimer -= dt;
+          if (prospector.wanderTimer <= 0) {
+            prospector.wanderTimer = rand(1.1, 2.8);
+            prospector.wanderAngle = rand(0, TAU);
+          }
+          direction = { x: Math.cos(prospector.wanderAngle), y: Math.sin(prospector.wanderAngle) };
+        }
+      }
+
+      if (direction && !prospector.mining) prospector.facing = Math.atan2(direction.y, direction.x);
+      const vx = (direction ? direction.x * speed : 0) + prospector.knockX;
+      const vy = (direction ? direction.y * speed : 0) + prospector.knockY;
+      prospector.knockX *= Math.max(0, 1 - 8 * dt);
+      prospector.knockY *= Math.max(0, 1 - 8 * dt);
+      const oldX = prospector.x;
+      const oldY = prospector.y;
+      if (!collidesAt(prospector.x + vx * dt, prospector.y, prospector.r)) prospector.x += vx * dt;
+      if (!collidesAt(prospector.x, prospector.y + vy * dt, prospector.r)) prospector.y += vy * dt;
+      const moved = Math.hypot(prospector.x - oldX, prospector.y - oldY);
+      if (moved > 0.01) {
+        prospector.walk += dt * 9;
+        prospector.stuckTime = 0;
+      } else if (direction) {
+        prospector.stuckTime += dt;
+        if (prospector.stuckTime > 0.8) {
+          prospector.stuckTime = 0;
+          prospector.wanderTimer = 0;
+          prospector.chasePathTimer = 0;
+          if (!prospector.chasing) { prospector.oreTarget = null; prospector.scanTimer = 0; prospector.mineProgress = 0; }
+        }
+      }
+
+      if (prospector.chasing && prospector.attackCd <= 0 &&
+          Math.hypot(player.x - prospector.x, player.y - prospector.y) <= BALANCE.prospectorMeleeRange) {
+        prospector.attackCd = 1;
+        prospector.swingTime = 0.3;
+        hurtPlayer(prospector.dmg, Math.atan2(player.y - prospector.y, player.x - prospector.x));
+        if (state.mode !== 'playing') return;
+      }
+    }
+  }
+
+  function updateDynamites(dt) {
+    for (let i = level.explosions.length - 1; i >= 0; i--) {
+      level.explosions[i].age += dt;
+      if (level.explosions[i].age >= level.explosions[i].duration) level.explosions.splice(i, 1);
+    }
+    for (let i = level.dynamites.length - 1; i >= 0; i--) {
+      const dynamite = level.dynamites[i];
+      dynamite.age += dt;
+      const flight = clamp(dynamite.age / BALANCE.dynamiteFlight, 0, 1);
+      dynamite.x = lerp(dynamite.fromX, dynamite.targetX, flight);
+      dynamite.y = lerp(dynamite.fromY, dynamite.targetY, flight);
+      // The two-second fuse starts when the projectile reaches the ground,
+      // not when the prospector releases it.
+      if (dynamite.age + 1e-9 < BALANCE.dynamiteFlight + BALANCE.dynamiteFuse) continue;
+      level.dynamites.splice(i, 1);
+      const x = dynamite.targetX;
+      const y = dynamite.targetY;
+      level.explosions.push({ x, y, age: 0, duration: 0.5 });
+      burst(x, y, 32, ['#ffdd7d', '#ff873b', '#e74d32', '#75665a'], 210, 0.55, 0.18);
+      if (Math.hypot(player.x - x, player.y - y) < 9 * TS) Sound.explosion();
+      shake(1.1);
+
+      // Distance is measured in tile rings: every adjacent tile is one block
+      // away, including diagonals. Percentages are of maximum player HP.
+      const px = Math.floor(player.x / TS);
+      const py = Math.floor(player.y / TS);
+      const tx = Math.floor(x / TS);
+      const ty = Math.floor(y / TS);
+      const ring = Math.max(Math.abs(px - tx), Math.abs(py - ty));
+      const damageFraction = [1, 0.7, 0.6, 0.5, 0.25][ring] || 0;
+      if (damageFraction > 0) {
+        // Blasts bypass ordinary contact invulnerability; the same-tile hit
+        // must always be fatal, even immediately after another attack.
+        const amount = Math.round(BALANCE.playerMaxHp * damageFraction);
+        hurtPlayer(amount, Math.atan2(player.y - y, player.x - x), true);
+        if (state.mode !== 'playing') return;
       }
     }
   }
@@ -1191,8 +2402,8 @@
   function stairsUnderPlayer() {
     const p = playerTile();
     const t = getTile(p.tx, p.ty);
-    if (t === STAIRS_DOWN) return 'stage1';
-    if (t === STAIRS_UP) return 'home';
+    if (t === STAIRS_DOWN) return level.downTarget;
+    if (t === STAIRS_UP) return level.upTarget;
     return null;
   }
 
@@ -1204,28 +2415,160 @@
     const target = stairsUnderPlayer();
     if (!target) return;
 
-    if (target === 'stage1') {
-      enterLevel('stage1', 'You descend into Stage 1…');
-    } else {
-      enterLevel('home', 'Back at Home Base.');
+    enterLevel(target, target === 'home' ? 'Back at Home Base.' : undefined);
+  }
+
+  function showAreaName(lv) {
+    const descriptions = {
+      stage1: { kicker: 'Stage 01', subtitle: 'The start of an epic journey!' },
+      stage2: { kicker: 'Stage 02', subtitle: 'Moles have carved these tunnels' },
+      stage3: { kicker: 'Stage 03', subtitle: 'The abundant riches have attracted the greedy' },
+      stage4: { kicker: 'Stage 04', subtitle: 'The calcium grows into spikes here' },
+    };
+    const area = descriptions[lv.id];
+    el.stageName.textContent = lv.name;
+    el.areaKicker.textContent = area ? area.kicker : '';
+    el.areaSubtitle.textContent = area ? area.subtitle : '';
+    state.areaIntro = area ? 3.5 : 0;
+    el.areaBanner.classList.toggle('is-arriving', !!area);
+  }
+
+  function updateAreaName(dt) {
+    if (state.areaIntro <= 0) return;
+    state.areaIntro = Math.max(0, state.areaIntro - dt);
+    if (state.areaIntro === 0) el.areaBanner.classList.remove('is-arriving');
+  }
+
+  // Tiles restored around a previously mined tunnel can otherwise bury a
+  // ground pickup or trap a prospector carrying ore. Find safe, reachable
+  // floor tiles without deleting either of them.
+  function reachableOnEntry(lv) {
+    const reachable = new Uint8Array(lv.w * lv.h);
+    const sx = Math.floor(lv.spawn.x / TS);
+    const sy = Math.floor(lv.spawn.y / TS);
+    if (isSolidInLevel(lv, sx, sy)) return reachable;
+    const queue = [idx(lv, sx, sy)];
+    reachable[queue[0]] = 1;
+    for (let head = 0; head < queue.length; head++) {
+      const current = queue[head];
+      const x = current % lv.w;
+      const y = Math.floor(current / lv.w);
+      for (const [dx, dy] of FOUR_WAYS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!inBounds(lv, nx, ny)) continue;
+        const next = idx(lv, nx, ny);
+        if (reachable[next] || isSolidInLevel(lv, nx, ny)) continue;
+        reachable[next] = 1;
+        queue.push(next);
+      }
+    }
+    return reachable;
+  }
+
+  function nearestReachableFloor(lv, x, y, reachable) {
+    const sx = clamp(Math.floor(x / TS), 0, lv.w - 1);
+    const sy = clamp(Math.floor(y / TS), 0, lv.h - 1);
+    const seen = new Uint8Array(lv.w * lv.h);
+    const queue = [idx(lv, sx, sy)];
+    seen[queue[0]] = 1;
+    for (let head = 0; head < queue.length; head++) {
+      const current = queue[head];
+      const tx = current % lv.w;
+      const ty = Math.floor(current / lv.w);
+      if (reachable[current] && lv.tiles[current] === FLOOR) {
+        return { x: (tx + 0.5) * TS, y: (ty + 0.5) * TS };
+      }
+      for (const [dx, dy] of FOUR_WAYS) {
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (!inBounds(lv, nx, ny)) continue;
+        const next = idx(lv, nx, ny);
+        if (seen[next]) continue;
+        seen[next] = 1;
+        queue.push(next);
+      }
+    }
+    return { x: lv.spawn.x, y: lv.spawn.y };
+  }
+
+  function restoreTilesOnEntry(lv) {
+    lv.tiles.set(lv.originalTiles);
+    lv.stalagmites.clear();
+    for (const key of lv.originalStalagmites) lv.stalagmites.add(key);
+    lv.damage.clear();
+    const reachable = reachableOnEntry(lv);
+    const isReachable = (x, y) => {
+      const tx = Math.floor(x / TS);
+      const ty = Math.floor(y / TS);
+      return inBounds(lv, tx, ty) && reachable[idx(lv, tx, ty)] === 1;
+    };
+
+    for (const pickup of lv.pickups) {
+      if (pickup.phase !== 'ground' || isReachable(pickup.x, pickup.y)) continue;
+      const safe = nearestReachableFloor(lv, pickup.x, pickup.y, reachable);
+      pickup.x = pickup.originX = safe.x;
+      pickup.y = pickup.originY = safe.y;
+    }
+    for (const prospector of lv.prospectors) {
+      if (prospector.dead) continue;
+      if (!isReachable(prospector.x, prospector.y) || collidesAt(prospector.x, prospector.y, prospector.r)) {
+        const safe = nearestReachableFloor(lv, prospector.x, prospector.y, reachable);
+        prospector.x = safe.x;
+        prospector.y = safe.y;
+        prospector.knockX = prospector.knockY = 0;
+      }
+      // Routes and partial NPC mining progress refer to the old terrain.
+      prospector.oreTarget = null;
+      prospector.mineProgress = 0;
+      prospector.mineTick = 0;
+      prospector.mining = false;
+      prospector.scanTimer = 0;
+      prospector.chasing = false;
+      prospector.chaseRoute.length = 0;
+      prospector.chaseRouteIndex = 0;
+      prospector.chaseGoal = '';
+      prospector.chasePathTimer = 0;
+      prospector.stuckTime = 0;
     }
   }
 
   function enterLevel(id, message) {
     const prev = level;
     if (id === 'stage1' && !levels.stage1) levels.stage1 = buildStage1();
+    if (id === 'stage2' && !levels.stage2) levels.stage2 = buildStage2();
+    if (id === 'stage3' && !levels.stage3) levels.stage3 = buildStage3();
+    if (id === 'stage4' && !levels.stage4) levels.stage4 = buildStage4();
+    if (!levels[id]) return;
+    if (prev && id !== prev.id) {
+      // Finish items already flying toward the player before changing maps.
+      // Anything that won't fit remains on its original floor, never deleted.
+      settleFlyingPickups(prev);
+      particles.length = 0;
+      floaters.length = 0;
+      melterBursts.length = 0;
+      // Live projectiles cannot follow the player to another level.
+      prev.dynamites.length = 0;
+      prev.explosions.length = 0;
+    }
     level = levels[id];
 
-    if (id !== prev.id) {
+    if (!prev || id !== prev.id) {
+      restoreTilesOnEntry(level);
       slimes.length = 0;
+      moles.length = 0;
+      spiders.length = 0;
       level.slimeTimer = 2.5;
+      level.moleTimer = 1.8;
+      level.spiderTimer = 1.8;
+      if (!level.prospectorTimer) level.prospectorTimer = 2.5;
     }
 
     let spawnX = level.spawn.x;
     let spawnY = level.spawn.y;
 
-    // arriving in the base: stand beside the stairs you came up from
-    if (id === 'home') {
+    // Coming upstairs places you beside the downward stairs you just used.
+    if (level.stairsDown && (id === 'home' || (prev && prev.upTarget === id))) {
       spawnX = (level.stairsDown.tx + 0.5) * TS;
       spawnY = (level.stairsDown.ty - 0.6) * TS;
     }
@@ -1236,9 +2579,119 @@
     camera.y = player.y;
     state.transitionLock = 0.6;
 
-    el.stageName.textContent = level.name;
-    showToast(message);
+    showAreaName(level);
+    if (message) showToast(message);
+    else clearToast();
     Sound.stairs();
+  }
+
+  /* ------------------------------------------------------- item collection */
+
+  const PICKUP_RISE_TIME = 0.38;
+  const PICKUP_FLIGHT_TIME = 0.55;
+
+  // A pickup first pops upward, then arcs toward the moving player. Real drops
+  // enter the bag on arrival; menu transfers have already been credited and
+  // play the same visual once the menu is closed.
+  function spawnPickup(item, count, x, y, options = {}) {
+    if (!level || !ITEMS[item] || count <= 0) return null;
+    if (options.alreadyCollected && state.mode === 'station') {
+      const queued = level.pickups.find((p) => p.alreadyCollected && p.item === item &&
+        p.phase === 'flying' && p.age === 0 && p.originX === x && p.originY === y);
+      if (queued) {
+        queued.count += count;
+        return queued;
+      }
+    }
+    const pickup = {
+      item, count, x, y, originX: x, originY: y,
+      phase: options.startOnGround ? 'ground' : 'flying', age: 0,
+      delay: options.delay || 0,
+      rise: options.rise || 30,
+      source: options.source || 'other',
+      alreadyCollected: !!options.alreadyCollected,
+    };
+    level.pickups.push(pickup);
+    return pickup;
+  }
+
+  function finishPickup(pickup, quiet = false) {
+    const left = pickup.alreadyCollected ? 0 : addItem(pickup.item, pickup.count);
+    const received = pickup.count - left;
+    if (pickup.source === 'mining') state.oreHauled += received;
+    if (received > 0 && !quiet) {
+      floaters.push({
+        x: player.x,
+        y: player.y - 30,
+        text: '+' + received + ' ' + ITEMS[pickup.item].name,
+        color: ITEMS[pickup.item].color,
+        life: 0.95,
+        maxLife: 0.95,
+        vy: -34,
+      });
+      burst(player.x, player.y - 10, 6, [ITEMS[pickup.item].color, '#fff2ce'], 65, 0.38, 0.07);
+      Sound.pickup();
+    }
+    if (left <= 0) return true;
+
+    // If the bag fills before the animation ends, leave the remainder on the
+    // ground. It will fly to the player again once there is room nearby.
+    pickup.count = left;
+    pickup.phase = 'ground';
+    pickup.x = pickup.originX;
+    pickup.y = pickup.originY;
+    pickup.age = 0;
+    pickup.delay = 0;
+    if (!quiet) showToast('Bag full! Make room at the Storage Chest.');
+    return false;
+  }
+
+  function settleFlyingPickups(lv) {
+    if (!lv) return;
+    for (let i = lv.pickups.length - 1; i >= 0; i--) {
+      const pickup = lv.pickups[i];
+      if (pickup.phase === 'flying' && finishPickup(pickup, true)) lv.pickups.splice(i, 1);
+    }
+  }
+
+  function updatePickups(dt) {
+    for (let i = level.pickups.length - 1; i >= 0; i--) {
+      const p = level.pickups[i];
+      if (p.phase === 'ground') {
+        p.age += dt;
+        if (inventorySpace(p.item) > 0 && Math.hypot(player.x - p.x, player.y - p.y) < 2.5 * TS) {
+          p.phase = 'flying';
+          p.originX = p.x;
+          p.originY = p.y;
+          p.rise = 20;
+          p.age = 0;
+        }
+        continue;
+      }
+
+      p.age += dt;
+      const elapsed = p.age - p.delay;
+      if (elapsed < 0) continue;
+      if (elapsed < PICKUP_RISE_TIME) {
+        const t = elapsed / PICKUP_RISE_TIME;
+        const easeOut = 1 - Math.pow(1 - t, 3);
+        p.x = p.originX + Math.sin(t * Math.PI) * 3;
+        p.y = p.originY - p.rise * easeOut;
+      } else {
+        const t = clamp((elapsed - PICKUP_RISE_TIME) / PICKUP_FLIGHT_TIME, 0, 1);
+        const ease = t * t * (3 - 2 * t);
+        p.x = lerp(p.originX, player.x, ease);
+        p.y = lerp(p.originY - p.rise, player.y - 10, ease) - Math.sin(t * Math.PI) * 6;
+        if (t >= 1 && finishPickup(p)) level.pickups.splice(i, 1);
+      }
+    }
+  }
+
+  function updateMelterBursts(dt) {
+    for (let i = melterBursts.length - 1; i >= 0; i--) {
+      melterBursts[i].age += dt;
+      if (melterBursts[i].age >= melterBursts[i].duration) melterBursts.splice(i, 1);
+    }
   }
 
   /* ------------------------------------------------------------ particles */
@@ -1310,8 +2763,20 @@
 
     updatePlayer(dt);
     updateSlimes(dt);
+    if (state.mode !== 'playing') return;
+    updateMoles(dt);
+    if (state.mode !== 'playing') return;
+    updateSpiders(dt);
+    if (state.mode !== 'playing') return;
+    updateProspectors(dt);
+    if (state.mode !== 'playing') return;
+    updateDynamites(dt);
+    if (state.mode !== 'playing') return; // an enemy or explosion may end the run
+    updatePickups(dt);
+    updateMelterBursts(dt);
     updateParticles(dt);
     updateTransition(dt);
+    updateAreaName(dt);
     updateToast(dt);
 
     if (pointer.inside) player.aim = aimAngle();
@@ -1346,6 +2811,10 @@
     toastTimer = 2;
     el.toast.textContent = text;
     el.toast.classList.add('is-on');
+  }
+  function clearToast() {
+    toastTimer = 0;
+    el.toast.classList.remove('is-on');
   }
   function updateToast(dt) {
     if (toastTimer > 0) {
@@ -1400,12 +2869,18 @@
     drawStations(ox, oy);
     drawDecor(ox, oy);
     drawSlimes(ox, oy);
+    drawMoles(ox, oy);
+    drawSpiders(ox, oy);
+    drawProspectors(ox, oy);
     drawPlayer(ox, oy);
     drawParticles(ox, oy);
     drawFloaters(ox, oy);
     drawSwing(ox, oy);
     drawDarkness(ox, oy);
     drawGlow(ox, oy);
+    drawDynamites(ox, oy);
+    drawMelterBursts(ox, oy);
+    drawPickups(ox, oy);
     drawReticle();
     drawVignette();
   }
@@ -1420,9 +2895,11 @@
 
         if (t === FLOOR) {
           drawFloor(x, y, tx, ty, h);
+          if (level.stalagmites.has(tileKey(tx, ty))) drawStalagmite(x, y, tx, ty);
         } else if (t === STAIRS_DOWN || t === STAIRS_UP) {
           drawFloor(x, y, tx, ty, h);
           drawStairs(x, y, t === STAIRS_DOWN);
+          drawStairCaption(x, y, tx, ty, t === STAIRS_DOWN);
         } else if (t === WALL) {
           drawWall(x, y, h);
         } else {
@@ -1430,6 +2907,21 @@
         }
       }
     }
+  }
+
+  function drawStairCaption(x, y, tx, ty, down) {
+    if (Math.hypot(player.x - (tx + 0.5) * TS, player.y - (ty + 0.5) * TS) > 110) return;
+    const target = down ? level.downTarget : level.upTarget;
+    const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels', stage3: 'Auag Cavern', stage4: 'Stalag Cavern' }[target];
+    if (!name) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+    ctx.fillStyle = down ? '#ffd28a' : '#bfe8f7';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 5;
+    ctx.fillText(name, x + TS / 2, y + TS + 13);
+    ctx.restore();
   }
 
   function drawFloor(x, y, tx, ty, h) {
@@ -1443,7 +2935,9 @@
       ctx.fillStyle = 'rgba(255, 210, 150, 0.045)';
       ctx.fillRect(x + 3, y + 4 + (h * 12) % 14, 6, 2);
     } else {
-      ctx.fillStyle = h > 0.5 ? '#1b2029' : '#191d25';
+      ctx.fillStyle = level.id === 'stage4'
+        ? (h > 0.5 ? '#202b2b' : '#1b2525')
+        : (h > 0.5 ? '#1b2029' : '#191d25');
       ctx.fillRect(x, y, TS + 1, TS + 1);
       // subtle flagstones
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -1463,6 +2957,48 @@
         ctx.stroke();
       }
     }
+  }
+
+  function drawStalagmite(x, y, tx, ty) {
+    ctx.save();
+    const variation = hash2(tx, ty, 231);
+    const tip = y + 3 + variation * 3;
+    // A shadow and three mineral spires, entirely on top of their floor tile.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(x + 16, y + 26, 13, 4.5, 0, 0, TAU);
+    ctx.fill();
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = '#46554f';
+    ctx.fillStyle = '#879c8f';
+    ctx.beginPath();
+    ctx.moveTo(x + 3, y + 26); ctx.lineTo(x + 8, y + 12); ctx.lineTo(x + 13, y + 26);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 20, y + 27); ctx.lineTo(x + 25, y + 14); ctx.lineTo(x + 29, y + 26);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c4d3c4';
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y + 27); ctx.lineTo(x + 16, tip); ctx.lineTo(x + 24, y + 27);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#eaf0de';
+    ctx.beginPath();
+    ctx.moveTo(x + 16, tip); ctx.lineTo(x + 13, y + 24); ctx.lineTo(x + 16, y + 19);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(77, 105, 94, 0.48)';
+    ctx.beginPath();
+    ctx.moveTo(x + 16, tip); ctx.lineTo(x + 16, y + 25); ctx.lineTo(x + 23, y + 27);
+    ctx.closePath(); ctx.fill();
+
+    if (level.damage.get(tileKey(tx, ty))) {
+      ctx.strokeStyle = '#4b6059';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x + 15, y + 15); ctx.lineTo(x + 18, y + 19); ctx.lineTo(x + 15, y + 23);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawWall(x, y, h) {
@@ -1541,6 +3077,58 @@
         ctx.arc(nx - r * 0.35, ny - r * 0.38, r * 0.28, 0, TAU);
         ctx.fill();
       }
+    } else if (t === GOLD || t === SILVER) {
+      // Large bright metal facets: warm gold and almost-white silver are easy
+      // to tell apart from copper's round nuggets and iron's blue diamonds.
+      const dark = t === GOLD ? '#8a6322' : '#6e7983';
+      const mid = t === GOLD ? '#e2a82e' : '#c5d1da';
+      const light = t === GOLD ? '#ffed95' : '#f7fcff';
+      for (let i = 0; i < 3; i++) {
+        const a = hash2(tx * 7 + i, ty * 3 + i, 127);
+        const b = hash2(tx * 5 + i, ty * 11 + i, 131);
+        const nx = x + 7 + a * (TS - 14);
+        const ny = y + 7 + b * (TS - 14);
+        const r = 4 + b * 2;
+        ctx.fillStyle = dark;
+        ctx.beginPath();
+        ctx.moveTo(nx - r, ny); ctx.lineTo(nx - r * 0.4, ny - r);
+        ctx.lineTo(nx + r * 0.6, ny - r * 0.7); ctx.lineTo(nx + r, ny + r * 0.3);
+        ctx.lineTo(nx, ny + r); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = mid;
+        ctx.beginPath();
+        ctx.moveTo(nx - r * 0.75, ny); ctx.lineTo(nx - r * 0.25, ny - r * 0.78);
+        ctx.lineTo(nx + r * 0.55, ny - r * 0.5); ctx.lineTo(nx + r * 0.7, ny + r * 0.24);
+        ctx.lineTo(nx, ny + r * 0.7); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = light;
+        ctx.beginPath();
+        ctx.moveTo(nx - r * 0.55, ny - r * 0.1); ctx.lineTo(nx - r * 0.18, ny - r * 0.65);
+        ctx.lineTo(nx + r * 0.4, ny - r * 0.35); ctx.lineTo(nx - r * 0.05, ny);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (t === IRON) {
+      // Cool silver-blue, faceted deposits distinguish iron from grey stone.
+      for (let i = 0; i < 3; i++) {
+        const a = hash2(tx * 7 + i, ty * 5 + i, 103);
+        const b = hash2(tx * 3 + i, ty * 11 + i, 109);
+        const nx = x + 7 + a * (TS - 14);
+        const ny = y + 7 + b * (TS - 14);
+        const r = 3.6 + a * 1.8;
+        ctx.fillStyle = '#202b34';
+        ctx.beginPath();
+        ctx.moveTo(nx, ny - r - 1); ctx.lineTo(nx + r + 1, ny);
+        ctx.lineTo(nx + 1, ny + r + 1); ctx.lineTo(nx - r - 1, ny + 1);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#91b0be';
+        ctx.beginPath();
+        ctx.moveTo(nx, ny - r); ctx.lineTo(nx + r, ny);
+        ctx.lineTo(nx, ny + r); ctx.lineTo(nx - r, ny);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#e3f4f7';
+        ctx.beginPath();
+        ctx.moveTo(nx, ny - r); ctx.lineTo(nx + r * 0.7, ny - r * 0.05);
+        ctx.lineTo(nx - r * 0.2, ny - r * 0.15);
+        ctx.closePath(); ctx.fill();
+      }
     } else {
       // plain stone: a couple of pebbles
       for (let i = 0; i < 2; i++) {
@@ -1564,6 +3152,12 @@
       ctx.lineTo(x + 12, y + 25);
       ctx.moveTo(x + 15, y + 15);
       ctx.lineTo(x + 24, y + 19);
+      if (taken >= 2) {
+        ctx.moveTo(x + 24, y + 4); ctx.lineTo(x + 19, y + 12); ctx.lineTo(x + 23, y + 24);
+      }
+      if (taken >= 4) {
+        ctx.moveTo(x + 5, y + 24); ctx.lineTo(x + 12, y + 18); ctx.lineTo(x + 7, y + 14);
+      }
       ctx.stroke();
     }
   }
@@ -1650,7 +3244,7 @@
         // copper spout
         ctx.fillStyle = '#c98a52';
         ctx.fillRect(x + 13, y - 4, 8, 4);
-      } else {
+      } else if (st.kind === 'forge') {
         // forge: anvil over a fire
         ctx.fillStyle = '#3a3630';
         ctx.fillRect(x - 14, y + 8, 28, 8); // base
@@ -1680,6 +3274,32 @@
           ctx.fillStyle = `rgba(255, 200, 120, ${(1 - t) * 0.8})`;
           ctx.fillRect(x - 6 + i * 12 + Math.sin(t * 9) * 4, y - t * 22, 2, 2);
         }
+      } else if (st.kind === 'storage') {
+        // A banded wooden chest, distinct from the decorative crates.
+        const wood = ctx.createLinearGradient(0, y - 15, 0, y + 15);
+        wood.addColorStop(0, '#9b6737');
+        wood.addColorStop(1, '#50331f');
+        ctx.fillStyle = wood;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - 21, y - 13, 42, 28, 5);
+        else ctx.rect(x - 21, y - 13, 42, 28);
+        ctx.fill();
+        ctx.fillStyle = '#b28048';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - 22, y - 18, 44, 15, 5);
+        else ctx.rect(x - 22, y - 18, 44, 15);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(45, 26, 15, 0.75)';
+        ctx.fillRect(x - 21, y - 4, 42, 3);
+        ctx.fillStyle = '#624b36';
+        ctx.fillRect(x - 14, y - 17, 4, 31);
+        ctx.fillRect(x + 10, y - 17, 4, 31);
+        ctx.fillStyle = '#d9ae67';
+        ctx.fillRect(x - 4, y - 5, 8, 8);
+        ctx.fillStyle = '#634425';
+        ctx.fillRect(x - 1, y - 2, 2, 3);
+        ctx.fillStyle = 'rgba(255, 221, 163, 0.34)';
+        ctx.fillRect(x - 18, y - 15, 7, 2);
       }
 
       // label, brightening as you get close
@@ -1847,6 +3467,247 @@
         ctx.fillRect(x - w / 2, hopY - s.r - 11, w, 3.4);
         ctx.fillStyle = pct > 0.5 ? '#8ce09a' : pct > 0.25 ? '#ffd166' : '#ff7a7a';
         ctx.fillRect(x - w / 2, hopY - s.r - 11, w * pct, 3.4);
+      }
+    }
+  }
+
+  function drawSpiders(ox, oy) {
+    for (const spider of spiders) {
+      if (spider.dead) continue;
+      const x = spider.x + ox, y = spider.y + oy;
+      if (x < -50 || x > W + 50 || y < -50 || y > H + 50) continue;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.46)';
+      ctx.beginPath();
+      ctx.ellipse(x, y + 9, 14, 4.5, 0, 0, TAU);
+      ctx.fill();
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(spider.facing + Math.PI / 2);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      // Four pairs of jointed legs scuttle alternately as the spider moves.
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 4; i++) {
+          const sy = -6 + i * 4;
+          const twitch = Math.sin(spider.walk + i * 1.8 + (side < 0 ? Math.PI : 0)) * 2.5;
+          ctx.strokeStyle = '#241b2a';
+          ctx.lineWidth = 3.2;
+          ctx.beginPath();
+          ctx.moveTo(side * 4, sy);
+          ctx.lineTo(side * (11 + twitch * 0.4), sy - 3 + twitch);
+          ctx.lineTo(side * 16, sy + 3 + twitch);
+          ctx.stroke();
+          ctx.strokeStyle = '#8d6b79';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = '#392b3d';
+      ctx.beginPath(); ctx.ellipse(0, 3, 8.5, 10, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#6d5065';
+      ctx.beginPath(); ctx.ellipse(-1.5, 1, 5.8, 7.2, -0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#312438';
+      ctx.beginPath(); ctx.ellipse(0, -6, 6, 5.5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = spider.bite > 0 ? '#ffedaa' : '#f49b86';
+      for (const side of [-1, 1]) {
+        ctx.beginPath(); ctx.arc(side * 2.8, -8, 1.35, 0, TAU); ctx.fill();
+      }
+      if (spider.flash > 0) {
+        ctx.globalAlpha = clamp(spider.flash / 0.16, 0, 1) * 0.7;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.ellipse(0, 1, 8.5, 11, 0, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+      if (spider.hp < spider.maxHp) {
+        const width = 25, pct = clamp(spider.hp / spider.maxHp, 0, 1);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)'; ctx.fillRect(x - width / 2, y - 19, width, 3);
+        ctx.fillStyle = pct > 0.5 ? '#8ce09a' : '#ff9a7d'; ctx.fillRect(x - width / 2, y - 19, width * pct, 3);
+      }
+    }
+  }
+
+  function drawMoles(ox, oy) {
+    for (const mole of moles) {
+      if (mole.dead) continue;
+      const x = mole.x + ox;
+      const y = mole.y + oy;
+      if (x < -70 || x > W + 70 || y < -70 || y > H + 70) continue;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(x + 1, y + 11, 15, 5, 0, 0, TAU);
+      ctx.fill();
+      if (mole.inWall) {
+        // A dusty ring makes it clear that the mole is burrowing through rock.
+        ctx.strokeStyle = 'rgba(206, 187, 154, 0.45)';
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.ellipse(x, y, 19, 15, mole.drillSpin * 0.1, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.translate(x, y + Math.sin(mole.drillSpin * 0.4) * 1.2);
+      ctx.rotate(mole.angle);
+
+      // Little ears and digging paws around a rounded, brown body.
+      ctx.fillStyle = '#70503f';
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(-8, side * 8, 5, 4.5, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#c99b89';
+        ctx.beginPath();
+        ctx.ellipse(-8, side * 8, 2.4, 2.2, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#70503f';
+      }
+      ctx.fillStyle = '#c39b7d';
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(2, side * 10, 5.5, 3.2, side * 0.35, 0, TAU);
+        ctx.fill();
+      }
+      const fur = ctx.createRadialGradient(-5, -4, 1, -2, 0, 17);
+      fur.addColorStop(0, '#c7a081');
+      fur.addColorStop(0.58, '#916d55');
+      fur.addColorStop(1, '#5a4034');
+      ctx.fillStyle = fur;
+      ctx.beginPath();
+      ctx.ellipse(-2, 0, 15, 11, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#1c1716';
+      for (const side of [-1, 1]) {
+        ctx.beginPath(); ctx.arc(5, side * 5, 1.7, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      for (const side of [-1, 1]) {
+        ctx.beginPath(); ctx.arc(5.4, side * 5 - 0.5, 0.55, 0, TAU); ctx.fill();
+      }
+
+      // A rotating silver drill for a snout, visible even inside a block.
+      const metal = ctx.createLinearGradient(9, -7, 9, 7);
+      metal.addColorStop(0, '#f1fafb');
+      metal.addColorStop(0.45, '#a8c5cf');
+      metal.addColorStop(1, '#506b79');
+      ctx.fillStyle = metal;
+      ctx.strokeStyle = '#31434a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(10, -7); ctx.lineTo(26, 0); ctx.lineTo(10, 7);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(64, 91, 102, 0.75)';
+      ctx.lineWidth = 1.2;
+      const shift = (mole.drillSpin * 1.4) % 4;
+      for (let i = 0; i < 3; i++) {
+        const sx = 11 + i * 4 + shift;
+        const half = Math.max(0.5, 6 * (26 - sx) / 16);
+        ctx.beginPath(); ctx.moveTo(sx, -half); ctx.lineTo(sx + 2, half * 0.8); ctx.stroke();
+      }
+      if (mole.flash > 0) {
+        ctx.globalAlpha = clamp(mole.flash / 0.16, 0, 1) * 0.7;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.ellipse(-2, 0, 15, 11, 0, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+
+      if (mole.hp < mole.maxHp) {
+        const w = mole.r * 1.9;
+        const pct = clamp(mole.hp / mole.maxHp, 0, 1);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+        ctx.fillRect(x - w / 2, y - mole.r - 11, w, 3.4);
+        ctx.fillStyle = pct > 0.5 ? '#8ce09a' : pct > 0.25 ? '#ffd166' : '#ff7a7a';
+        ctx.fillRect(x - w / 2, y - mole.r - 11, w * pct, 3.4);
+      }
+      if (Math.hypot(player.x - mole.x, player.y - mole.y) < 110) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '800 9px ui-rounded, system-ui, sans-serif';
+        ctx.fillStyle = '#e4c6aa';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+        ctx.fillText('Drill Mole', x, y - mole.r - (mole.hp < mole.maxHp ? 17 : 9));
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawProspectors(ox, oy) {
+    for (const prospector of level.prospectors) {
+      if (prospector.dead) continue;
+      const x = prospector.x + ox;
+      const y = prospector.y + oy;
+      if (x < -70 || x > W + 70 || y < -70 || y > H + 70) continue;
+      const stride = Math.sin(prospector.walk) * 1.7;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+      ctx.beginPath(); ctx.ellipse(x + 1, y + 11, 13, 5, 0, 0, TAU); ctx.fill();
+      ctx.translate(x, y);
+
+      // Pack and boots give this miner a distinct silhouette from the player.
+      ctx.fillStyle = '#59402b';
+      ctx.fillRect(-13, -7, 10, 15);
+      ctx.strokeStyle = '#a67b46'; ctx.lineWidth = 1.2;
+      ctx.strokeRect(-12, -6, 8, 13);
+      ctx.fillStyle = '#443329';
+      ctx.fillRect(-7, 7 + stride, 5, 6);
+      ctx.fillRect(2, 7 - stride, 5, 6);
+      ctx.fillStyle = prospector.flash > 0 ? '#f7dfbc' : '#806447';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-8, -7, 16, 17, 5);
+      else ctx.rect(-8, -7, 16, 17);
+      ctx.fill();
+      ctx.fillStyle = '#503d31'; ctx.fillRect(-7, 3, 14, 3);
+      ctx.fillStyle = '#e7c16c'; ctx.fillRect(-1, 3, 3, 3);
+
+      // Face, beard and a broad prospector's hat.
+      ctx.fillStyle = '#dfb18c';
+      ctx.beginPath(); ctx.arc(0, -10, 7.4, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#684a35';
+      ctx.beginPath(); ctx.arc(0, -7.8, 5.1, 0.1, Math.PI - 0.1); ctx.fill();
+      ctx.fillStyle = '#241c19';
+      ctx.beginPath(); ctx.arc(-2.7, -10.3, 0.8, 0, TAU); ctx.arc(2.7, -10.3, 0.8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#563929'; ctx.fillRect(-9.5, -17, 19, 3.4);
+      ctx.fillStyle = '#82603d';
+      ctx.beginPath();
+      ctx.moveTo(-6.5, -17); ctx.lineTo(-5, -22); ctx.lineTo(5, -22); ctx.lineTo(6.5, -17);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#d9ab60'; ctx.fillRect(-5.8, -17.8, 11.6, 1.8);
+
+      // The pickaxe follows the target and swings while mining or attacking.
+      const swing = prospector.swingTime > 0 ? Math.sin((1 - prospector.swingTime / 0.3) * Math.PI) * 0.8 : 0;
+      ctx.save();
+      ctx.translate(3, 0);
+      ctx.rotate(prospector.facing + 0.35 - swing);
+      ctx.strokeStyle = '#9f7246'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(17, 0); ctx.stroke();
+      ctx.strokeStyle = '#d7e2e8'; ctx.lineWidth = 2.7;
+      ctx.beginPath(); ctx.moveTo(16, -7); ctx.quadraticCurveTo(22, 0, 16, 7); ctx.stroke();
+      ctx.restore();
+
+      if (prospector.haul.gold + prospector.haul.silver > 0) {
+        ctx.fillStyle = prospector.haul.gold ? '#ffdc6a' : '#e9f3f7';
+        ctx.beginPath(); ctx.arc(-9, -3, 2, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+
+      if (prospector.hp < prospector.maxHp) {
+        const width = 25;
+        const percent = clamp(prospector.hp / prospector.maxHp, 0, 1);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(x - width / 2, y - 30, width, 3.5);
+        ctx.fillStyle = percent > 0.5 ? '#8ce09a' : percent > 0.25 ? '#ffd166' : '#ff7a7a';
+        ctx.fillRect(x - width / 2, y - 30, width * percent, 3.5);
+      }
+      if (Math.hypot(player.x - prospector.x, player.y - prospector.y) < 140) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '800 9px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+        ctx.fillStyle = prospector.chasing ? '#ff9d85' : '#ead4a8';
+        ctx.fillText(prospector.chasing ? 'Prospector !' : 'Prospector', x, y - (prospector.hp < prospector.maxHp ? 36 : 28));
+        ctx.restore();
       }
     }
   }
@@ -2030,6 +3891,7 @@
   }
 
   function punch(cx, cy, radius, strength) {
+    if (cx + radius < 0 || cy + radius < 0 || cx - radius > W || cy - radius > H) return;
     const g = lctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
     g.addColorStop(0, `rgba(0, 0, 0, ${strength})`);
     g.addColorStop(0.35, `rgba(0, 0, 0, ${strength * 0.9})`);
@@ -2061,6 +3923,7 @@
       if (d.kind !== 'lantern') continue;
       const x = d.x + ox;
       const y = d.y - 7 + oy;
+      if (x + 110 < 0 || y + 110 < 0 || x - 110 > W || y - 110 > H) continue;
       const flicker = 0.85 + Math.sin(state.time * 5.5 + (d.phase || 0)) * 0.15;
       const pg = ctx.createRadialGradient(x, y, 2, x, y, 110);
       pg.addColorStop(0, `rgba(255, 190, 100, ${0.2 * flicker})`);
@@ -2071,6 +3934,169 @@
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  function drawDynamites(ox, oy) {
+    for (const dynamite of level.dynamites) {
+      const progress = clamp((dynamite.age - BALANCE.dynamiteFlight) / BALANCE.dynamiteFuse, 0, 1);
+      const tx = Math.floor(dynamite.targetX / TS);
+      const ty = Math.floor(dynamite.targetY / TS);
+      const targetX = tx * TS + ox;
+      const targetY = ty * TS + oy;
+      const pulse = 0.16 + 0.12 * Math.abs(Math.sin(dynamite.age * 12));
+      ctx.save();
+      // A red landing tile and subtle four-tile outline telegraph the blast.
+      ctx.fillStyle = `rgba(255, 55, 34, ${pulse})`;
+      ctx.fillRect(targetX, targetY, TS, TS);
+      ctx.strokeStyle = 'rgba(255, 111, 74, 0.9)'; ctx.lineWidth = 1.6;
+      ctx.strokeRect(targetX + 1, targetY + 1, TS - 2, TS - 2);
+      ctx.strokeStyle = 'rgba(255, 111, 74, 0.28)'; ctx.lineWidth = 1;
+      ctx.setLineDash([5, 7]);
+      ctx.strokeRect(targetX - 4 * TS, targetY - 4 * TS, 9 * TS, 9 * TS);
+      ctx.setLineDash([]);
+
+      const flight = clamp(dynamite.age / BALANCE.dynamiteFlight, 0, 1);
+      const x = dynamite.x + ox;
+      const y = dynamite.y + oy - Math.sin(flight * Math.PI) * 20;
+      ctx.translate(x, y);
+      ctx.rotate(-0.3 + flight * 0.8);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath(); ctx.ellipse(1, 6, 7, 3, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#a62625';
+      ctx.fillRect(-7, -5, 14, 9);
+      ctx.fillStyle = '#e64b36'; ctx.fillRect(-6, -4, 12, 3);
+      ctx.fillStyle = '#75201c'; ctx.fillRect(-2, -5, 3, 9);
+      ctx.strokeStyle = '#c4a579'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(6, -4); ctx.quadraticCurveTo(9, -9, 11, -9); ctx.stroke();
+      ctx.fillStyle = progress > 0.65 ? '#fff5b3' : '#ffd15f';
+      ctx.beginPath(); ctx.arc(11, -9, 2 + progress, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+
+    for (const explosion of level.explosions) {
+      const t = clamp(explosion.age / explosion.duration, 0, 1);
+      const x = explosion.x + ox;
+      const y = explosion.y + oy;
+      const radius = 18 + t * 100;
+      ctx.save();
+      ctx.globalAlpha = Math.pow(1 - t, 1.4);
+      const glow = ctx.createRadialGradient(x, y, 1, x, y, radius);
+      glow.addColorStop(0, '#fff8d0');
+      glow.addColorStop(0.28, '#ffd06b');
+      glow.addColorStop(0.62, '#fa6b35');
+      glow.addColorStop(1, 'rgba(212, 60, 30, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#ffe8a1'; ctx.lineWidth = 3 * (1 - t) + 1;
+      ctx.beginPath(); ctx.arc(x, y, radius * 0.8, 0, TAU); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawMelterBursts(ox, oy) {
+    for (const fire of melterBursts) {
+      const t = clamp(fire.age / fire.duration, 0, 1);
+      const envelope = t < 0.16 ? t / 0.16 : Math.pow((1 - t) / 0.84, 0.6);
+      if (envelope <= 0) continue;
+      const x = fire.x + ox;
+      const y = fire.y + oy;
+      const height = 96 * envelope * (0.94 + Math.sin(fire.age * 30) * 0.06);
+      const width = 36 * (0.45 + envelope * 0.55);
+      const lean = Math.sin(fire.age * 18) * width * 0.15;
+
+      ctx.save();
+      ctx.globalAlpha = envelope;
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = ctx.createRadialGradient(x, y - height * 0.4, 0, x, y - height * 0.4, Math.max(1, height * 1.15));
+      glow.addColorStop(0, 'rgba(255, 167, 42, 0.38)');
+      glow.addColorStop(1, 'rgba(255, 75, 12, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y - height * 0.4, Math.max(1, height * 1.15), 0, TAU);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Three curved tongues make the burst feel like flame, not a flat flash.
+      const tongue = (w, h, color, sway) => {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x - w * 0.48, y + 2);
+        ctx.bezierCurveTo(x - w * 0.72, y - h * 0.28, x - w * 0.44, y - h * 0.57, x + sway, y - h);
+        ctx.bezierCurveTo(x + w * 0.16, y - h * 0.6, x + w * 0.72, y - h * 0.4, x + w * 0.47, y + 2);
+        ctx.quadraticCurveTo(x, y + 7, x - w * 0.48, y + 2);
+        ctx.fill();
+      };
+      tongue(width, height, '#e84b1b', lean);
+      tongue(width * 0.74, height * 0.76, '#ff9a26', -lean * 0.6);
+      tongue(width * 0.4, height * 0.48, '#fff0a0', lean * 0.3);
+
+      for (let i = 0; i < 9; i++) {
+        const s = (fire.age * 0.85 + i / 9) % 1;
+        const sx = x + (i - 4) * 5 + Math.sin(s * 8 + i) * 5;
+        const sy = y - s * (height + 20);
+        ctx.globalAlpha = envelope * (1 - s);
+        ctx.fillStyle = i % 2 ? '#ffd76d' : '#ff8c33';
+        ctx.fillRect(sx, sy, 2.5, 2.5);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawPickups(ox, oy) {
+    for (const p of level.pickups) {
+      if (p.phase === 'flying' && p.age < p.delay) continue;
+      const x = p.x + ox;
+      const y = p.y + oy + (p.phase === 'ground' ? Math.sin(state.time * 4) * 2 : 0);
+      const end = p.phase === 'flying'
+        ? clamp((p.age - p.delay - PICKUP_RISE_TIME) / PICKUP_FLIGHT_TIME, 0, 1) : 0;
+      const scale = 1 - end * 0.2;
+      const color = ITEMS[p.item].color;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = 0.48;
+      const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, 19);
+      glow.addColorStop(0, color);
+      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 19, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+      ctx.shadowBlur = 5;
+      ctx.strokeStyle = 'rgba(26, 25, 27, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      if (ITEMS[p.item].isIngot) {
+        ctx.moveTo(-9, 5); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.lineTo(9, 5);
+      } else {
+        ctx.moveTo(0, -9); ctx.lineTo(8, -4); ctx.lineTo(7, 4);
+        ctx.lineTo(1, 8); ctx.lineTo(-7, 5); ctx.lineTo(-8, -3);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+      if (ITEMS[p.item].isIngot) ctx.fillRect(-5, -3, 10, 2);
+      else {
+        ctx.beginPath();
+        ctx.moveTo(-4, -4); ctx.lineTo(0, -7); ctx.lineTo(3, -4); ctx.lineTo(-1, -2);
+        ctx.closePath(); ctx.fill();
+      }
+      if (p.count > 1) {
+        ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff5df';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 4;
+        ctx.fillText('×' + p.count, 9, 8);
+      }
+      ctx.restore();
+    }
   }
 
   function drawReticle() {
@@ -2110,7 +4136,10 @@
     Sound.init();
 
     levels.home = buildHome();
-    levels.stage1 = null; // regenerated with fresh ore on every run
+    levels.stage1 = null; // caves regenerate with fresh ore on a new run
+    levels.stage2 = null;
+    levels.stage3 = null;
+    levels.stage4 = null;
 
     for (let i = 0; i < inventory.length; i++) inventory[i] = null;
     syncBag();
@@ -2119,14 +4148,20 @@
     state.tools.sword = 1;
     melter.coal = 0;
     melter.copper = 0;
+    melter.iron = 0;
+    melter.selectedOre = 'copper';
+    for (const item of Object.keys(storage)) storage[item] = 0;
     state.openStation = null;
     if (el.station) el.station.classList.add('is-hidden');
     refreshTierBadges();
     refreshStation();
 
     slimes.length = 0;
+    moles.length = 0;
+    spiders.length = 0;
     particles.length = 0;
     floaters.length = 0;
+    melterBursts.length = 0;
 
     state.hp = BALANCE.playerMaxHp;
     state.invuln = 0;
@@ -2134,6 +4169,9 @@
     state.shack = 0;
     state.oreHauled = 0;
     state.slimesSlain = 0;
+    state.molesSlain = 0;
+    state.prospectorsSlain = 0;
+    state.spidersSlain = 0;
     state.time = 0;
     state.transitionLock = 0.3;
 
@@ -2142,11 +4180,12 @@
     player.y = level.spawn.y;
     camera.x = player.x;
     camera.y = player.y;
-    el.stageName.textContent = level.name;
+    showAreaName(level);
     selectTool('pickaxe');
     syncVitals();
 
     state.mode = 'playing';
+    clearToast();
     stage.classList.add('is-playing');
     el.menu.classList.add('is-hidden');
     el.pause.classList.add('is-hidden');
@@ -2176,6 +4215,8 @@
   }
 
   function die() {
+    // Credit items already on their way before the death penalty is applied.
+    settleFlyingPickups(level);
     state.mode = 'dead';
     state.cooldown = 0;
     keys.clear();
@@ -2183,20 +4224,27 @@
     stage.classList.remove('is-playing');
     el.overOre.textContent = String(state.oreHauled);
     el.overSlimes.textContent = String(state.slimesSlain);
-    el.overLine.textContent =
-      state.slimesSlain === 0
-        ? 'The slimes got you before you could fight back.'
-        : `You cleared ${state.slimesSlain} slime${state.slimesSlain === 1 ? '' : 's'} before they got you.`;
+    el.overMoles.textContent = String(state.molesSlain);
+    el.overProspectors.textContent = String(state.prospectorsSlain);
+    if (el.overSpiders) el.overSpiders.textContent = String(state.spidersSlain);
+    const enemies = state.slimesSlain + state.molesSlain + state.prospectorsSlain + state.spidersSlain;
+    el.overLine.textContent = enemies === 0
+      ? 'The cave creatures got you before you could fight back.'
+      : `You defeated ${enemies} cave creature${enemies === 1 ? '' : 's'} before they got you.`;
     el.over.classList.remove('is-hidden');
   }
 
-  // Wake up in Home Base: half of every resource stack is gone, the tools you
-  // earned are not.
+  // Wake up in Home Base: half of each resource in the bag is gone; stored
+  // resources and the tools you earned are not.
   function respawnAtBase() {
+    settleFlyingPickups(level);
     halveResources();
     slimes.length = 0;
+    moles.length = 0;
+    spiders.length = 0;
     particles.length = 0;
     floaters.length = 0;
+    melterBursts.length = 0;
     state.hp = BALANCE.playerMaxHp;
     state.invuln = 0;
     state.cooldown = 0;
@@ -2226,10 +4274,14 @@
     if (node && node.addEventListener) node.addEventListener(event, handler);
   };
   bind(el.slotFuel, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)('coal'); });
-  bind(el.slotInput, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)('copper'); });
+  bind(el.slotInput, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)(melter.selectedOre); });
+  bind(el.oreCopper, 'click', () => selectMelterOre('copper'));
+  bind(el.oreIron, 'click', () => selectMelterOre('iron'));
   bind(el.meltBtn, 'click', melt);
   bind(el.upgradePickaxe, 'click', () => upgradeTool('pickaxe'));
   bind(el.upgradeSword, 'click', () => upgradeTool('sword'));
+  bind(el.depositAll, 'click', depositEverything);
+  bind(el.withdrawAll, 'click', withdrawEverything);
   if (document.querySelectorAll) {
     for (const btn of document.querySelectorAll('[data-close-station]')) {
       bind(btn, 'click', closeStation);
@@ -2268,6 +4320,7 @@
   function boot() {
     resize();
     buildBag();
+    buildStorage();
     buildToolbelt();
     levels.home = buildHome();
     level = levels.home;
@@ -2275,7 +4328,7 @@
     player.y = level.spawn.y;
     camera.x = player.x;
     camera.y = player.y;
-    el.stageName.textContent = level.name;
+    showAreaName(level);
     syncVitals();
     refreshTierBadges();
     refreshStation();
@@ -2289,15 +4342,23 @@
     player,
     camera,
     inventory,
+    storage,
     slimes,
+    moles,
+    spiders,
+    melterBursts,
+    get prospectors() { return level.prospectors; },
+    get dynamites() { return level.dynamites; },
+    get pickups() { return level.pickups; },
     BALANCE,
     TILES,
     ITEMS,
-    FLOOR, WALL, STONE, COAL, COPPER, STAIRS_DOWN, STAIRS_UP,
+    FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, STAIRS_DOWN, STAIRS_UP,
     get level() { return level; },
     levels,
     getTile,
     setTile,
+    isSolid,
     swing,
     selectTool,
     addItem,
@@ -2307,18 +4368,31 @@
     closeStation,
     melt,
     upgradeTool,
+    selectMelterOre,
     loadSlot,
     emptySlot,
+    depositToStorage,
+    withdrawFromStorage,
     halveResources,
     countItem,
+    inventorySpace,
     removeItem,
     tierDamage,
     pickaxeHits,
     respawnAtBase,
     get melterState() { return melter; },
     spawnSlimeAwayFromPlayer,
+    spawnMoleAwayFromPlayer,
+    spawnSpiderAwayFromPlayer,
+    spawnProspectorAwayFromPlayer,
     buildStage1,
+    buildStage2,
+    buildStage3,
+    buildStage4,
     makeSlime,
+    makeMole,
+    makeSpider,
+    makeProspector,
     pointer,
     pickaxeTarget,
     start: startGame,

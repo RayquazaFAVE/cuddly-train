@@ -1,7 +1,7 @@
 # Mining Simulator ⛏️
 
-A top-down dungeon mining game. You start safe in **Home Base**, take the stairs down to
-**Stage 1**, and work the cave for ore while slimes try to eat you.
+A top-down dungeon mining game. Start safe in **Home Base**, explore **Cave Entrance**,
+then descend through **Dreadful Tunnels** and **Auag Cavern** to **Stalag Cavern**.
 
 No dependencies, no build step. Open `index.html` and play, or serve the folder:
 
@@ -15,6 +15,21 @@ yesterday's script against today's HTML — which looks exactly like a dead star
 If you ever do see the page without a working start button, it is almost always a cached
 copy: hard-reload with `Ctrl+Shift+R` (`Cmd+Shift+R` on macOS).
 
+## Deploy to Render
+
+Use a **Static Site**, connected to this GitHub repository. No server or build tools are
+needed. In Render's build settings:
+
+- **Branch:** select the branch containing the version you want to publish.
+- **Root Directory:** leave empty (the repository root).
+- **Build Command:** leave empty; if Render requires a command, use `true`.
+- **Publish Directory:** `.`
+
+Save the settings and deploy the latest commit. With auto-deploy enabled, future pushes to
+that branch are deployed automatically. If the site looks old, check the branch and commit
+shown in Render's deploy log, wait for the deploy to go live, then hard-refresh the page.
+`serve.py` is only for local previews and is not needed for a Render Static Site.
+
 ## Controls
 
 | Input | Action |
@@ -23,16 +38,21 @@ copy: hard-reload with `Ctrl+Shift+R` (`Cmd+Shift+R` on macOS).
 | `Q` | Equip the **pickaxe** |
 | `E` | Equip the **sword** |
 | Left click / `Space` | Swing the equipped tool toward the cursor |
-| Left click a station | Open the Melter or the Forge (in Home Base) |
+| Left click a station | Open the Melter, Storage Chest or Forge (in Home Base) |
 | `Esc` | Pause · `M` mute |
 
 ## How a run works
 
 You begin in Home Base, a warm little room with lanterns, crates, a bedroll and a set of
-stairs down. Walking onto the stairs takes you to Stage 1; walking onto the stairs there
-takes you back home. Your inventory and health carry between the two.
+stairs down. Walking onto the stairs takes you to Cave Entrance. The stairs in its far
+chamber lead down to Dreadful Tunnels, whose lower gallery descends into Auag Cavern.
+Stairs in Auag Cavern lead to Stalag Cavern. Each stage also has stairs back up. Your
+inventory and health carry between areas. When you re-enter an area, its tiles and
+stalagmites return to their original state for that run: mined blocks and ore reappear,
+and partial cracks are cleared. Uncollected drops and Prospector hauls remain safe. On arrival, the stage title appears at the top of the screen, then shrinks
+into a small area bubble.
 
-### Stage 1 · Weeping Hollow
+### Stage 1 · Cave Entrance
 
 The cave layout is preset — seven rooms joined by corridors — but the rock seeded into its
 walls is randomised on every run, so no two digs are the same. Three things live in the
@@ -45,119 +65,216 @@ rock:
 | Copper | 2 | Copper ×1 |
 
 Copper becomes more common the further you get from the entrance, so pushing away from the
-stairs pays better. Cracked tiles stay cracked, so a half-mined copper vein is easy to spot
-and finish later.
+stairs pays better. A half-mined vein stays cracked while you're in the area, but leaving
+and returning restores it.
+
+### Stage 2 · Dreadful Tunnels
+
+Descend from the far room of Cave Entrance to a network of **long, straight tunnels** with
+a few larger openings. It contains Stone, Coal, Copper and the new **Iron** ore. The
+layout is fixed, while ore is re-seeded on each new run. Slimes still live here, and the
+new Drill Moles can reach you through solid rock.
+
+| Rock | T1 pickaxe | T2 pickaxe | T3 pickaxe | Yields |
+| --- | --- | --- | --- | --- |
+| Stone | 1 hit | 1 hit | 1 hit | Stone ×1–2 |
+| Coal | 1 hit | 1 hit | 1 hit | Coal ×1 |
+| Copper | 2 hits | 1 hit | 1 hit | Copper ×1 |
+| Iron | 5 hits | 3 hits | 2 hits | Iron ×1 |
+
+The arrival subtitle is “Moles have carved these tunnels”.
+
+### Stage 3 · Auag Cavern
+
+The rounded chambers of Auag Cavern contain **Stone, Gold and Silver**. Its arrival subtitle
+is “The abundant riches have attracted the greedy”. The layout is fixed and the ore is
+randomised for each new run. Gold and Silver currently have the same mining requirements as
+Iron: **5 / 3 / 2 hits** with a T1 / T2 / T3 pickaxe. Each ore block yields one piece.
+They can be kept in the Home Base Storage Chest; the Melter still works with copper and iron.
+
+### Stage 4 · Stalag Cavern
+
+The subtitle is “The calcium grows into spikes here”. The cavern's rock contains **Stone,
+Iron and Gold**. Pale **Stalagmites** grow on open ground, some beside walls and others
+freestanding; they never generate inside walls or ore. Mine a stalagmite to get **1 Calcite**.
+It takes **2 hits with a T1 pickaxe** or **1 hit with T2 or T3**. Like other terrain,
+stalagmites grow back when you leave the area and return. Store Calcite in the Home Base
+chest. Prospectors, Large Slimes and Spiders inhabit this stage.
+
+### Prospectors
+
+Prospectors appear in Auag Cavern and Stalag Cavern. They wander at the same speed as wandering slimes. They search within **4 tiles** for
+Gold or Silver, walk around obstacles (or mine intervening stone), and collect the ore they
+mine. If defeated, a Prospector drops **all** the Gold and Silver it collected. Their haul
+and any uncollected drops remain in their cavern if you leave and come back.
+
+A Prospector ignores you unless you have Gold or Silver **in your bag** and are within
+**4 tiles**. Then it chases at a normal slime's speed, swings its pickaxe for **20 damage**
+up close, and throws dynamite from farther away. Prospectors have **45 HP** and wait
+**8 seconds between throws**. Dynamite lands on the tile you were standing on when it was
+thrown and explodes **2 seconds after landing**, so move away from the red warning. Damage
+is a percentage of maximum HP, measured in tile rings
+(including diagonals):
+
+| Distance from dynamite | Damage |
+| --- | --- |
+| Same tile | Instant death |
+| 1 tile | 70% |
+| 2 tiles | 60% |
+| 3 tiles | 50% |
+| 4 tiles | 25% |
+| 5 or more tiles | None |
+
+Explosions bypass the brief contact-hit invulnerability, so a same-tile blast is always fatal.
 
 ### Slimes
 
 Slimes spawn around the cave and chase you. A normal slime:
 
-- has **30 HP** and dies to **3 sword hits** (10 damage each)
+- has **30 HP** and dies to **3 T1 sword hits** (10 damage each)
 - bites for **20 damage**
 - **splits into two Tiny Slimes** when killed
 
-Tiny Slimes have exactly **half** of everything: **15 HP** (2 sword hits), **10 damage**,
-and they move faster and are smaller, so they are easier to underestimate.
+Tiny Slimes have **half the HP and damage**: **15 HP** (2 T1 sword hits) and **10 damage**.
+They move faster and are smaller, so they are easier to underestimate.
 
 **They have short sight.** A normal slime notices you within **4 tiles**, a Tiny Slime only
 within **2**. Outside that radius a slime loses interest and wanders in a random direction
 at **half speed**, picking a new heading whenever it walks into a wall. Slimes hop as they
 move — quick little bounces while chasing, a slower amble when wandering.
 
-### The Melter and the Forge
+**Large Slimes** in Stalag Cavern have **60 HP** and deal **40 damage**: double a regular
+slime. They spot you from **6 tiles** away but move at **half a regular slime's speed**.
+Defeating one splits it into **two regular slimes**, which can then split into tiny slimes.
 
-Home Base has two workstations. Click either one to open its menu; `Esc` or **Close** to
-leave. The game pauses while a menu is open.
+### Spiders
 
-**The Melter** turns copper into ingots:
+Spiders skitter quickly through Stalag Cavern and navigate around obstacles. They have
+**15 HP**, deal **5 damage** per bite, and can attack every **0.4 seconds**. Spider bites
+give a shorter **0.3-second** recovery window, so their quick attacks can land repeatedly.
 
-1. Click the **fuel slot** to load **1 Coal** from your bag.
-2. Click the **top slot** to load **1 Copper**.
-3. Click **Melt** → **1 Copper Ingot**.
+### Drill Moles
 
-Shift-click a loaded slot to send its contents back to the bag.
+Drill Moles appear in Dreadful Tunnels. Like normal slimes they have **30 HP** and deal
+**20 damage**, but they do not split. They chase from up to **5 tiles** away, and can
+burrow straight through solid blocks. Each time a mole enters a block, it has a **1 in 10**
+chance of destroying it. Blocks destroyed by moles drop nothing; the outer map boundary
+remains intact.
+
+### Home Base: Melter, Storage Chest and Forge
+
+Click a workstation or the chest to open its menu; `Esc` or **Close** to leave. The game
+pauses while a menu is open.
+
+**The Storage Chest** keeps Stone, Coal, Copper, Iron, Gold, Silver, Calcite and both kinds
+of ingot safe at home. Each row shows how many are in your bag and how many are stored. Click
+**Store** or **Take** to move
+one item; Shift-click either button to move as many as possible. **Deposit all** and
+**Take all** work across every resource. Stored resources survive cave deaths, and anything
+that doesn't fit in your bag stays in the chest. Storage lasts for the current run; like
+the rest of the game, it is reset when starting a new run or reloading the page.
+
+**The Melter** turns copper and iron into matching ingots:
+
+1. Choose **Copper** or **Iron**, then click the **top slot** to load one of that ore.
+2. Click the **bottom slot** to load **1 Coal** as fuel.
+3. Click **Melt**. The menu closes, a flame bursts from the Melter, and the matching
+   ingot flies over to you and into your bag.
+
+The top slot holds one kind of ore at a time. Shift-click it to return its contents before
+switching types; anything that doesn't fit stays in the Melter. The Melt button needs room
+in the bag for the ingot.
 
 **The Forge** spends ingots on permanent tool upgrades:
 
 | Upgrade | Cost | Effect |
 | --- | --- | --- |
-| Pickaxe → T2 | 3 Copper Ingots | Cracks **any** rock (stone, coal, copper) in **one** hit |
-| Sword → T2 | 3 Copper Ingots | **15** damage per hit instead of 10 — a normal slime dies in 2 hits |
+| Pickaxe T1 → T2 | 3 Copper Ingots | Stone, coal and copper take 1 hit; iron takes 3 |
+| Sword T1 → T2 | 3 Copper Ingots | **15** damage per hit — a normal slime or mole takes 2 hits |
+| Pickaxe T2 → T3 | 3 Iron Ingots | Stone, coal and copper take 1 hit; iron takes 2 |
+| Sword T2 → T3 | 3 Iron Ingots | **30** damage per hit — a normal slime or mole takes 1 hit |
 
-Your current tiers show on the tool belt (`T1`/`T2`) and in the Forge. Upgrades are kept
-through death; only resources are lost.
+A tool must reach T2 before it can be upgraded to T3. Your current tiers show on the tool
+belt and in the Forge. Upgrades are kept through death; only resources in the bag are lost.
 
 ### Dying
 
-When your health runs out you wake up in **Home Base** at full health, and **half of every
-resource stack** in your bag is gone (rounded to the nearest whole item — `round(7/2)` is 4,
-`round(5/2)` is 3). Tool upgrades, and the Melter's currently loaded coal and copper, are
-untouched.
+When your health runs out you wake up in **Home Base** at full health, keeping **half of
+each resource's total** in your bag, rounded to the nearest whole item (`round(7/2)` is 4,
+`round(5/2)` is 3). Tool upgrades, the Storage Chest, and the Melter's currently loaded
+coal and ore are untouched.
 
 ### Health
 
-The player has **100 HP**. A normal slime kills you in **5 hits** exactly
-(100 ÷ 20), and a Tiny Slime takes 10 of them. After being hit you get 0.9 seconds of
-invulnerability so a pack cannot delete you in one frame.
-
-Sword damage is deliberately lower than slime damage: trading blows loses, so you have to
-use the reach of your swing (a bit over two tiles wide) rather than standing still.
+The player has **100 HP**. A normal slime or Drill Mole kills you in **5 hits** exactly
+(100 ÷ 20), and a Tiny Slime takes 10 of them. Most hits grant 0.9 seconds of
+invulnerability; a spider bite grants 0.3 seconds, making its fast attacks dangerous.
+Use the reach of your sword rather than standing still and trading blows.
 
 ## The interface
 
-Health and the current area are top-left. The **tool belt** is bottom-centre with the
-pickaxe (`Q`) and sword (`E` — clicking either one works too), and the **inventory** sits
-just below it.
+Health is top-left and the current area is top-centre. The **tool belt** is bottom-centre
+with the pickaxe (`Q`) and sword (`E` — clicking either one works too), and the
+**inventory** sits just below it.
 
 The inventory is ten slots, display only — there is no slot selection and no 1–0 hotkeys.
 Ore is stacked automatically into the first slot with room, 99 per stack, and each slot
-shows the ore's colour and count.
+shows the ore's colour and count. Collected items pop up and fly to the player; resources
+that won't fit remain on the ground until there is room and you return to collect them.
 
 ## How it is built
 
 ```
-index.html        canvas, HUD, tool belt, inventory, title/pause/death cards
-css/style.css     all styling
-js/game.js        levels, mining, combat, physics, renderer, audio
+index.html          canvas, HUD, tool belt, inventory, station and game screens
+css/style.css       all styling
+js/game.js          levels, mining, storage, combat, physics, renderer, audio
+tests/game.test.js  dependency-free integration tests (Node.js)
+```
+
+To run the tests with Node.js installed:
+
+```bash
+node --test tests/game.test.js
 ```
 
 Notes on the implementation:
 
-- **Levels** are tile grids (32 px tiles). `buildHome()` and `buildStage1()` lay out rooms
-  and corridors as data, so adding Stage 2 is a matter of adding a room list.
-- **Ore seeding** floods outward from every walkable tile and converts walls within two
-  tiles into rock: Stone, Coal or Copper, with copper odds rising with distance from the
-  entrance. Cave walls beyond that ring stay indestructible, so you can dig into the rock
-  but never wander off the level.
-- **Mining** is hit-based rather than time-based, which is what makes the T1 pickaxe's
-  1-hit Stone / 2-hit Copper behaviour exact. Partial damage is remembered per tile.
+- **Levels** are tile grids (32 px tiles). Stage 1 connects rooms, Stage 2 combines straight
+  galleries and openings, and Stages 3–4 connect broad cavern chambers.
+- **Ore seeding** converts walls near walkable tiles into each area's rock resources. The
+  outer boundary stays intact. Stage 4's stalagmites are separate objects placed only on
+  floor tiles, with routes kept open for players and Large Slimes.
+- **Mining** is hit-based rather than time-based. Iron, Gold and Silver have per-tier hit
+  tables, and partial damage is remembered per tile until you leave and return.
+- **Area resets** restore the original terrain, ore and stalagmites generated for the current
+  run on each return. Stored items, upgrades, machines and uncollected loot are preserved;
+  drops or Prospectors trapped by restored obstacles are moved onto reachable floor.
+- **Moles** ignore interior collisions and roll once when entering a solid tile. Their
+  break chance is not repeatedly applied each frame, and destroyed blocks drop nothing.
+- **Prospectors** pathfind to reachable ore, carry what they mine, and switch to combat when
+  the nearby player has treasure. Dynamite targets a fixed tile, with an eight-second throw
+  cooldown and a two-second fuse after it lands.
 - **Combat** is an arc test: a swing hits everything inside the sword's range whose angle
-  is within the arc of your aim. Damage numbers and slime health bars are drawn in world
+  is within the arc of your aim. Damage numbers and enemy health bars are drawn in world
   space.
-- **Splitting** copies the parent into two half-strength slimes. A swing snapshots the
-  slime list first, so the tinies created by a kill cannot be damaged by the blow that
-  made them.
+- **Splitting** makes two regular slimes from a Large Slime, and two tinies from a regular
+  slime. A swing snapshots the enemy list first, so newly spawned slimes cannot be damaged
+  by the blow that made them.
 - **Lighting** is an offscreen darkness layer punched through with radial gradients at the
   player and each lantern. Home Base is lit softly; the cave is not.
 - **Audio** is synthesised with Web Audio, so there are no asset files.
 
 ## Where to take it next
 
-- **Stage 2** — add a room list and lower `stairsDown` through it; the tile, mining and
-  combat systems are level-agnostic already.
-- **Selling the haul** — the inventory is populated and stacked; a shop at Home Base that
-  converts ore to gold is the natural sink, and the total is already tracked in
-  `state.oreHauled`.
-- **Tool tiers** — `TILES` holds a `hits` value per rock, currently read as "T1 pickaxe
-  hits". Turning that into a per-tier table is the obvious next step for upgrades, and the
-  tool belt is the right place to show it.
+- **More stages** — add another level, its stair targets and new ores or enemies.
+- **Selling the haul** — add a Home Base shop that trades ore for a separate currency; the
+  total resources gathered by mining are already tracked in `state.oreHauled`.
 - **More enemies** — `makeSlime()` plus `updateSlimes()` is a compact template; a new
   enemy type is a new factory and a branch in the update loop.
 - **More stations** — `level.stations` is just data (`{ kind, x, y }`); `openStation()`
-  swaps which panel is visible, so a shop or a chest is a new panel and a branch on `kind`.
+  swaps which panel is visible, so a shop could be a new panel and a branch on `kind`.
 - **Higher tiers** — `state.tools` holds a tier per tool. `pickaxeHits()` maps a rock to
-  the hits your current pickaxe needs, and `tierDamage()` maps the sword tier to damage,
-  so T3 is a table entry rather than a rewrite.
+  the hits your current pickaxe needs, and `tierDamage()` maps the sword tier to damage.
 
 ## Poking at it
 
@@ -165,11 +282,17 @@ Notes on the implementation:
 MiningSim.state            // mode, hp, tool, counts
 MiningSim.level            // the current level, its tiles and stairs
 MiningSim.slimes           // live slime list
+MiningSim.moles            // live Drill Moles
+MiningSim.spiders          // live Spiders
+MiningSim.prospectors      // Prospectors in the current area
+MiningSim.dynamites        // active dynamite in the current area
 MiningSim.BALANCE          // all the tuning numbers in one object
-MiningSim.addItem('copper', 5)
-MiningSim.enterLevel('stage1', 'debug')
+MiningSim.addItem('gold', 5)
+MiningSim.enterLevel('stage4', 'debug')
 MiningSim.melter           // what is loaded into the Melter
-MiningSim.melt()           // force a melt
+MiningSim.storage          // resources safe in the Storage Chest
+MiningSim.pickups          // items flying or waiting on the current floor
+MiningSim.melt()           // start a melt at Home Base
 MiningSim.upgradeTool('pickaxe')
 MiningSim.halveResources() // the death penalty, on demand
 ```

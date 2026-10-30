@@ -6,7 +6,7 @@
 <title>Mining Simulator</title>
 <meta name="description" content="A dungeon mining game. Dig for ore, fight the slimes, go deeper." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/style.css?v=4" />
+<link rel="stylesheet" href="css/style.css?v=9" />
 </head>
 <body>
   <main id="stage">
@@ -20,9 +20,11 @@
           <div class="hp-track"><div id="hp-fill" class="hp-fill"></div></div>
           <span id="hp-text" class="hp-text">100</span>
         </div>
-        <div class="location">
-          <span id="stage-name" class="stage-name">Home Base</span>
-        </div>
+      </div>
+      <div id="area-banner" class="area-banner" aria-live="polite" aria-atomic="true">
+        <span id="area-kicker" class="area-kicker"></span>
+        <span id="stage-name" class="stage-name">Home Base</span>
+        <span id="area-subtitle" class="area-subtitle"></span>
       </div>
       <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
     </div>
@@ -54,25 +56,30 @@
       <div id="bag" class="bag" aria-label="Inventory"></div>
     </div>
 
-    <!-- ------------------------------------------- Melter / Forge modal -->
-    <section id="station" class="overlay is-hidden">
-      <div class="panel station-panel">
+    <!-- ----------------------------------------- Home Base workstations -->
+    <section id="station" class="overlay is-hidden" role="dialog" aria-modal="true" aria-label="Home Base workstation">
+      <div id="station-panel" class="panel station-panel">
         <!-- MELTER -->
         <div id="view-melter" class="station-view is-hidden">
           <h2>Melter</h2>
-          <p class="tagline">Coal fires it. Copper goes in the top.</p>
+          <p class="tagline">Ore on top, coal underneath. Let it glow!</p>
 
+          <div class="ore-picker" role="group" aria-label="Choose ore for the Melter">
+            <span class="ore-picker-label">Choose ore</span>
+            <button id="ore-copper" class="ore-choice is-active" type="button" aria-pressed="true">Copper</button>
+            <button id="ore-iron" class="ore-choice is-iron" type="button" aria-pressed="false">Iron</button>
+          </div>
           <div class="melter-stack">
-            <button id="slot-fuel" class="station-slot" type="button">
-              <span class="station-slot-label">Fuel · Coal</span>
-              <span id="fuel-gem" class="gem"></span>
-              <span id="fuel-count" class="station-slot-count"></span>
-            </button>
-            <div class="melter-flow">▼</div>
-            <button id="slot-input" class="station-slot" type="button">
-              <span class="station-slot-label">Top · Copper</span>
+            <button id="slot-input" class="station-slot" type="button" title="Click to load ore; Shift-click to return it">
+              <span id="input-label" class="station-slot-label">Top · Copper ore</span>
               <span id="input-gem" class="gem"></span>
               <span id="input-count" class="station-slot-count"></span>
+            </button>
+            <div class="melter-flow" aria-hidden="true">✦</div>
+            <button id="slot-fuel" class="station-slot" type="button" title="Click to load coal; Shift-click to return it">
+              <span class="station-slot-label">Bottom · Coal fuel</span>
+              <span id="fuel-gem" class="gem"></span>
+              <span id="fuel-count" class="station-slot-count"></span>
             </button>
           </div>
 
@@ -84,12 +91,11 @@
         <!-- FORGE -->
         <div id="view-forge" class="station-view is-hidden">
           <h2>Forge</h2>
-          <p class="tagline">Three Copper Ingots buy one upgrade.</p>
+          <p class="tagline">Copper for T2. Iron for T3.</p>
 
-          <div class="forge-bank">
-            <span class="gem gem-inline"></span>
-            <span id="forge-ingots">0</span>
-            <span class="forge-of">/ 3 ingots</span>
+          <div class="forge-bank" aria-label="Ingots in your bag">
+            <span class="forge-stock"><span class="gem forge-copper" aria-hidden="true"></span><span id="forge-ingots">0</span><span class="forge-of">Copper</span></span>
+            <span class="forge-stock"><span class="gem forge-iron" aria-hidden="true"></span><span id="forge-iron-ingots">0</span><span class="forge-of">Iron</span></span>
           </div>
 
           <div class="forge-row">
@@ -105,7 +111,29 @@
             </div>
           </div>
 
-          <p class="hint" id="forge-hint">A T2 pickaxe cracks any rock in one hit.</p>
+          <p class="hint" id="forge-hint">Each upgrade costs 3 ingots of the next tier.</p>
+          <button class="btn btn-quiet" type="button" data-close-station>Close</button>
+        </div>
+
+        <!-- STORAGE -->
+        <div id="view-storage" class="station-view is-hidden">
+          <div class="storage-heading">
+            <span class="storage-eyebrow">HOME BASE</span>
+            <h2>Storage Chest</h2>
+            <p class="tagline">A safe place for your hard-earned haul.</p>
+          </div>
+          <div class="storage-table" aria-label="Resources in your bag and storage">
+            <div class="storage-columns" aria-hidden="true">
+              <span>Resource</span><span>Bag</span><span>Stored</span><span></span>
+            </div>
+            <div id="storage-rows"></div>
+          </div>
+          <p class="storage-hint" id="storage-hint">Store or take one at a time · Shift-click for all.</p>
+          <div class="storage-bulk">
+            <button id="deposit-all" class="btn btn-small storage-bulk-btn" type="button">Deposit all</button>
+            <button id="withdraw-all" class="btn btn-small storage-bulk-btn storage-take-all" type="button">Take all</button>
+          </div>
+          <p class="storage-safe">✦ Stored items are safe if you fall in the cave.</p>
           <button class="btn btn-quiet" type="button" data-close-station>Close</button>
         </div>
       </div>
@@ -125,7 +153,7 @@
           <li><span class="mouse-ico"></span><span>Left click to swing the equipped tool</span></li>
         </ul>
         <button id="play" class="btn" type="button">Enter the base</button>
-        <p class="hint">Find the stairs to reach Stage 1 · <kbd>Esc</kbd> to pause</p>
+        <p class="hint">Find the stairs to reach Cave Entrance · <kbd>Esc</kbd> to pause</p>
       </div>
     </section>
 
@@ -141,8 +169,8 @@
     <section id="over" class="overlay is-hidden">
       <div class="panel">
         <h2>You were overwhelmed</h2>
-        <p class="tagline" id="over-line">The slimes got you.</p>
-        <p class="loss-note">You wake up at Home Base, and <strong>half of every resource</strong> in your bag is gone.</p>
+        <p class="tagline" id="over-line">The cave creatures got you.</p>
+        <p class="loss-note">You wake up at Home Base, and <strong>half of every resource</strong> in your bag is gone. Your Storage Chest is safe.</p>
         <div class="stats">
           <div class="stat">
             <span class="stat-label">Ore hauled</span>
@@ -151,6 +179,18 @@
           <div class="stat">
             <span class="stat-label">Slimes slain</span>
             <span class="stat-value" id="over-slimes">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Moles slain</span>
+            <span class="stat-value" id="over-moles">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Prospectors slain</span>
+            <span class="stat-value" id="over-prospectors">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Spiders slain</span>
+            <span class="stat-value" id="over-spiders">0</span>
           </div>
         </div>
         <button id="again" class="btn" type="button">Wake up at base</button>
@@ -201,6 +241,6 @@
     });
   })();
   </script>
-  <script src="js/game.js?v=4"></script>
+  <script src="js/game.js?v=11"></script>
 </body>
 </html>
