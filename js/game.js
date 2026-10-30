@@ -8,9 +8,9 @@
      E                  equip the sword
      Left click / Space swing the equipped tool
 
-   Begin in Home Base, then descend through Cave Entrance, Dreadful Tunnels,
-   Auag Cavern and Stalag Cavern. Smelt copper and iron and forge better tools;
-   beware slimes, moles, spiders and treasure-hunting Prospectors.
+   Begin in Home Base, then descend through the caves to Alumina Cave.
+   Smelt ore, forge tools, press coins and trade with the Coin Trader;
+   beware slimes, moles, spiders, Prospectors and bulky Golems.
 
    No dependencies, no build step.
    ========================================================================== */
@@ -50,6 +50,7 @@
   const SILVER = 9;
   // Stalagmites are separate, mineable objects on FLOOR tiles, not wall tiles.
   const STALAGMITE = 10;
+  const BAUXITE = 11;
 
   // hits = pickaxe hits needed with the T1 pickaxe; null means indestructible
   const TILES = {
@@ -62,6 +63,7 @@
     [GOLD]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'gold', base: '#5b5344' },
     [SILVER]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'silver', base: '#4d535a' },
     [STALAGMITE]: { solid: true, hits: 2, drop: 'calcite', base: '#b5c3b7' },
+    [BAUXITE]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'bauxite', base: '#69564e' },
     [STAIRS_DOWN]: { solid: false },
     [STAIRS_UP]: { solid: false },
   };
@@ -76,11 +78,23 @@
     ingot: { name: 'Copper Ingot', color: '#e8a86a', isIngot: true },
     ironIngot: { name: 'Iron Ingot', color: '#d4e7ef', isIngot: true },
     calcite: { name: 'Calcite', color: '#d9e4c9' },
+    bauxite: { name: 'Bauxite', color: '#d78f75' },
+    aluminum: { name: 'Aluminum', color: '#e0e6ea', isIngot: true },
+    copperCoin: { name: 'Copper Coin', color: '#d99558', isCoin: true },
+    silverCoin: { name: 'Silver Coin', color: '#d8e2eb', isCoin: true },
+    goldCoin: { name: 'Gold Coin', color: '#f5c650', isCoin: true },
+    aluminumCoin: { name: 'Aluminum Coin', color: '#edf4f6', isCoin: true },
   };
 
   const MELT_COAL = 1; // coal burned per melt
-  const MELT_ORE = 1; // copper or iron fed into the top per melt
-  const INGOT_FOR_ORE = { copper: 'ingot', iron: 'ironIngot' };
+  const MELT_ORE = 1;
+  const INGOT_FOR_ORE = { copper: 'ingot', iron: 'ironIngot', bauxite: 'aluminum' };
+  const COINS = {
+    copper: { input: 'copper', coin: 'copperCoin', cost: 2, coal: 1 },
+    silver: { input: 'silver', coin: 'silverCoin', cost: 1, coal: 1 },
+    gold: { input: 'gold', coin: 'goldCoin', cost: 1, coal: 2 },
+    aluminum: { input: 'aluminum', coin: 'aluminumCoin', cost: 1, coal: 4 },
+  };
   const UPGRADE_COST = 3; // matching ingots per tool upgrade
   const MAX_TIER = 3;
 
@@ -128,6 +142,15 @@
     spiderHitInvulnerability: 0.3,
     maxSpiders: 5,
     spiderSpawnEvery: 4,
+    golemHp: 100,
+    golemDamage: 45,
+    golemSpeed: 24,
+    golemDetect: 6 * TS,
+    golemRadius: 21,
+    golemMoveLimit: 10 * TS,
+    golemDisabledTime: 3,
+    maxGolems: 3,
+    golemSpawnEvery: 7,
     moleHp: 30,
     moleDamage: 20,
     moleSpeed: 63,
@@ -174,6 +197,10 @@
     viewMelter: document.getElementById('view-melter'),
     viewForge: document.getElementById('view-forge'),
     viewStorage: document.getElementById('view-storage'),
+    viewPress: document.getElementById('view-press'),
+    viewTrader: document.getElementById('view-trader'),
+    pressHint: document.getElementById('press-hint'),
+    traderHint: document.getElementById('trader-hint'),
     storageRows: document.getElementById('storage-rows'),
     storageHint: document.getElementById('storage-hint'),
     depositAll: document.getElementById('deposit-all'),
@@ -183,6 +210,7 @@
     inputLabel: document.getElementById('input-label'),
     oreCopper: document.getElementById('ore-copper'),
     oreIron: document.getElementById('ore-iron'),
+    oreBauxite: document.getElementById('ore-bauxite'),
     fuelGem: document.getElementById('fuel-gem'),
     fuelCount: document.getElementById('fuel-count'),
     inputGem: document.getElementById('input-gem'),
@@ -205,10 +233,18 @@
     overMoles: document.getElementById('over-moles'),
     overProspectors: document.getElementById('over-prospectors'),
     overSpiders: document.getElementById('over-spiders'),
+    overGolems: document.getElementById('over-golems'),
     play: document.getElementById('play'),
     resume: document.getElementById('resume'),
     again: document.getElementById('again'),
   };
+
+  const coinUi = Object.fromEntries(Object.keys(COINS).map((kind) => [kind, {
+    press: document.getElementById(`press-${kind}`),
+    count: document.getElementById(`press-${kind}-count`),
+    trade: document.getElementById(`trade-${kind}`),
+    status: document.getElementById(`trade-${kind}-status`),
+  }]));
 
   /* ---------------------------------------------------------------- audio */
 
@@ -312,6 +348,7 @@
     molesSlain: 0,
     prospectorsSlain: 0,
     spidersSlain: 0,
+    golemsSlain: 0,
     transitionLock: 0,
     swingDir: 0,
   };
@@ -338,6 +375,7 @@
   const slimes = [];
   const moles = [];
   const spiders = [];
+  const golems = [];
   const particles = [];
   const floaters = [];
   const melterBursts = [];
@@ -346,7 +384,9 @@
   let level = null;
 
   // The top slot holds one ore type at a time; the bottom slot holds coal.
-  const melter = { coal: 0, copper: 0, iron: 0, selectedOre: 'copper' };
+  const melter = { coal: 0, copper: 0, iron: 0, bauxite: 0, selectedOre: 'copper' };
+  // Copper is always accepted; other denominations unlock only when pressed.
+  const traderUnlocked = { copper: true, silver: false, gold: false, aluminum: false };
 
   let W = 0;
   let H = 0;
@@ -376,6 +416,7 @@
       slimeTimer: 0,
       moleTimer: 0,
       spiderTimer: 0,
+      golemTimer: 0,
       prospectorTimer: 0,
     };
   }
@@ -446,6 +487,8 @@
       { kind: 'melter', x: 4.2 * TS, y: 4.4 * TS },
       { kind: 'storage', x: 9.5 * TS, y: 4.4 * TS },
       { kind: 'forge', x: 14.8 * TS, y: 4.4 * TS },
+      { kind: 'press', x: 4.8 * TS, y: 7 * TS },
+      { kind: 'trader', x: 14.2 * TS, y: 7 * TS },
     ];
 
     lv.decor.push({ kind: 'lantern', x: 3.2 * TS, y: 3.1 * TS, phase: 0 });
@@ -647,6 +690,9 @@
     lv.upTarget = 'stage3';
     lv.tiles[idx(lv, sx, sy)] = STAIRS_UP;
     lv.spawn = { x: (sx + 0.5) * TS, y: (sy + 1.6) * TS };
+    lv.stairsDown = { tx: 42, ty: 36 };
+    lv.downTarget = 'stage5';
+    lv.tiles[idx(lv, 42, 36)] = STAIRS_DOWN;
     seedOre(lv, sx, sy);
     lv.decor.push({ kind: 'lantern', x: 4.8 * TS, y: 6.2 * TS, phase: 0.6 });
     lv.decor.push({ kind: 'lantern', x: 11 * TS, y: 6.6 * TS, phase: 2.1 });
@@ -660,6 +706,51 @@
     return captureOriginalTiles(lv);
   }
 
+  // ---- Stage 5 -------------------------------------------------------------
+
+  // Spacious caverns and wide galleries give bulky Golems room to roam.
+  const STAGE5_CHAMBERS = [
+    { x: 8, y: 8, rx: 6, ry: 5 },
+    { x: 24, y: 9, rx: 8, ry: 6 },
+    { x: 45, y: 9, rx: 8, ry: 6 },
+    { x: 51, y: 23, rx: 8, ry: 7 },
+    { x: 31, y: 22, rx: 9, ry: 7 },
+    { x: 12, y: 23, rx: 8, ry: 7 },
+    { x: 19, y: 37, rx: 8, ry: 6 },
+    { x: 40, y: 36, rx: 9, ry: 6 },
+  ];
+
+  function buildStage5() {
+    const lv = makeLevel('stage5', 'Alumina Cave', 64, 46, false);
+    for (const room of STAGE5_CHAMBERS) {
+      for (let ty = Math.floor(room.y - room.ry); ty <= room.y + room.ry; ty++) {
+        for (let tx = Math.floor(room.x - room.rx); tx <= room.x + room.rx; tx++) {
+          const dx = (tx + 0.5 - room.x) / room.rx;
+          const dy = (ty + 0.5 - room.y) / room.ry;
+          if (dx * dx + dy * dy <= 1) carveRect(lv, tx, ty, 1, 1);
+        }
+      }
+    }
+    const links = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 3], [1, 4]];
+    for (const [from, to] of links) {
+      const a = STAGE5_CHAMBERS[from], b = STAGE5_CHAMBERS[to];
+      carveRect(lv, Math.min(a.x, b.x) - 1, a.y - 2, Math.abs(b.x - a.x) + 3, 5);
+      carveRect(lv, b.x - 2, Math.min(a.y, b.y) - 1, 5, Math.abs(b.y - a.y) + 3);
+    }
+    const sx = 6, sy = 8;
+    lv.stairsUp = { tx: sx, ty: sy };
+    lv.upTarget = 'stage4';
+    lv.tiles[idx(lv, sx, sy)] = STAIRS_UP;
+    lv.spawn = { x: (sx + 0.5) * TS, y: (sy + 1.6) * TS };
+    seedOre(lv, sx, sy);
+    for (const [x, y, phase] of [[4.8, 6.2, 0.5], [11, 6.7, 2], [24, 9, 1.2],
+      [45, 9, 2.8], [31, 22, 0.9], [19, 37, 1.9], [40, 36, 3]]) {
+      lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    }
+    lv.decor.push({ kind: 'bones', x: 48.5 * TS, y: 24.5 * TS, phase: 0 });
+    return captureOriginalTiles(lv);
+  }
+
   function placeStalagmites(lv) {
     const byWall = [], inOpen = [];
     for (let ty = 1; ty < lv.h - 1; ty++) {
@@ -667,6 +758,8 @@
         // Only put formations on existing floor, never replace a rock or wall.
         if (lv.tiles[idx(lv, tx, ty)] !== FLOOR) continue;
         if (Math.hypot(tx - lv.stairsUp.tx, ty - lv.stairsUp.ty) < 4) continue;
+        // Keep the exit and the space used when returning upstairs clear.
+        if (lv.stairsDown && Math.hypot(tx - lv.stairsDown.tx, ty - lv.stairsDown.ty) < 4) continue;
         if (lv.decor.some((d) => Math.hypot(tx + 0.5 - d.x / TS, ty + 0.5 - d.y / TS) < 0.9)) continue;
         const openSides = FOUR_WAYS.filter(([dx, dy]) => !TILES[lv.tiles[idx(lv, tx + dx, ty + dy)]].solid).length;
         if (openSides < 3) continue; // leave narrow passages clear
@@ -784,7 +877,11 @@
 
         const away = Math.hypot(tx - spawnTx, ty - spawnTy);
         const r = Math.random();
-        if (lv.id === 'stage4') {
+        if (lv.id === 'stage5') {
+          if (r < 0.3) lv.tiles[i] = BAUXITE;
+          else if (r < 0.58) lv.tiles[i] = IRON;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage4') {
           if (r < 0.22) lv.tiles[i] = GOLD;
           else if (r < 0.53) lv.tiles[i] = IRON;
           else lv.tiles[i] = STONE;
@@ -808,14 +905,15 @@
       }
     }
 
-    if (lv.id === 'stage4') {
+    if (lv.id === 'stage4' || lv.id === 'stage5') {
       // Even an unlucky random seed leaves at least one accessible vein of
       // each requested rock. Only edge rock can be selected for the fallback.
-      for (const wanted of [STONE, IRON, GOLD]) {
+      const ores = lv.id === 'stage5' ? [STONE, IRON, BAUXITE] : [STONE, IRON, GOLD];
+      for (const wanted of ores) {
         if (lv.tiles.includes(wanted)) continue;
         for (let i = 0; i < lv.tiles.length; i++) {
           const current = lv.tiles[i];
-          if (dist[i] !== 1 || (current !== STONE && current !== IRON && current !== GOLD)) continue;
+          if (dist[i] !== 1 || !ores.includes(current)) continue;
           if (lv.tiles.filter((tile) => tile === current).length <= 1) continue;
           lv.tiles[i] = wanted;
           break;
@@ -885,6 +983,45 @@
     return n - left;
   }
 
+  // Plan an exchange on a copy first. Taking the smallest input stacks first
+  // can free a slot even in a full bag; no ingredient is lost if output will
+  // not fit. The original bag is changed only after the whole plan succeeds.
+  function planExchange(input, inputCount, output, outputCount) {
+    if (countItem(input) < inputCount) return null;
+    const bag = inventory.map((cell) => cell ? { ...cell } : null);
+    const sources = bag.map((cell, index) => ({ cell, index }))
+      .filter(({ cell }) => cell && cell.item === input)
+      .sort((a, b) => a.cell.count - b.cell.count);
+    let remaining = inputCount;
+    for (const { index } of sources) {
+      const take = Math.min(bag[index].count, remaining);
+      bag[index].count -= take;
+      remaining -= take;
+      if (bag[index].count === 0) bag[index] = null;
+      if (!remaining) break;
+    }
+    let left = outputCount;
+    for (const cell of bag) {
+      if (!cell || cell.item !== output || cell.count >= STACK_MAX) continue;
+      const amount = Math.min(STACK_MAX - cell.count, left);
+      cell.count += amount;
+      left -= amount;
+      if (!left) break;
+    }
+    for (let i = 0; i < bag.length && left > 0; i++) {
+      if (bag[i]) continue;
+      const amount = Math.min(STACK_MAX, left);
+      bag[i] = { item: output, count: amount };
+      left -= amount;
+    }
+    return left ? null : bag;
+  }
+
+  function commitExchange(plan) {
+    for (let i = 0; i < inventory.length; i++) inventory[i] = plan[i];
+    syncBag();
+  }
+
   // Halve each resource's total, not each stack independently. The chest and
   // the Melter are separate from the bag and are never part of the penalty.
   function halveResources() {
@@ -928,11 +1065,12 @@
       if (item && ITEMS[item.item]) {
         cell.slot.classList.add('has-item');
         cell.slot.classList.toggle('is-ingot', !!ITEMS[item.item].isIngot);
+        cell.slot.classList.toggle('is-coin', !!ITEMS[item.item].isCoin);
         cell.gem.style.setProperty('--gem', ITEMS[item.item].color);
         cell.count.textContent = item.count > 1 ? String(item.count) : '';
         cell.slot.title = ITEMS[item.item].name;
       } else {
-        cell.slot.classList.remove('has-item', 'is-ingot');
+        cell.slot.classList.remove('has-item', 'is-ingot', 'is-coin');
         cell.count.textContent = '';
         cell.slot.removeAttribute('title');
       }
@@ -952,7 +1090,7 @@
       const resource = document.createElement('span');
       resource.className = 'storage-resource';
       const gem = document.createElement('span');
-      gem.className = def.isIngot ? 'gem is-ingot' : 'gem';
+      gem.className = def.isIngot ? 'gem is-ingot' : def.isCoin ? 'gem is-coin' : 'gem';
       gem.setAttribute('aria-hidden', 'true');
       gem.style.setProperty('--gem', def.color);
       const name = document.createElement('span');
@@ -1072,7 +1210,7 @@
 
   /* ------------------------------------------------ Home Base stations */
 
-  const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage' };
+  const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage', press: 'Coin Press', trader: 'Coin Trader' };
 
   function tierDamage() {
     if (state.tools.sword >= 3) return BALANCE.swordDamageT3;
@@ -1120,9 +1258,13 @@
     el.viewMelter.classList.toggle('is-hidden', kind !== 'melter');
     el.viewForge.classList.toggle('is-hidden', kind !== 'forge');
     el.viewStorage.classList.toggle('is-hidden', kind !== 'storage');
+    el.viewPress.classList.toggle('is-hidden', kind !== 'press');
+    el.viewTrader.classList.toggle('is-hidden', kind !== 'trader');
     el.stationPanel.classList.toggle('is-storage', kind === 'storage');
     el.station.setAttribute('aria-label', STATION_LABELS[kind]);
     el.station.classList.remove('is-hidden');
+    if (kind === 'press') el.pressHint.textContent = 'Melt Bauxite first to make Aluminum.';
+    if (kind === 'trader') el.traderHint.textContent = 'Press each new coin to unlock its exchange.';
     refreshStation();
   }
 
@@ -1153,7 +1295,7 @@
     el.inputGem.style.display = inputReady ? 'block' : 'none';
     el.fuelCount.textContent = fuelReady ? String(melter.coal) : '';
     el.inputCount.textContent = inputReady ? String(melter[ore]) : '';
-    for (const [kind, button] of [['copper', el.oreCopper], ['iron', el.oreIron]]) {
+    for (const [kind, button] of [['copper', el.oreCopper], ['iron', el.oreIron], ['bauxite', el.oreBauxite]]) {
       button.classList.toggle('is-active', kind === ore);
       button.setAttribute('aria-pressed', kind === ore ? 'true' : 'false');
     }
@@ -1195,12 +1337,13 @@
 
     refreshTierBadges();
     refreshStorage();
+    refreshCoins();
   }
 
   function selectMelterOre(ore) {
     if (!Object.hasOwn(INGOT_FOR_ORE, ore)) return false;
-    const other = ore === 'iron' ? 'copper' : 'iron';
-    if (melter[other] > 0) {
+    const other = Object.keys(INGOT_FOR_ORE).find((kind) => kind !== ore && melter[kind] > 0);
+    if (other) {
       el.melterHint.textContent = `Shift-click the top slot to return its ${other} before switching.`;
       return false;
     }
@@ -1256,6 +1399,66 @@
     melterBursts.push({ x: mouthX, y: mouthY, age: 0, duration: 1.25 });
     spawnPickup(result, 1, mouthX, mouthY, { delay: 0.16, rise: 46, source: 'melter' });
     Sound.melt();
+    return true;
+  }
+
+  function refreshCoins() {
+    for (const [kind, recipe] of Object.entries(COINS)) {
+      const ui = coinUi[kind];
+      const material = countItem(recipe.input);
+      const coins = countItem(recipe.coin);
+      const canPress = !!planExchange(recipe.input, 1, recipe.coin, 1);
+      const canTrade = traderUnlocked[kind] && !!planExchange(recipe.coin, recipe.cost, 'coal', recipe.coal);
+      ui.count.textContent = `${material} in bag${material && !canPress ? ' · bag full' : ''}`;
+      ui.press.disabled = !canPress;
+      ui.press.title = material ? (canPress ? 'Press one coin' : 'Make room in your bag first') : `Needs ${ITEMS[recipe.input].name} in your bag`;
+      ui.trade.disabled = !canTrade;
+      ui.trade.textContent = traderUnlocked[kind] ? 'Trade' : 'Locked';
+      ui.status.textContent = traderUnlocked[kind]
+        ? `Available · ${coins} in bag${coins >= recipe.cost && !canTrade ? ' · bag full' : ''}`
+        : `Locked · press ${kind === 'aluminum' ? 'an' : 'a'} ${ITEMS[recipe.coin].name}`;
+    }
+  }
+
+  function pressCoin(kind) {
+    if (!Object.hasOwn(COINS, kind) || !level || !level.isBase) return false;
+    const recipe = COINS[kind];
+    const plan = planExchange(recipe.input, 1, recipe.coin, 1);
+    if (!plan) {
+      refreshStation();
+      el.pressHint.textContent = countItem(recipe.input) ? 'Your bag is full. Make room for the coin first.' : `Needs ${ITEMS[recipe.input].name} in your bag.`;
+      return false;
+    }
+    commitExchange(plan);
+    const unlockedNow = !traderUnlocked[kind];
+    traderUnlocked[kind] = true;
+    refreshStation();
+    el.pressHint.textContent = unlockedNow
+      ? `${ITEMS[recipe.coin].name} pressed! Its coal trade is now unlocked.`
+      : `${ITEMS[recipe.coin].name} pressed.`;
+    const station = level.stations.find((st) => st.kind === 'press');
+    if (station) spawnPickup(recipe.coin, 1, station.x, station.y - 12, { alreadyCollected: true });
+    Sound.pickup();
+    return true;
+  }
+
+  function tradeCoin(kind) {
+    if (!Object.hasOwn(COINS, kind) || !level || !level.isBase || !traderUnlocked[kind]) return false;
+    const recipe = COINS[kind];
+    const plan = planExchange(recipe.coin, recipe.cost, 'coal', recipe.coal);
+    if (!plan) {
+      refreshStation();
+      el.traderHint.textContent = countItem(recipe.coin) < recipe.cost
+        ? `Needs ${recipe.cost} ${ITEMS[recipe.coin].name}${recipe.cost === 1 ? '' : 's'} in your bag.`
+        : 'Your bag is full. Make room for the coal first.';
+      return false;
+    }
+    commitExchange(plan);
+    refreshStation();
+    el.traderHint.textContent = `Traded for ${recipe.coal} Coal.`;
+    const station = level.stations.find((st) => st.kind === 'trader');
+    if (station) spawnPickup('coal', recipe.coal, station.x, station.y - 12, { alreadyCollected: true });
+    Sound.pickup();
     return true;
   }
 
@@ -1444,7 +1647,7 @@
 
     // Snapshot all enemies: a slime's newly split children cannot be hit by
     // the same swing, and a prospector's loot is dropped exactly once.
-    for (const s of [...slimes, ...moles, ...spiders, ...level.prospectors]) {
+    for (const s of [...slimes, ...moles, ...spiders, ...golems, ...level.prospectors]) {
       if (s.dead) continue;
       const dx = s.x - player.x;
       const dy = s.y - player.y;
@@ -1459,6 +1662,7 @@
       hitAny = true;
       if (s.kind === 'mole') damageMole(s, tierDamage(), ang);
       else if (s.kind === 'spider') damageSpider(s, tierDamage(), ang);
+      else if (s.kind === 'golem') damageGolem(s, tierDamage(), ang);
       else if (s.kind === 'prospector') damageProspector(s, tierDamage(), ang);
       else damageSlime(s, tierDamage(), ang);
     }
@@ -1520,6 +1724,27 @@
     state.spidersSlain += 1;
     Sound.slimeDie();
     burst(spider.x, spider.y, 12, ['#59465f', '#a88192', '#dfc9c0'], 140, 0.45, 0.1);
+  }
+
+  function damageGolem(golem, amount, angle) {
+    if (golem.dead) return;
+    golem.hp -= amount;
+    golem.flash = 0.16;
+    // A disabled Golem stays completely still, even when struck.
+    if (golem.disabled <= 0) {
+      golem.knockX += Math.cos(angle) * 70;
+      golem.knockY += Math.sin(angle) * 70;
+    }
+    shake(0.3);
+    floaters.push({
+      x: golem.x, y: golem.y - golem.r - 12, text: String(amount),
+      color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
+    });
+    if (golem.hp > 0) return;
+    golem.dead = true;
+    state.golemsSlain += 1;
+    Sound.moleDie();
+    burst(golem.x, golem.y, 16, ['#766e65', '#b6a99a', '#e4b285'], 150, 0.55, 0.14);
   }
 
   function damageProspector(prospector, amount, angle) {
@@ -1645,7 +1870,7 @@
       if (getTile(tx, ty) === STAIRS_UP || getTile(tx, ty) === STAIRS_DOWN) continue;
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
 
-      const large = level.id === 'stage4';
+      const large = level.id === 'stage4' || level.id === 'stage5';
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
       if (collidesAt(x, y, large ? BALANCE.largeSlimeRadius : BALANCE.slimeRadius)) continue;
       const s = makeSlime(x, y, false, large);
@@ -1660,11 +1885,11 @@
     if (level.isBase || level.id === 'stage3') return;
 
     const alive = slimes.filter((s) => !s.dead).length;
-    const inStalag = level.id === 'stage4';
-    if (alive < (inStalag ? BALANCE.maxLargeSlimes : BALANCE.maxSlimes)) {
+    const largeStage = level.id === 'stage4' || level.id === 'stage5';
+    if (alive < (largeStage ? BALANCE.maxLargeSlimes : BALANCE.maxSlimes)) {
       level.slimeTimer -= dt;
       if (level.slimeTimer <= 0) {
-        level.slimeTimer = inStalag ? BALANCE.largeSlimeSpawnEvery : BALANCE.slimeSpawnEvery;
+        level.slimeTimer = largeStage ? BALANCE.largeSlimeSpawnEvery : BALANCE.slimeSpawnEvery;
         spawnSlimeAwayFromPlayer();
       }
     }
@@ -1872,7 +2097,7 @@
   }
 
   function spawnSpiderAwayFromPlayer() {
-    if (level.id !== 'stage4') return null;
+    if (level.id !== 'stage4' && level.id !== 'stage5') return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
@@ -1890,7 +2115,7 @@
   }
 
   function updateSpiders(dt) {
-    if (level.id !== 'stage4') return;
+    if (level.id !== 'stage4' && level.id !== 'stage5') return;
     if (spiders.filter((spider) => !spider.dead).length < BALANCE.maxSpiders) {
       level.spiderTimer -= dt;
       if (level.spiderTimer <= 0) {
@@ -1952,6 +2177,124 @@
     }
   }
 
+  /* ---------------------------------------------------------------- Golems */
+
+  function makeGolem(x, y) {
+    return {
+      kind: 'golem', x, y, r: BALANCE.golemRadius,
+      hp: BALANCE.golemHp, maxHp: BALANCE.golemHp,
+      dmg: BALANCE.golemDamage, speed: BALANCE.golemSpeed,
+      detect: BALANCE.golemDetect, dead: false, flash: 0,
+      attackCd: 0, knockX: 0, knockY: 0,
+      facing: 0, walk: 0, chasing: false, moved: 0, disabled: 0,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.8, 2.4),
+      chaseRoute: [], chaseRouteIndex: 0, chaseGoal: '', chasePathTimer: 0,
+      stuckTime: 0,
+    };
+  }
+
+  function spawnGolemAwayFromPlayer() {
+    if (level.id !== 'stage5') return null;
+    const p = playerTile();
+    for (let attempt = 0; attempt < 90; attempt++) {
+      const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
+      const tile = getTile(tx, ty);
+      if (isSolid(tx, ty) || tile === STAIRS_UP || tile === STAIRS_DOWN) continue;
+      if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
+      const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+      if (collidesAt(x, y, BALANCE.golemRadius)) continue;
+      const golem = makeGolem(x, y);
+      golems.push(golem);
+      burst(x, y, 9, ['#766d63', '#b5a696', '#d4b290'], 65, 0.4, 0.08);
+      return golem;
+    }
+    return null;
+  }
+
+  function updateGolems(dt) {
+    if (level.id !== 'stage5') return;
+    if (golems.filter((golem) => !golem.dead).length < BALANCE.maxGolems) {
+      level.golemTimer -= dt;
+      if (level.golemTimer <= 0) {
+        level.golemTimer = BALANCE.golemSpawnEvery;
+        spawnGolemAwayFromPlayer();
+      }
+    }
+
+    for (let i = golems.length - 1; i >= 0; i--) {
+      const golem = golems[i];
+      if (golem.dead) { golems.splice(i, 1); continue; }
+      golem.flash = Math.max(0, golem.flash - dt);
+      golem.attackCd = Math.max(0, golem.attackCd - dt);
+      if (golem.disabled > 0) {
+        golem.disabled = Math.max(0, golem.disabled - dt);
+        if (golem.disabled < 1e-9) golem.disabled = 0;
+        golem.knockX = golem.knockY = 0;
+        continue; // no movement or contact damage, including while overlapping
+      }
+
+      const dx = player.x - golem.x, dy = player.y - golem.y;
+      const distance = Math.hypot(dx, dy);
+      golem.chasing = distance <= golem.detect;
+      let direction, speed = golem.speed;
+      if (golem.chasing) {
+        direction = chaseDirection(golem, dt);
+        golem.wanderTimer = 0;
+      } else {
+        golem.wanderTimer -= dt;
+        if (golem.wanderTimer <= 0) {
+          golem.wanderTimer = rand(1.1, 2.8);
+          golem.wanderAngle = rand(0, TAU);
+        }
+        direction = { x: Math.cos(golem.wanderAngle), y: Math.sin(golem.wanderAngle) };
+        speed *= 0.5;
+      }
+      if (direction) golem.facing = Math.atan2(direction.y, direction.x);
+      let stepX = ((direction ? direction.x * speed : 0) + golem.knockX) * dt;
+      let stepY = ((direction ? direction.y * speed : 0) + golem.knockY) * dt;
+      golem.knockX *= Math.max(0, 1 - 8 * dt);
+      golem.knockY *= Math.max(0, 1 - 8 * dt);
+
+      // Stop at exactly ten tiles of actual travel, not time spent trying to
+      // walk into a wall. Sword knockback also counts as physical movement.
+      const remaining = Math.max(0, BALANCE.golemMoveLimit - golem.moved);
+      const intended = Math.hypot(stepX, stepY);
+      if (intended > remaining && intended > 0) {
+        stepX *= remaining / intended;
+        stepY *= remaining / intended;
+      }
+      const oldX = golem.x, oldY = golem.y;
+      if (!collidesAt(golem.x + stepX, golem.y, golem.r)) golem.x += stepX;
+      if (!collidesAt(golem.x, golem.y + stepY, golem.r)) golem.y += stepY;
+      const moved = Math.hypot(golem.x - oldX, golem.y - oldY);
+      golem.moved += moved;
+      if (moved > 0.01) {
+        golem.walk += moved / 8;
+        golem.stuckTime = 0;
+      } else {
+        golem.stuckTime += dt;
+        if (golem.stuckTime > 0.8) {
+          golem.stuckTime = 0;
+          golem.wanderTimer = 0;
+          golem.chasePathTimer = 0;
+        }
+      }
+      if (golem.moved >= BALANCE.golemMoveLimit - 1e-7) {
+        golem.moved = 0;
+        golem.disabled = BALANCE.golemDisabledTime;
+        golem.knockX = golem.knockY = 0;
+        floaters.push({ x: golem.x, y: golem.y - golem.r - 16, text: 'Disabled!',
+          color: '#d9ecf2', life: 1, maxLife: 1, vy: -28 });
+        continue;
+      }
+      if (Math.hypot(player.x - golem.x, player.y - golem.y) <= golem.r + BALANCE.playerRadius + 1 && golem.attackCd <= 1e-9) {
+        golem.attackCd = 1;
+        hurtPlayer(golem.dmg, Math.atan2(player.y - golem.y, player.x - golem.x));
+        if (state.mode !== 'playing') return;
+      }
+    }
+  }
+
   /* ------------------------------------------------------------ Prospectors */
 
   const FOUR_WAYS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
@@ -1993,7 +2336,7 @@
   // A breadth-first walk tree lets Prospectors reach a vein around corners
   // rather than trying to walk through stone. Ore itself remains solid until
   // the prospector reaches a walkable tile next to it.
-  function walkTree(tx, ty) {
+  function walkTree(tx, ty, radius = 0) {
     if (!inBounds(level, tx, ty) || isSolid(tx, ty)) return null;
     const size = level.w * level.h;
     const previous = new Int32Array(size).fill(-1);
@@ -2013,6 +2356,7 @@
         const nx = x + dx;
         const ny = y + dy;
         if (!inBounds(level, nx, ny) || isSolid(nx, ny)) continue;
+        if (radius && collidesAt((nx + 0.5) * TS, (ny + 0.5) * TS, radius)) continue;
         const next = idx(level, nx, ny);
         if (previous[next] !== -1) continue;
         previous[next] = current;
@@ -2125,8 +2469,23 @@
     const goal = `${tx},${ty}`;
     prospector.chasePathTimer -= dt;
     if (prospector.chasePathTimer <= 0 || prospector.chaseGoal !== goal) {
-      const tree = walkTree(Math.floor(prospector.x / TS), Math.floor(prospector.y / TS));
-      prospector.chaseRoute = routeTo(tree, tx, ty) || [];
+      // A Golem needs a route that fits its whole body, not just its centre.
+      const radius = prospector.kind === 'golem' ? prospector.r : 0;
+      const tree = walkTree(Math.floor(prospector.x / TS), Math.floor(prospector.y / TS), radius);
+      let route = routeTo(tree, tx, ty);
+      if (!route && radius && tree) {
+        // The player may stand against a wall where a Golem cannot fit. Head
+        // to the closest reachable wide tile instead of abandoning the chase.
+        let best = -1, bestDistance = Infinity;
+        for (let i = 0; i < tree.distance.length; i++) {
+          if (tree.distance[i] < 0) continue;
+          const x = (i % level.w + 0.5) * TS, y = (Math.floor(i / level.w) + 0.5) * TS;
+          const d = Math.hypot(player.x - x, player.y - y);
+          if (d < bestDistance) { bestDistance = d; best = i; }
+        }
+        if (best >= 0) route = routeTo(tree, best % level.w, Math.floor(best / level.w));
+      }
+      prospector.chaseRoute = route || [];
       prospector.chaseRouteIndex = 0;
       prospector.chaseGoal = goal;
       prospector.chasePathTimer = 0.6;
@@ -2424,6 +2783,7 @@
       stage2: { kicker: 'Stage 02', subtitle: 'Moles have carved these tunnels' },
       stage3: { kicker: 'Stage 03', subtitle: 'The abundant riches have attracted the greedy' },
       stage4: { kicker: 'Stage 04', subtitle: 'The calcium grows into spikes here' },
+      stage5: { kicker: 'Stage 05', subtitle: 'Ancient stone guardians roam among the Bauxite' },
     };
     const area = descriptions[lv.id];
     el.stageName.textContent = lv.name;
@@ -2539,6 +2899,7 @@
     if (id === 'stage2' && !levels.stage2) levels.stage2 = buildStage2();
     if (id === 'stage3' && !levels.stage3) levels.stage3 = buildStage3();
     if (id === 'stage4' && !levels.stage4) levels.stage4 = buildStage4();
+    if (id === 'stage5' && !levels.stage5) levels.stage5 = buildStage5();
     if (!levels[id]) return;
     if (prev && id !== prev.id) {
       // Finish items already flying toward the player before changing maps.
@@ -2558,9 +2919,11 @@
       slimes.length = 0;
       moles.length = 0;
       spiders.length = 0;
+      golems.length = 0;
       level.slimeTimer = 2.5;
       level.moleTimer = 1.8;
       level.spiderTimer = 1.8;
+      level.golemTimer = 2;
       if (!level.prospectorTimer) level.prospectorTimer = 2.5;
     }
 
@@ -2768,6 +3131,8 @@
     if (state.mode !== 'playing') return;
     updateSpiders(dt);
     if (state.mode !== 'playing') return;
+    updateGolems(dt);
+    if (state.mode !== 'playing') return;
     updateProspectors(dt);
     if (state.mode !== 'playing') return;
     updateDynamites(dt);
@@ -2871,6 +3236,7 @@
     drawSlimes(ox, oy);
     drawMoles(ox, oy);
     drawSpiders(ox, oy);
+    drawGolems(ox, oy);
     drawProspectors(ox, oy);
     drawPlayer(ox, oy);
     drawParticles(ox, oy);
@@ -2912,7 +3278,7 @@
   function drawStairCaption(x, y, tx, ty, down) {
     if (Math.hypot(player.x - (tx + 0.5) * TS, player.y - (ty + 0.5) * TS) > 110) return;
     const target = down ? level.downTarget : level.upTarget;
-    const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels', stage3: 'Auag Cavern', stage4: 'Stalag Cavern' }[target];
+    const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels', stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave' }[target];
     if (!name) return;
     ctx.save();
     ctx.textAlign = 'center';
@@ -2935,9 +3301,11 @@
       ctx.fillStyle = 'rgba(255, 210, 150, 0.045)';
       ctx.fillRect(x + 3, y + 4 + (h * 12) % 14, 6, 2);
     } else {
-      ctx.fillStyle = level.id === 'stage4'
-        ? (h > 0.5 ? '#202b2b' : '#1b2525')
-        : (h > 0.5 ? '#1b2029' : '#191d25');
+      ctx.fillStyle = level.id === 'stage5'
+        ? (h > 0.5 ? '#302824' : '#292320')
+        : level.id === 'stage4'
+          ? (h > 0.5 ? '#202b2b' : '#1b2525')
+          : (h > 0.5 ? '#1b2029' : '#191d25');
       ctx.fillRect(x, y, TS + 1, TS + 1);
       // subtle flagstones
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -3076,6 +3444,19 @@
         ctx.beginPath();
         ctx.arc(nx - r * 0.35, ny - r * 0.38, r * 0.28, 0, TAU);
         ctx.fill();
+      }
+    } else if (t === BAUXITE) {
+      // Reddish clay-like clusters are distinct from copper and iron.
+      for (let i = 0; i < 3; i++) {
+        const a = hash2(tx * 5 + i, ty * 7 + i, 173);
+        const b = hash2(tx * 9 + i, ty * 3 + i, 179);
+        const nx = x + 7 + a * (TS - 14), ny = y + 7 + b * (TS - 14);
+        ctx.fillStyle = '#6d372f';
+        ctx.beginPath(); ctx.ellipse(nx + 0.5, ny + 1, 5.5, 4.5, a, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#c97559';
+        ctx.beginPath(); ctx.ellipse(nx, ny, 4.4, 3.5, a, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#efb194';
+        ctx.beginPath(); ctx.arc(nx - 1.2, ny - 1.2, 1.4, 0, TAU); ctx.fill();
       }
     } else if (t === GOLD || t === SILVER) {
       // Large bright metal facets: warm gold and almost-white silver are easy
@@ -3300,6 +3681,38 @@
         ctx.fillRect(x - 1, y - 2, 2, 3);
         ctx.fillStyle = 'rgba(255, 221, 163, 0.34)';
         ctx.fillRect(x - 18, y - 15, 7, 2);
+      } else if (st.kind === 'press') {
+        // A compact iron screw press, with a coin waiting on its bed.
+        ctx.fillStyle = '#4c4540';
+        ctx.fillRect(x - 20, y + 9, 40, 8);
+        ctx.fillStyle = '#77746c';
+        ctx.fillRect(x - 18, y - 19, 6, 28);
+        ctx.fillRect(x + 12, y - 19, 6, 28);
+        ctx.fillStyle = '#a19b8a';
+        ctx.fillRect(x - 20, y - 23, 40, 6);
+        ctx.fillStyle = '#c1b395';
+        ctx.fillRect(x - 2, y - 30, 4, 18);
+        ctx.fillRect(x - 11, y - 31, 22, 3);
+        ctx.fillStyle = '#696e6b';
+        ctx.fillRect(x - 10, y - 13, 20, 6);
+        ctx.fillStyle = '#e5b357';
+        ctx.beginPath(); ctx.ellipse(x, y + 5, 9, 4, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#ffe4a2'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(x, y + 4, 6, 2.5, 0, 0, TAU); ctx.stroke();
+      } else if (st.kind === 'trader') {
+        // The trader stands behind a little coin-covered market counter.
+        ctx.fillStyle = '#554535';
+        ctx.beginPath(); ctx.arc(x, y - 12, 14, Math.PI, 0); ctx.lineTo(x + 14, y + 6); ctx.lineTo(x - 14, y + 6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#d4ac83';
+        ctx.beginPath(); ctx.arc(x, y - 11, 8, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#35302d';
+        ctx.beginPath(); ctx.arc(x - 3, y - 12, 1, 0, TAU); ctx.arc(x + 3, y - 12, 1, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#825b38'; ctx.fillRect(x - 21, y + 2, 42, 14);
+        ctx.fillStyle = '#bd8951'; ctx.fillRect(x - 22, y, 44, 5);
+        ctx.fillStyle = '#ebbd5d';
+        ctx.beginPath(); ctx.ellipse(x - 10, y + 1, 5, 2.6, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#cfdbe0';
+        ctx.beginPath(); ctx.ellipse(x + 10, y + 1, 5, 2.6, 0, 0, TAU); ctx.fill();
       }
 
       // label, brightening as you get close
@@ -3467,6 +3880,58 @@
         ctx.fillRect(x - w / 2, hopY - s.r - 11, w, 3.4);
         ctx.fillStyle = pct > 0.5 ? '#8ce09a' : pct > 0.25 ? '#ffd166' : '#ff7a7a';
         ctx.fillRect(x - w / 2, hopY - s.r - 11, w * pct, 3.4);
+      }
+    }
+  }
+
+  function drawGolems(ox, oy) {
+    for (const golem of golems) {
+      if (golem.dead) continue;
+      const x = golem.x + ox, y = golem.y + oy;
+      if (x < -80 || y < -80 || x > W + 80 || y > H + 80) continue;
+      const disabled = golem.disabled > 0;
+      ctx.fillStyle = 'rgba(0,0,0,0.48)';
+      ctx.beginPath(); ctx.ellipse(x + 2, y + 18, 24, 9, 0, 0, TAU); ctx.fill();
+      if (disabled) {
+        ctx.strokeStyle = 'rgba(163, 214, 232, 0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(x, y + 15, 27, 12, 0, 0, TAU); ctx.stroke();
+      }
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(golem.facing + Math.PI / 2);
+      const stride = disabled ? 0 : Math.sin(golem.walk) * 2;
+      // Arms and feet are separate rounded boulders around a wide torso.
+      ctx.fillStyle = '#514c49';
+      ctx.beginPath(); ctx.ellipse(-13, 16 + stride, 9, 8, -0.2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(13, 16 - stride, 9, 8, 0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = disabled ? '#777e7e' : '#86776a';
+      ctx.beginPath(); ctx.ellipse(-20, 1 + stride, 9, 14, -0.2, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(20, 1 - stride, 9, 14, 0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = golem.flash > 0 ? '#e4d9ca' : disabled ? '#929b9a' : '#aa9987';
+      ctx.beginPath();
+      ctx.moveTo(-17, -13); ctx.lineTo(-11, -20); ctx.lineTo(12, -20);
+      ctx.lineTo(18, -11); ctx.lineTo(16, 13); ctx.lineTo(9, 19);
+      ctx.lineTo(-12, 18); ctx.lineTo(-18, 10); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#554f4a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-13, -10); ctx.lineTo(-6, -4); ctx.lineTo(-9, 4);
+      ctx.moveTo(11, -14); ctx.lineTo(6, -7); ctx.lineTo(10, 0); ctx.stroke();
+      ctx.fillStyle = '#615b56';
+      ctx.beginPath(); ctx.ellipse(0, -13, 12, 9, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = disabled ? '#bac9c9' : '#ffbf79';
+      ctx.fillRect(-8, -15, 5, 2.5); ctx.fillRect(3, -15, 5, 2.5);
+      ctx.restore();
+      if (golem.hp < golem.maxHp) {
+        const width = 42, pct = clamp(golem.hp / golem.maxHp, 0, 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(x - width / 2, y - 36, width, 4);
+        ctx.fillStyle = '#df9b6e'; ctx.fillRect(x - width / 2, y - 36, width * pct, 4);
+      }
+      if (Math.hypot(player.x - golem.x, player.y - golem.y) < 150 || disabled) {
+        ctx.save(); ctx.textAlign = 'center';
+        ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+        ctx.fillStyle = disabled ? '#c9ecf6' : '#ead0b4';
+        ctx.fillText(disabled ? 'Golem · disabled' : 'Golem', x, y - (golem.hp < golem.maxHp ? 42 : 34));
+        ctx.restore();
       }
     }
   }
@@ -4072,6 +4537,8 @@
       ctx.beginPath();
       if (ITEMS[p.item].isIngot) {
         ctx.moveTo(-9, 5); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.lineTo(9, 5);
+      } else if (ITEMS[p.item].isCoin) {
+        ctx.arc(0, 0, 8, 0, TAU);
       } else {
         ctx.moveTo(0, -9); ctx.lineTo(8, -4); ctx.lineTo(7, 4);
         ctx.lineTo(1, 8); ctx.lineTo(-7, 5); ctx.lineTo(-8, -3);
@@ -4140,6 +4607,7 @@
     levels.stage2 = null;
     levels.stage3 = null;
     levels.stage4 = null;
+    levels.stage5 = null;
 
     for (let i = 0; i < inventory.length; i++) inventory[i] = null;
     syncBag();
@@ -4149,7 +4617,9 @@
     melter.coal = 0;
     melter.copper = 0;
     melter.iron = 0;
+    melter.bauxite = 0;
     melter.selectedOre = 'copper';
+    for (const kind of Object.keys(traderUnlocked)) traderUnlocked[kind] = kind === 'copper';
     for (const item of Object.keys(storage)) storage[item] = 0;
     state.openStation = null;
     if (el.station) el.station.classList.add('is-hidden');
@@ -4159,6 +4629,7 @@
     slimes.length = 0;
     moles.length = 0;
     spiders.length = 0;
+    golems.length = 0;
     particles.length = 0;
     floaters.length = 0;
     melterBursts.length = 0;
@@ -4172,6 +4643,7 @@
     state.molesSlain = 0;
     state.prospectorsSlain = 0;
     state.spidersSlain = 0;
+    state.golemsSlain = 0;
     state.time = 0;
     state.transitionLock = 0.3;
 
@@ -4227,7 +4699,8 @@
     el.overMoles.textContent = String(state.molesSlain);
     el.overProspectors.textContent = String(state.prospectorsSlain);
     if (el.overSpiders) el.overSpiders.textContent = String(state.spidersSlain);
-    const enemies = state.slimesSlain + state.molesSlain + state.prospectorsSlain + state.spidersSlain;
+    if (el.overGolems) el.overGolems.textContent = String(state.golemsSlain);
+    const enemies = state.slimesSlain + state.molesSlain + state.prospectorsSlain + state.spidersSlain + state.golemsSlain;
     el.overLine.textContent = enemies === 0
       ? 'The cave creatures got you before you could fight back.'
       : `You defeated ${enemies} cave creature${enemies === 1 ? '' : 's'} before they got you.`;
@@ -4242,6 +4715,7 @@
     slimes.length = 0;
     moles.length = 0;
     spiders.length = 0;
+    golems.length = 0;
     particles.length = 0;
     floaters.length = 0;
     melterBursts.length = 0;
@@ -4277,6 +4751,11 @@
   bind(el.slotInput, 'click', (e) => { (e.shiftKey ? emptySlot : loadSlot)(melter.selectedOre); });
   bind(el.oreCopper, 'click', () => selectMelterOre('copper'));
   bind(el.oreIron, 'click', () => selectMelterOre('iron'));
+  bind(el.oreBauxite, 'click', () => selectMelterOre('bauxite'));
+  for (const kind of Object.keys(COINS)) {
+    bind(coinUi[kind].press, 'click', () => pressCoin(kind));
+    bind(coinUi[kind].trade, 'click', () => tradeCoin(kind));
+  }
   bind(el.meltBtn, 'click', melt);
   bind(el.upgradePickaxe, 'click', () => upgradeTool('pickaxe'));
   bind(el.upgradeSword, 'click', () => upgradeTool('sword'));
@@ -4346,6 +4825,7 @@
     slimes,
     moles,
     spiders,
+    golems,
     melterBursts,
     get prospectors() { return level.prospectors; },
     get dynamites() { return level.dynamites; },
@@ -4353,7 +4833,7 @@
     BALANCE,
     TILES,
     ITEMS,
-    FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, STAIRS_DOWN, STAIRS_UP,
+    FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, BAUXITE, STAIRS_DOWN, STAIRS_UP,
     get level() { return level; },
     levels,
     getTile,
@@ -4364,9 +4844,12 @@
     addItem,
     enterLevel,
     melter,
+    traderUnlocked,
     openStation,
     closeStation,
     melt,
+    pressCoin,
+    tradeCoin,
     upgradeTool,
     selectMelterOre,
     loadSlot,
@@ -4384,14 +4867,17 @@
     spawnSlimeAwayFromPlayer,
     spawnMoleAwayFromPlayer,
     spawnSpiderAwayFromPlayer,
+    spawnGolemAwayFromPlayer,
     spawnProspectorAwayFromPlayer,
     buildStage1,
     buildStage2,
     buildStage3,
     buildStage4,
+    buildStage5,
     makeSlime,
     makeMole,
     makeSpider,
+    makeGolem,
     makeProspector,
     pointer,
     pickaxeTarget,

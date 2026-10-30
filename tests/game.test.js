@@ -79,7 +79,7 @@ function createGame() {
     button.dataset.tool = tool;
     elements.toolbelt.appendChild(button);
   }
-  const closers = [new Element('button'), new Element('button'), new Element('button')];
+  const closers = Array.from({ length: (html.match(/data-close-station/g) || []).length }, () => new Element('button'));
   const document = {
     hidden: false,
     getElementById: (id) => elements[id] || null,
@@ -1249,7 +1249,7 @@ test('prospectors wait eight seconds between dynamite throws', () => {
 });
 
 test('every area restores all original tiles and clears mining damage when revisited', () => {
-  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4']) {
+  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5']) {
     const { game } = createGame();
     if (id !== 'home') game.enterLevel(id);
     const area = game.level;
@@ -1954,4 +1954,502 @@ test('a new run builds a fresh Stalag Cavern and clears spider and Calcite progr
   game.enterLevel('stage4');
   assert.notEqual(game.level, old);
   assert.ok(game.level.stalagmites.size > 0);
+});
+
+// Stage 5 and the Home Base coin economy
+
+test('Stalag Cavern has a clear two-way stair connection to Alumina Cave', () => {
+  const { game, elements, step } = createGame();
+  game.enterLevel('stage4');
+  const stage4 = game.level, down = stage4.stairsDown;
+  assert.equal(stage4.downTarget, 'stage5');
+  assert.equal(stage4.tiles[down.ty * stage4.w + down.tx], game.STAIRS_DOWN);
+  assert.ok(reachableWalkableTiles(game, stage4).has(`${down.tx},${down.ty}`));
+  for (const key of stage4.stalagmites) {
+    const [x, y] = key.split(',').map(Number);
+    assert.ok(Math.hypot(x - down.tx, y - down.ty) >= 4, 'arrival and stairs must stay clear');
+  }
+  game.player.x = (down.tx + 0.5) * 32;
+  game.player.y = (down.ty + 0.5) * 32;
+  game.state.transitionLock = 0;
+  step(1);
+  assert.equal(game.level.id, 'stage5');
+  assert.equal(game.level.name, 'Alumina Cave');
+  assert.equal(elements['stage-name'].textContent, 'Alumina Cave');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 05');
+  assert.equal(game.level.upTarget, 'stage4');
+  const up = game.level.stairsUp;
+  game.player.x = (up.tx + 0.5) * 32;
+  game.player.y = (up.ty + 0.5) * 32;
+  game.state.transitionLock = 0;
+  step(1);
+  assert.equal(game.level, stage4);
+  assert.equal(Math.floor(game.player.x / 32), down.tx);
+  assert.equal(Math.floor(game.player.y / 32), down.ty - 1);
+  assert.equal(game.isSolid(Math.floor(game.player.x / 32), Math.floor(game.player.y / 32)), false);
+});
+
+test('Alumina Cave is connected and contains Stone, Iron, and Bauxite only', () => {
+  for (const randomValue of [0.01, 0.5, 0.99]) {
+    const { game, math } = createGame();
+    math.random = () => randomValue;
+    game.enterLevel('stage5');
+    const area = game.level;
+    for (const tile of [game.STONE, game.IRON, game.BAUXITE]) assert.ok(area.tiles.includes(tile));
+    for (const tile of [game.COAL, game.COPPER, game.GOLD, game.SILVER, game.STALAGMITE]) {
+      assert.ok(!area.tiles.includes(tile), `unexpected tile ${tile}`);
+    }
+    assert.equal(area.stalagmites.size, 0);
+    const reachable = reachableWalkableTiles(game, area);
+    let walkable = 0;
+    for (let y = 0; y < area.h; y++) for (let x = 0; x < area.w; x++) {
+      if (!game.TILES[area.tiles[y * area.w + x]].solid) walkable++;
+    }
+    assert.equal(reachable.size, walkable);
+    for (const ore of [game.STONE, game.IRON, game.BAUXITE]) assert.ok(findReachableOre(game, ore));
+    for (let x = 0; x < area.w; x++) {
+      assert.equal(area.tiles[x], game.WALL);
+      assert.equal(area.tiles[(area.h - 1) * area.w + x], game.WALL);
+    }
+  }
+});
+
+test('Bauxite uses the pickaxe tiers and produces a collectible ore', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage5');
+  game.level.slimeTimer = game.level.spiderTimer = game.level.golemTimer = 999;
+  for (const [tier, hits] of [[1, 5], [2, 3], [3, 2]]) {
+    game.state.tools.pickaxe = tier;
+    mine(game, game.BAUXITE);
+    let swings = 1;
+    while (game.getTile(6, 5) === game.BAUXITE && swings < 6) {
+      game.state.cooldown = 0;
+      game.swing();
+      swings++;
+    }
+    assert.equal(swings, hits);
+    assert.equal(game.getTile(6, 5), game.FLOOR);
+  }
+  assert.equal(game.pickups.length, 3);
+  assert.ok(game.pickups.every((p) => p.item === 'bauxite'));
+  step(25);
+  assert.equal(game.countItem('bauxite'), 3);
+});
+
+test('Bauxite safely selects in the Melter and becomes Aluminum with coal', () => {
+  const { game, elements, step } = createGame();
+  game.addItem('copper', 1);
+  game.addItem('iron', 1);
+  game.addItem('bauxite', 2);
+  game.addItem('coal', 1);
+  game.openStation('melter');
+  elements['slot-input'].click();
+  elements['ore-bauxite'].click();
+  assert.equal(game.melter.selectedOre, 'copper', 'cannot replace loaded copper');
+  assert.match(elements['melter-hint'].textContent, /return its copper/);
+  elements['slot-input'].click({ shiftKey: true });
+  elements['ore-iron'].click();
+  elements['slot-input'].click();
+  elements['ore-bauxite'].click();
+  assert.equal(game.melter.selectedOre, 'iron', 'cannot replace loaded iron');
+  elements['slot-input'].click({ shiftKey: true });
+  elements['ore-bauxite'].click();
+  assert.equal(game.melter.selectedOre, 'bauxite');
+  assert.equal(elements['ore-bauxite'].attributes['aria-pressed'], 'true');
+  elements['slot-input'].click();
+  elements['slot-fuel'].click();
+  assert.equal(elements['melt-btn'].disabled, false);
+  elements['melt-btn'].click();
+  assert.equal(game.melter.bauxite, 0);
+  assert.equal(game.melter.coal, 0);
+  assert.equal(game.pickups.filter((p) => p.item === 'aluminum').length, 1);
+  step(30);
+  assert.equal(game.countItem('aluminum'), 1);
+  assert.equal(game.countItem('bauxite'), 1);
+});
+
+test('Alumina terrain resets without losing a Bauxite drop or player progress', () => {
+  const { game, step } = createGame();
+  game.addItem('stone', 990);
+  game.enterLevel('stage5');
+  game.level.slimeTimer = game.level.spiderTimer = game.level.golemTimer = 999;
+  const area = game.level, ore = findReachableOre(game, game.BAUXITE);
+  aimPickaxeAt(game, ore);
+  game.state.tools.pickaxe = 3;
+  game.state.cooldown = 0; game.swing();
+  assert.equal(area.damage.get(`${ore.tx},${ore.ty}`), 1);
+  game.state.cooldown = 0; game.swing();
+  assert.equal(game.getTile(ore.tx, ore.ty), game.FLOOR);
+  const drop = game.pickups[0];
+  step(25);
+  assert.equal(drop.phase, 'ground');
+  game.storage.aluminum = 3;
+  game.melter.bauxite = 2;
+  game.state.tools.sword = 2;
+  game.enterLevel('stage4');
+  game.enterLevel('stage5');
+  assert.equal(game.level, area);
+  assert.equal(game.getTile(ore.tx, ore.ty), game.BAUXITE);
+  assert.equal(area.damage.size, 0);
+  assert.equal(game.storage.aluminum, 3);
+  assert.equal(game.melter.bauxite, 2);
+  assert.equal(game.state.tools.sword, 2);
+  assert.equal(game.pickups[0], drop);
+  const x = Math.floor(drop.x / 32), y = Math.floor(drop.y / 32);
+  assert.equal(game.isSolid(x, y), false);
+  assert.ok(reachableWalkableTiles(game, area).has(`${x},${y}`));
+  game.removeItem('stone', 99);
+  game.player.x = drop.x; game.player.y = drop.y;
+  step(30);
+  assert.equal(game.countItem('bauxite'), 1);
+  assert.equal(game.pickups.length, 0);
+});
+
+function stage5Arena(game) {
+  game.enterLevel('stage5');
+  game.level.slimeTimer = game.level.spiderTimer = game.level.golemTimer = 999;
+  for (let y = 6; y <= 25; y++) for (let x = 6; x <= 34; x++) game.setTile(x, y, game.FLOOR);
+  game.player.x = 10.5 * 32;
+  game.player.y = 22.5 * 32;
+}
+
+test('Alumina Cave naturally spawns Large Slimes, Spiders and Golems, not Moles or Prospectors', () => {
+  const { game, math, step } = createGame();
+  game.enterLevel('stage5');
+  let seed = 29117;
+  math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  game.level.slimeTimer = game.level.spiderTimer = game.level.golemTimer = 0;
+  step(1);
+  assert.ok(game.slimes.length > 0 && game.slimes.every((s) => s.large));
+  assert.ok(game.spiders.length > 0);
+  assert.ok(game.golems.length > 0);
+  assert.equal(game.moles.length, 0);
+  assert.equal(game.prospectors.length, 0);
+  game.enterLevel('stage4');
+  assert.equal(game.golems.length, 0);
+  assert.equal(game.spawnGolemAwayFromPlayer(), null);
+});
+
+test('Golems disable after ten tiles of actual travel, cannot move or hurt for three seconds, then recover', () => {
+  const { game, step } = createGame();
+  stage5Arena(game);
+  const golem = game.makeGolem(10.5 * 32, 10.5 * 32);
+  assert.ok(golem.hp > game.BALANCE.largeSlimeHp);
+  assert.ok(golem.r > game.BALANCE.slimeRadius);
+  assert.ok(golem.speed < game.BALANCE.slimeSpeed);
+  assert.ok(golem.dmg > game.BALANCE.slimeDamage);
+  golem.wanderAngle = 0; golem.wanderTimer = 999;
+  game.golems.push(golem);
+  const startX = golem.x;
+  step(533); // 26.65 seconds at half of 24 px/s = 319.8 px
+  assert.ok(Math.abs(golem.x - startX - 319.8) < 1e-6);
+  assert.equal(golem.disabled, 0);
+  step(1);
+  assert.ok(Math.abs(golem.x - startX - 320) < 1e-6);
+  assert.equal(golem.moved, 0);
+  assert.equal(golem.disabled, 3);
+
+  // Even touching and being struck cannot move a disabled Golem or deal damage.
+  game.player.x = golem.x - 20; game.player.y = golem.y;
+  aimSwordAt(game, golem);
+  game.state.tools.sword = 1;
+  game.state.cooldown = 0; game.swing();
+  assert.equal(golem.hp, game.BALANCE.golemHp - 10);
+  assert.equal(golem.knockX, 0);
+  const x = golem.x, y = golem.y;
+  game.state.invuln = 0;
+  step(59);
+  assert.ok(golem.disabled > 0);
+  assert.equal(golem.x, x); assert.equal(golem.y, y);
+  assert.equal(game.state.hp, 100);
+  step(1);
+  assert.equal(golem.disabled, 0);
+  assert.equal(golem.x, x); assert.equal(game.state.hp, 100);
+  step(1);
+  assert.ok(golem.x < x);
+  assert.equal(game.state.hp, 100 - game.BALANCE.golemDamage);
+});
+
+test('a Golem does not count blocked movement toward its ten-tile limit', () => {
+  const { game, step } = createGame();
+  stage5Arena(game);
+  game.setTile(10, 10, game.WALL);
+  const golem = game.makeGolem(10 * 32 - game.BALANCE.golemRadius, 10.5 * 32);
+  golem.wanderAngle = 0; golem.wanderTimer = 999; golem.moved = 319;
+  game.golems.push(golem);
+  const x = golem.x, y = golem.y;
+  step(10); // before the stuck-wander reset chooses a different heading
+  assert.equal(golem.x, x); assert.equal(golem.y, y);
+  assert.equal(golem.moved, 319);
+  assert.equal(golem.disabled, 0);
+});
+
+test('a Golem navigates around a wall and sword kills count in the death screen', () => {
+  const { game, elements, step } = createGame();
+  stage5Arena(game);
+  game.setTile(12, 10, game.WALL);
+  const golem = game.makeGolem(10.5 * 32, 10.5 * 32);
+  game.golems.push(golem);
+  game.player.x = 14.5 * 32; game.player.y = 10.5 * 32;
+  game.state.invuln = 999;
+  step(240);
+  assert.ok(Math.hypot(game.player.x - golem.x, game.player.y - golem.y) < 45, 'bulky Golem should go around the wall');
+  assert.equal(game.getTile(12, 10), game.WALL);
+  game.player.x = golem.x - 35; game.player.y = golem.y;
+  aimSwordAt(game, golem);
+  for (let i = 0; i < 4; i++) { game.state.cooldown = 0; game.swing(); }
+  assert.equal(golem.dead, true);
+  assert.equal(game.state.golemsSlain, 1);
+  assert.equal(game.slimes.length, 0);
+  const killer = game.makeGolem(game.player.x + 10, game.player.y);
+  killer.speed = 0;
+  game.golems.push(killer);
+  game.state.hp = 45; game.state.invuln = 0;
+  step(1);
+  assert.equal(game.state.mode, 'dead');
+  assert.equal(elements['over-golems'].textContent, '1');
+  assert.match(elements['over-line'].textContent, /1 cave creature/);
+});
+
+test('both coin stations open by mouse or touch without overlapping existing stations', () => {
+  const { game, elements } = createGame();
+  for (const [kind, pointerType, view] of [['press', 'mouse', 'view-press'], ['trader', 'touch', 'view-trader']]) {
+    const station = game.level.stations.find((s) => s.kind === kind);
+    assert.ok(station);
+    const x = station.x - game.camera.x + 1280 / 2;
+    const y = station.y - game.camera.y + 800 / 2;
+    elements.game.dispatch('pointerdown', { clientX: x, clientY: y, pointerType });
+    assert.equal(game.state.mode, 'station');
+    assert.equal(game.state.openStation, kind);
+    assert.equal(elements[view].classList.contains('is-hidden'), false);
+    game.closeStation();
+  }
+  assert.equal((html.match(/data-close-station/g) || []).length, 5);
+});
+
+test('the Coin Press unlocks each higher denomination only after pressing its first coin', () => {
+  const { game, elements, step } = createGame();
+  game.addItem('copper', 2);
+  game.addItem('silver', 1);
+  game.addItem('gold', 1);
+  game.addItem('bauxite', 1);
+  game.addItem('aluminum', 1);
+  game.addItem('silverCoin', 1); // possessing a coin alone does not unlock trading
+  game.openStation('trader');
+  assert.equal(game.traderUnlocked.copper, true);
+  for (const kind of ['silver', 'gold', 'aluminum']) {
+    assert.equal(game.traderUnlocked[kind], false);
+    assert.equal(elements[`trade-${kind}`].disabled, true);
+    assert.equal(game.tradeCoin(kind), false);
+  }
+  game.closeStation();
+  game.openStation('press');
+  for (const kind of ['copper', 'copper', 'silver', 'gold', 'aluminum']) {
+    assert.equal(elements[`press-${kind}`].disabled, false);
+    elements[`press-${kind}`].click();
+  }
+  assert.equal(game.countItem('copperCoin'), 2);
+  assert.equal(game.countItem('silverCoin'), 2);
+  assert.equal(game.countItem('goldCoin'), 1);
+  assert.equal(game.countItem('aluminumCoin'), 1);
+  assert.equal(game.countItem('bauxite'), 1, 'raw Bauxite is not Aluminum');
+  for (const kind of ['silver', 'gold', 'aluminum']) assert.equal(game.traderUnlocked[kind], true);
+  game.closeStation();
+  step(30); // cosmetic press pickups cannot duplicate credited coins
+  assert.equal(game.countItem('copperCoin'), 2);
+  assert.equal(game.countItem('silverCoin'), 2);
+  assert.equal(game.countItem('goldCoin'), 1);
+  assert.equal(game.countItem('aluminumCoin'), 1);
+});
+
+test('the Coin Trader applies all four exact coal rates and updates visible rows', () => {
+  const { game, elements } = createGame();
+  for (const [item, count] of [['copper', 2], ['silver', 1], ['gold', 1], ['aluminum', 1]]) game.addItem(item, count);
+  game.openStation('press');
+  for (const kind of ['copper', 'copper', 'silver', 'gold', 'aluminum']) assert.equal(game.pressCoin(kind), true);
+  game.closeStation();
+  game.openStation('trader');
+  for (const [kind, coal, coins] of [['copper', 1, 2], ['silver', 1, 1], ['gold', 2, 1], ['aluminum', 4, 1]]) {
+    const before = game.countItem('coal');
+    assert.equal(elements[`trade-${kind}`].disabled, false);
+    assert.match(elements[`trade-${kind}-status`].textContent, /Available/);
+    elements[`trade-${kind}`].click();
+    assert.equal(game.countItem('coal') - before, coal, kind);
+    assert.equal(game.countItem(`${kind}Coin`), 0, `${coins} ${kind} coin(s) spent`);
+    assert.equal(elements[`trade-${kind}`].disabled, true);
+  }
+  assert.equal(game.countItem('coal'), 8);
+});
+
+test('coin conversions are atomic in a full bag and can reuse a freed slot or an existing stack', () => {
+  {
+    const { game, elements } = createGame();
+    game.addItem('stone', 891); // nine full stacks
+    game.addItem('copper', 2); // tenth slot, cannot free it by pressing just one
+    game.openStation('press');
+    assert.equal(elements['press-copper'].disabled, true);
+    assert.match(elements['press-copper-count'].textContent, /bag full/);
+    assert.equal(game.pressCoin('copper'), false);
+    assert.equal(game.countItem('copper'), 2);
+    assert.equal(game.countItem('copperCoin'), 0);
+    game.removeItem('copper', 1);
+    assert.equal(game.pressCoin('copper'), true);
+    assert.equal(game.countItem('copper'), 0);
+    assert.equal(game.countItem('copperCoin'), 1);
+  }
+  {
+    const { game } = createGame();
+    game.addItem('stone', 792); // eight stacks
+    game.addItem('copperCoin', 1);
+    game.addItem('copper', 2);
+    game.openStation('press');
+    assert.equal(game.pressCoin('copper'), true, 'output fits the existing coin stack');
+    assert.equal(game.countItem('copper'), 1);
+    assert.equal(game.countItem('copperCoin'), 2);
+  }
+  {
+    const { game } = createGame();
+    game.addItem('stone', 891);
+    game.addItem('copperCoin', 3);
+    game.openStation('trader');
+    assert.equal(game.tradeCoin('copper'), false);
+    assert.equal(game.countItem('copperCoin'), 3);
+    assert.equal(game.countItem('coal'), 0);
+    game.removeItem('copperCoin', 1);
+    assert.equal(game.tradeCoin('copper'), true, 'spent stack frees space for coal');
+    assert.equal(game.countItem('copperCoin'), 0);
+    assert.equal(game.countItem('coal'), 1);
+  }
+  {
+    const { game } = createGame();
+    game.addItem('copperCoin', 100); // stacks of 99 and 1
+    game.addItem('stone', 792); // fill the remaining eight slots
+    game.openStation('trader');
+    assert.equal(game.tradeCoin('copper'), true, 'consume the small stack first to make room');
+    assert.equal(game.countItem('copperCoin'), 98);
+    assert.equal(game.countItem('coal'), 1);
+  }
+});
+
+test('coins and Aluminum work in storage and death, unlocks persist until a new run', () => {
+  const { game } = createGame();
+  game.addItem('silver', 4);
+  game.addItem('gold', 4);
+  game.addItem('aluminum', 5);
+  game.addItem('bauxite', 3);
+  game.openStation('press');
+  for (const kind of ['silver', 'silver', 'gold', 'aluminum', 'aluminum']) assert.equal(game.pressCoin(kind), true);
+  game.closeStation();
+  game.openStation('storage');
+  assert.equal(game.depositToStorage('silverCoin', 1), 1);
+  assert.equal(game.depositToStorage('aluminum', 1), 1);
+  assert.equal(game.depositToStorage('bauxite', 1), 1);
+  game.closeStation();
+  game.melter.bauxite = 2;
+  game.enterLevel('stage5');
+  game.respawnAtBase();
+  assert.equal(game.storage.silverCoin, 1);
+  assert.equal(game.storage.aluminum, 1);
+  assert.equal(game.storage.bauxite, 1);
+  assert.equal(game.countItem('silverCoin'), 1); // one kept, rounding up
+  assert.equal(game.countItem('aluminumCoin'), 1); // two halved
+  assert.equal(game.countItem('aluminum'), 1); // two halved after storing
+  assert.equal(game.melter.bauxite, 2);
+  for (const kind of ['silver', 'gold', 'aluminum']) assert.equal(game.traderUnlocked[kind], true);
+  assert.equal(game.withdrawFromStorage('silverCoin', 1), 1);
+  assert.equal(game.countItem('silverCoin'), 2);
+  game.start();
+  assert.equal(game.levels.stage5, null);
+  assert.equal(game.melter.bauxite, 0);
+  assert.equal(game.storage.aluminum, 0);
+  assert.equal(game.storage.bauxite, 0);
+  assert.equal(game.storage.silverCoin, 0);
+  assert.equal(game.countItem('aluminumCoin'), 0);
+  assert.equal(game.traderUnlocked.copper, true);
+  for (const kind of ['silver', 'gold', 'aluminum']) assert.equal(game.traderUnlocked[kind], false);
+});
+
+test('Alumina Cave has wide, connected routes for a Golem body', () => {
+  const { game } = createGame();
+  game.enterLevel('stage5');
+  const area = game.level, r = game.BALANCE.golemRadius;
+  const fits = (x, y) => {
+    const px = (x + 0.5) * 32, py = (y + 0.5) * 32;
+    for (let ty = Math.floor((py - r) / 32); ty <= Math.floor((py + r - 0.001) / 32); ty++) {
+      for (let tx = Math.floor((px - r) / 32); tx <= Math.floor((px + r - 0.001) / 32); tx++) {
+        if (game.isSolid(tx, ty)) return false;
+      }
+    }
+    return true;
+  };
+  const sx = Math.floor(area.spawn.x / 32), sy = Math.floor(area.spawn.y / 32);
+  assert.ok(fits(sx, sy));
+  const seen = new Set([`${sx},${sy}`]), queue = [[sx, sy]];
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, key = `${nx},${ny}`;
+      if (!seen.has(key) && fits(nx, ny)) { seen.add(key); queue.push([nx, ny]); }
+    }
+  }
+  for (const [cx, cy] of [[8, 8], [24, 9], [45, 9], [51, 23], [31, 22], [12, 23], [19, 37], [40, 36]]) {
+    assert.ok([...seen].some((key) => {
+      const [x, y] = key.split(',').map(Number);
+      return Math.abs(x - cx) <= 4 && Math.abs(y - cy) <= 3;
+    }), `a Golem should fit through to ${cx},${cy}`);
+  }
+});
+
+test('a Golem resets its movement counter and can disable again', () => {
+  const { game, step } = createGame();
+  stage5Arena(game);
+  const golem = game.makeGolem(10.5 * 32, 10.5 * 32);
+  golem.wanderAngle = 0; golem.wanderTimer = 999;
+  game.golems.push(golem);
+  golem.moved = 319.5;
+  step(1);
+  assert.equal(golem.disabled, 3);
+  assert.equal(golem.moved, 0);
+  step(60);
+  assert.equal(golem.disabled, 0);
+  const x = golem.x;
+  step(1);
+  assert.ok(golem.x > x);
+  assert.ok(golem.moved > 0);
+  golem.moved = 319.5;
+  step(1);
+  assert.equal(golem.disabled, 3);
+  assert.equal(golem.moved, 0);
+});
+
+test('failed full-bag presses do not unlock trades; Aluminum exchanges need room for all four Coal', () => {
+  const { game, elements } = createGame();
+  game.addItem('stone', 891);
+  game.addItem('silver', 2);
+  game.openStation('press');
+  assert.equal(game.pressCoin('silver'), false);
+  assert.equal(game.traderUnlocked.silver, false);
+  assert.equal(game.countItem('silver'), 2);
+  assert.equal(game.countItem('silverCoin'), 0);
+  game.removeItem('silver', 1);
+  assert.equal(game.pressCoin('silver'), true);
+  assert.equal(game.traderUnlocked.silver, true);
+
+  game.start();
+  game.addItem('aluminum', 1);
+  game.openStation('press');
+  assert.equal(game.pressCoin('aluminum'), true);
+  game.closeStation();
+  game.addItem('aluminumCoin', 1); // coin stack will survive trading one
+  game.addItem('coal', 98); // room for only one of four Coal
+  game.addItem('stone', 792); // eight more slots; bag is full
+  game.openStation('trader');
+  assert.equal(elements['trade-aluminum'].disabled, true);
+  assert.equal(game.tradeCoin('aluminum'), false);
+  assert.equal(game.countItem('aluminumCoin'), 2);
+  assert.equal(game.countItem('coal'), 98);
+  game.removeItem('aluminumCoin', 1); // spending the last one now frees a slot
+  assert.equal(game.tradeCoin('aluminum'), true);
+  assert.equal(game.countItem('aluminumCoin'), 0);
+  assert.equal(game.countItem('coal'), 102);
 });

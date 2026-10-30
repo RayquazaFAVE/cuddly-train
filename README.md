@@ -1,7 +1,8 @@
 # Mining Simulator ⛏️
 
 A top-down dungeon mining game. Start safe in **Home Base**, explore **Cave Entrance**,
-then descend through **Dreadful Tunnels** and **Auag Cavern** to **Stalag Cavern**.
+then descend through **Dreadful Tunnels**, **Auag Cavern**, and **Stalag Cavern** to
+**Alumina Cave**.
 
 No dependencies, no build step. Open `index.html` and play, or serve the folder:
 
@@ -38,7 +39,7 @@ shown in Render's deploy log, wait for the deploy to go live, then hard-refresh 
 | `Q` | Equip the **pickaxe** |
 | `E` | Equip the **sword** |
 | Left click / `Space` | Swing the equipped tool toward the cursor |
-| Left click a station | Open the Melter, Storage Chest or Forge (in Home Base) |
+| Left click a station | Open the Melter, Storage Chest, Forge, Coin Press or Coin Trader (in Home Base) |
 | `Esc` | Pause · `M` mute |
 
 ## How a run works
@@ -46,11 +47,12 @@ shown in Render's deploy log, wait for the deploy to go live, then hard-refresh 
 You begin in Home Base, a warm little room with lanterns, crates, a bedroll and a set of
 stairs down. Walking onto the stairs takes you to Cave Entrance. The stairs in its far
 chamber lead down to Dreadful Tunnels, whose lower gallery descends into Auag Cavern.
-Stairs in Auag Cavern lead to Stalag Cavern. Each stage also has stairs back up. Your
-inventory and health carry between areas. When you re-enter an area, its tiles and
-stalagmites return to their original state for that run: mined blocks and ore reappear,
-and partial cracks are cleared. Uncollected drops and Prospector hauls remain safe. On arrival, the stage title appears at the top of the screen, then shrinks
-into a small area bubble.
+Stairs in Auag Cavern lead to Stalag Cavern, whose far chamber descends into Alumina Cave.
+Each stage also has stairs back up. Your inventory and health carry between areas. When you
+re-enter an area, its tiles and stalagmites return to their original state for that run:
+mined blocks and ore reappear, and partial cracks are cleared. Uncollected drops and
+Prospector hauls remain safe. On arrival, the stage title appears at the top of the screen,
+then shrinks into a small area bubble.
 
 ### Stage 1 · Cave Entrance
 
@@ -90,7 +92,7 @@ The rounded chambers of Auag Cavern contain **Stone, Gold and Silver**. Its arri
 is “The abundant riches have attracted the greedy”. The layout is fixed and the ore is
 randomised for each new run. Gold and Silver currently have the same mining requirements as
 Iron: **5 / 3 / 2 hits** with a T1 / T2 / T3 pickaxe. Each ore block yields one piece.
-They can be kept in the Home Base Storage Chest; the Melter still works with copper and iron.
+They can be kept in the Home Base Storage Chest or pressed into coins.
 
 ### Stage 4 · Stalag Cavern
 
@@ -100,6 +102,13 @@ freestanding; they never generate inside walls or ore. Mine a stalagmite to get 
 It takes **2 hits with a T1 pickaxe** or **1 hit with T2 or T3**. Like other terrain,
 stalagmites grow back when you leave the area and return. Store Calcite in the Home Base
 chest. Prospectors, Large Slimes and Spiders inhabit this stage.
+
+### Stage 5 · Alumina Cave
+
+Beyond Stalag Cavern lies **Alumina Cave**, with broad galleries containing **Stone, Iron
+and Bauxite**. Bauxite yields one piece and takes **5 / 3 / 2 hits** with a T1 / T2 / T3
+pickaxe. Melt one Bauxite with one Coal at Home Base to produce **Aluminum**. Large Slimes,
+Spiders and Golems spawn here; the area's tiles reset when you leave and return.
 
 ### Prospectors
 
@@ -143,15 +152,25 @@ within **2**. Outside that radius a slime loses interest and wanders in a random
 at **half speed**, picking a new heading whenever it walks into a wall. Slimes hop as they
 move — quick little bounces while chasing, a slower amble when wandering.
 
-**Large Slimes** in Stalag Cavern have **60 HP** and deal **40 damage**: double a regular
+**Large Slimes** in Stalag Cavern and Alumina Cave have **60 HP** and deal **40 damage**: double a regular
 slime. They spot you from **6 tiles** away but move at **half a regular slime's speed**.
 Defeating one splits it into **two regular slimes**, which can then split into tiny slimes.
 
 ### Spiders
 
-Spiders skitter quickly through Stalag Cavern and navigate around obstacles. They have
-**15 HP**, deal **5 damage** per bite, and can attack every **0.4 seconds**. Spider bites
-give a shorter **0.3-second** recovery window, so their quick attacks can land repeatedly.
+Spiders skitter quickly through Stalag Cavern and Alumina Cave and navigate around
+obstacles. They have **15 HP**, deal **5 damage** per bite, and can attack every
+**0.4 seconds**. Spider bites give a shorter **0.3-second** recovery window, so their
+quick attacks can land repeatedly.
+
+### Golems
+
+Golems are slow, bulky stone guardians found in Alumina Cave. They have **100 HP**, deal
+**45 damage**, and move at **24 pixels per second** while chasing. After every **10 tiles
+of actual travel**, a Golem becomes **disabled for 3 seconds**: it cannot move or deal
+contact damage, even if you stand next to it. A blue ring and label show when it is safe
+to attack. Hitting a disabled Golem does not push it; attempted movement into walls does
+not count toward its distance.
 
 ### Drill Moles
 
@@ -161,25 +180,25 @@ burrow straight through solid blocks. Each time a mole enters a block, it has a 
 chance of destroying it. Blocks destroyed by moles drop nothing; the outer map boundary
 remains intact.
 
-### Home Base: Melter, Storage Chest and Forge
+### Home Base stations
 
 Click a workstation or the chest to open its menu; `Esc` or **Close** to leave. The game
 pauses while a menu is open.
 
-**The Storage Chest** keeps Stone, Coal, Copper, Iron, Gold, Silver, Calcite and both kinds
-of ingot safe at home. Each row shows how many are in your bag and how many are stored. Click
+**The Storage Chest** keeps all resources and coins, including Bauxite and Aluminum, safe
+at home. Each row shows how many are in your bag and how many are stored. Click
 **Store** or **Take** to move
 one item; Shift-click either button to move as many as possible. **Deposit all** and
 **Take all** work across every resource. Stored resources survive cave deaths, and anything
 that doesn't fit in your bag stays in the chest. Storage lasts for the current run; like
 the rest of the game, it is reset when starting a new run or reloading the page.
 
-**The Melter** turns copper and iron into matching ingots:
+**The Melter** turns Copper and Iron into matching ingots, and Bauxite into Aluminum:
 
-1. Choose **Copper** or **Iron**, then click the **top slot** to load one of that ore.
+1. Choose **Copper**, **Iron** or **Bauxite**, then click the **top slot** to load one.
 2. Click the **bottom slot** to load **1 Coal** as fuel.
-3. Click **Melt**. The menu closes, a flame bursts from the Melter, and the matching
-   ingot flies over to you and into your bag.
+3. Click **Melt**. The menu closes, a flame bursts from the Melter, and the resulting
+   ingot or Aluminum flies over to you and into your bag.
 
 The top slot holds one kind of ore at a time. Shift-click it to return its contents before
 switching types; anything that doesn't fit stays in the Melter. The Melt button needs room
@@ -197,12 +216,31 @@ in the bag for the ingot.
 A tool must reach T2 before it can be upgraded to T3. Your current tiers show on the tool
 belt and in the Forge. Upgrades are kept through death; only resources in the bag are lost.
 
+**The Coin Press** turns **1 raw Copper, Silver or Gold** into its matching coin. It also
+turns **1 Aluminum** into an Aluminum Coin; Bauxite must first be melted into Aluminum.
+The station uses materials in your bag. Pressing the first Silver, Gold or Aluminum Coin
+unlocks that coin's trade at the Coin Trader.
+
+**The Coin Trader** exchanges coins in your bag for Coal:
+
+| Trade | Availability |
+| --- | --- |
+| 2 Copper Coins → 1 Coal | Available from the start |
+| 1 Silver Coin → 1 Coal | Unlock by pressing a Silver Coin |
+| 1 Gold Coin → 2 Coal | Unlock by pressing a Gold Coin |
+| 1 Aluminum Coin → 4 Coal | Unlock by pressing an Aluminum Coin |
+
+Unlocked trades remain available through death, but reset on a new run. Pressing or trading
+never consumes ingredients unless the complete result fits in the bag; a stack used up by
+the exchange can free a slot for its output.
+
 ### Dying
 
 When your health runs out you wake up in **Home Base** at full health, keeping **half of
 each resource's total** in your bag, rounded to the nearest whole item (`round(7/2)` is 4,
-`round(5/2)` is 3). Tool upgrades, the Storage Chest, and the Melter's currently loaded
-coal and ore are untouched.
+`round(5/2)` is 3). Tool upgrades, unlocked coin trades, the Storage Chest, and the Melter's
+currently loaded coal and ore are untouched. Coins and Aluminum in the bag are halved like
+other resources.
 
 ### Health
 
@@ -240,12 +278,12 @@ node --test tests/game.test.js
 Notes on the implementation:
 
 - **Levels** are tile grids (32 px tiles). Stage 1 connects rooms, Stage 2 combines straight
-  galleries and openings, and Stages 3–4 connect broad cavern chambers.
+  galleries and openings, and Stages 3–5 connect broad cavern chambers.
 - **Ore seeding** converts walls near walkable tiles into each area's rock resources. The
   outer boundary stays intact. Stage 4's stalagmites are separate objects placed only on
   floor tiles, with routes kept open for players and Large Slimes.
-- **Mining** is hit-based rather than time-based. Iron, Gold and Silver have per-tier hit
-  tables, and partial damage is remembered per tile until you leave and return.
+- **Mining** is hit-based rather than time-based. Iron, Gold, Silver and Bauxite have
+  per-tier hit tables, and partial damage is remembered per tile until you leave and return.
 - **Area resets** restore the original terrain, ore and stalagmites generated for the current
   run on each return. Stored items, upgrades, machines and uncollected loot are preserved;
   drops or Prospectors trapped by restored obstacles are moved onto reachable floor.
@@ -255,8 +293,10 @@ Notes on the implementation:
   the nearby player has treasure. Dynamite targets a fixed tile, with an eight-second throw
   cooldown and a two-second fuse after it lands.
 - **Combat** is an arc test: a swing hits everything inside the sword's range whose angle
-  is within the arc of your aim. Damage numbers and enemy health bars are drawn in world
-  space.
+  is within the arc of your aim. Golems count actual movement and pause without contact
+  damage after ten tiles. Damage numbers and enemy health bars are drawn in world space.
+- **Coins** are exchanged atomically against a copy of the bag, then committed only if the
+  output fits. Unlocks live for the current run and are not lost on death.
 - **Splitting** makes two regular slimes from a Large Slime, and two tinies from a regular
   slime. A swing snapshots the enemy list first, so newly spawned slimes cannot be damaged
   by the blow that made them.
@@ -267,8 +307,8 @@ Notes on the implementation:
 ## Where to take it next
 
 - **More stages** — add another level, its stair targets and new ores or enemies.
-- **Selling the haul** — add a Home Base shop that trades ore for a separate currency; the
-  total resources gathered by mining are already tracked in `state.oreHauled`.
+- **More trades** — extend the Coin Trader with additional recipes or rewards; the total
+  resources gathered by mining are already tracked in `state.oreHauled`.
 - **More enemies** — `makeSlime()` plus `updateSlimes()` is a compact template; a new
   enemy type is a new factory and a branch in the update loop.
 - **More stations** — `level.stations` is just data (`{ kind, x, y }`); `openStation()`
@@ -284,15 +324,19 @@ MiningSim.level            // the current level, its tiles and stairs
 MiningSim.slimes           // live slime list
 MiningSim.moles            // live Drill Moles
 MiningSim.spiders          // live Spiders
+MiningSim.golems           // live Golems
 MiningSim.prospectors      // Prospectors in the current area
 MiningSim.dynamites        // active dynamite in the current area
 MiningSim.BALANCE          // all the tuning numbers in one object
 MiningSim.addItem('gold', 5)
-MiningSim.enterLevel('stage4', 'debug')
+MiningSim.enterLevel('stage5', 'debug')
 MiningSim.melter           // what is loaded into the Melter
+MiningSim.traderUnlocked   // coin trade unlocks for this run
 MiningSim.storage          // resources safe in the Storage Chest
 MiningSim.pickups          // items flying or waiting on the current floor
 MiningSim.melt()           // start a melt at Home Base
+MiningSim.pressCoin('silver') // press one Silver Coin at Home Base
+MiningSim.tradeCoin('silver') // trade a Silver Coin for Coal
 MiningSim.upgradeTool('pickaxe')
 MiningSim.halveResources() // the death penalty, on demand
 ```

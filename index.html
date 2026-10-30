@@ -4,9 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Mining Simulator</title>
-<meta name="description" content="A dungeon mining game. Dig for ore, fight the slimes, go deeper." />
+<meta name="description" content="A dungeon mining game. Explore caves, fight monsters, smelt ore, and trade coins." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/style.css?v=9" />
+<link rel="stylesheet" href="css/style.css?v=10" />
 </head>
 <body>
   <main id="stage">
@@ -68,6 +68,7 @@
             <span class="ore-picker-label">Choose ore</span>
             <button id="ore-copper" class="ore-choice is-active" type="button" aria-pressed="true">Copper</button>
             <button id="ore-iron" class="ore-choice is-iron" type="button" aria-pressed="false">Iron</button>
+            <button id="ore-bauxite" class="ore-choice is-bauxite" type="button" aria-pressed="false">Bauxite</button>
           </div>
           <div class="melter-stack">
             <button id="slot-input" class="station-slot" type="button" title="Click to load ore; Shift-click to return it">
@@ -112,6 +113,68 @@
           </div>
 
           <p class="hint" id="forge-hint">Each upgrade costs 3 ingots of the next tier.</p>
+          <button class="btn btn-quiet" type="button" data-close-station>Close</button>
+        </div>
+
+        <!-- COIN PRESS -->
+        <div id="view-press" class="station-view is-hidden">
+          <span class="storage-eyebrow">HOME BASE WORKSHOP</span>
+          <h2>Coin Press</h2>
+          <p class="tagline">Turn one metal into one coin. Press a new coin to unlock its trade.</p>
+          <div class="coin-table" aria-label="Coin press recipes">
+            <div class="coin-row">
+              <span class="coin-icon is-copper" aria-hidden="true">C</span>
+              <span class="coin-details"><strong>Copper Coin</strong><small>1 raw Copper → 1 coin · <span id="press-copper-count">0 in bag</span></small></span>
+              <button id="press-copper" class="coin-action" type="button" aria-label="Press Copper Coin">Press</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-silver" aria-hidden="true">S</span>
+              <span class="coin-details"><strong>Silver Coin</strong><small>1 raw Silver → 1 coin · <span id="press-silver-count">0 in bag</span></small></span>
+              <button id="press-silver" class="coin-action" type="button" aria-label="Press Silver Coin">Press</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-gold" aria-hidden="true">G</span>
+              <span class="coin-details"><strong>Gold Coin</strong><small>1 raw Gold → 1 coin · <span id="press-gold-count">0 in bag</span></small></span>
+              <button id="press-gold" class="coin-action" type="button" aria-label="Press Gold Coin">Press</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-aluminum" aria-hidden="true">A</span>
+              <span class="coin-details"><strong>Aluminum Coin</strong><small>1 Aluminum → 1 coin · <span id="press-aluminum-count">0 in bag</span></small></span>
+              <button id="press-aluminum" class="coin-action" type="button" aria-label="Press Aluminum Coin">Press</button>
+            </div>
+          </div>
+          <p class="hint" id="press-hint">Melt Bauxite first to make Aluminum.</p>
+          <button class="btn btn-quiet" type="button" data-close-station>Close</button>
+        </div>
+
+        <!-- COIN TRADER -->
+        <div id="view-trader" class="station-view is-hidden">
+          <span class="storage-eyebrow">HOME BASE MARKET</span>
+          <h2>Coin Trader</h2>
+          <p class="tagline">Trade coins from your bag for coal.</p>
+          <div class="coin-table" aria-label="Coal exchange rates">
+            <div class="coin-row">
+              <span class="coin-icon is-copper" aria-hidden="true">C</span>
+              <span class="coin-details"><strong>2 Copper Coins → 1 Coal</strong><small id="trade-copper-status">Available · 0 coins in bag</small></span>
+              <button id="trade-copper" class="coin-action" type="button" aria-label="Trade Copper Coins for Coal">Trade</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-silver" aria-hidden="true">S</span>
+              <span class="coin-details"><strong>1 Silver Coin → 1 Coal</strong><small id="trade-silver-status">Locked · press a Silver Coin</small></span>
+              <button id="trade-silver" class="coin-action" type="button" aria-label="Trade Silver Coin for Coal">Locked</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-gold" aria-hidden="true">G</span>
+              <span class="coin-details"><strong>1 Gold Coin → 2 Coal</strong><small id="trade-gold-status">Locked · press a Gold Coin</small></span>
+              <button id="trade-gold" class="coin-action" type="button" aria-label="Trade Gold Coin for Coal">Locked</button>
+            </div>
+            <div class="coin-row">
+              <span class="coin-icon is-aluminum" aria-hidden="true">A</span>
+              <span class="coin-details"><strong>1 Aluminum Coin → 4 Coal</strong><small id="trade-aluminum-status">Locked · press an Aluminum Coin</small></span>
+              <button id="trade-aluminum" class="coin-action" type="button" aria-label="Trade Aluminum Coin for Coal">Locked</button>
+            </div>
+          </div>
+          <p class="hint" id="trader-hint">Press each new coin to unlock its exchange.</p>
           <button class="btn btn-quiet" type="button" data-close-station>Close</button>
         </div>
 
@@ -192,6 +255,10 @@
             <span class="stat-label">Spiders slain</span>
             <span class="stat-value" id="over-spiders">0</span>
           </div>
+          <div class="stat">
+            <span class="stat-label">Golems slain</span>
+            <span class="stat-value" id="over-golems">0</span>
+          </div>
         </div>
         <button id="again" class="btn" type="button">Wake up at base</button>
       </div>
@@ -241,6 +308,6 @@
     });
   })();
   </script>
-  <script src="js/game.js?v=11"></script>
+  <script src="js/game.js?v=12"></script>
 </body>
 </html>
