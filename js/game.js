@@ -51,6 +51,12 @@
   // Stalagmites are separate, mineable objects on FLOOR tiles, not wall tiles.
   const STALAGMITE = 10;
   const BAUXITE = 11;
+  const WET = 12;
+  const COBALT = 13;
+  const QUARTZ = 14;
+  const IRIDIUM = 15;
+  const TITANIUM = 16;
+  const MERCURY = 17;
 
   // hits = pickaxe hits needed with the T1 pickaxe; null means indestructible
   const TILES = {
@@ -64,6 +70,12 @@
     [SILVER]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'silver', base: '#4d535a' },
     [STALAGMITE]: { solid: true, hits: 2, drop: 'calcite', base: '#b5c3b7' },
     [BAUXITE]: { solid: true, hits: 5, hitsByTier: [5, 3, 2], drop: 'bauxite', base: '#69564e' },
+    [WET]: { solid: false },
+    [COBALT]: { solid: true, hits: 7, hitsByTier: [7, 5, 4], drop: 'cobalt', base: '#38485f' },
+    [QUARTZ]: { solid: true, hits: 5, hitsByTier: [5, 4, 3], drop: 'quartz', base: '#56505e' },
+    [IRIDIUM]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'iridium', base: '#504563' },
+    [TITANIUM]: { solid: true, hits: 9, hitsByTier: [9, 7, 5], drop: 'titanium', base: '#485a60' },
+    [MERCURY]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'mercury', base: '#46585b' },
     [STAIRS_DOWN]: { solid: false },
     [STAIRS_UP]: { solid: false },
   };
@@ -80,6 +92,12 @@
     calcite: { name: 'Calcite', color: '#d9e4c9' },
     bauxite: { name: 'Bauxite', color: '#d78f75' },
     aluminum: { name: 'Aluminum', color: '#e0e6ea', isIngot: true },
+    cobalt: { name: 'Cobalt', color: '#5f92f2' },
+    quartz: { name: 'Quartz', color: '#edddf3' },
+    iridium: { name: 'Iridium', color: '#b798ef' },
+    titanium: { name: 'Titanium', color: '#b8dde2' },
+    mercury: { name: 'Mercury', color: '#c6eceb' },
+    axolotl: { name: 'Axolotl', color: '#f4a8bd', isCreature: true },
     copperCoin: { name: 'Copper Coin', color: '#d99558', isCoin: true },
     silverCoin: { name: 'Silver Coin', color: '#d8e2eb', isCoin: true },
     goldCoin: { name: 'Gold Coin', color: '#f5c650', isCoin: true },
@@ -95,8 +113,19 @@
     gold: { input: 'gold', coin: 'goldCoin', cost: 1, coal: 2 },
     aluminum: { input: 'aluminum', coin: 'aluminumCoin', cost: 1, coal: 4 },
   };
-  const UPGRADE_COST = 3; // matching ingots per tool upgrade
-  const MAX_TIER = 3;
+  const UPGRADE_COST = 3; // ingots for T2/T3, raw Titanium for T4
+  const MAX_TIER = 4;
+  // The hidden cave deliberately has no lift or destination button.
+  const ELEVATOR_FLOORS = [
+    { id: 'home', number: '00', name: 'Home Base' },
+    { id: 'stage1', number: '01', name: 'Cave Entrance' },
+    { id: 'stage2', number: '02', name: 'Dreadful Tunnels' },
+    { id: 'stage3', number: '03', name: 'Auag Cavern' },
+    { id: 'stage4', number: '04', name: 'Stalag Cavern' },
+    { id: 'stage5', number: '05', name: 'Alumina Cave' },
+    { id: 'stage6', number: '06', name: 'Luscious Cave' },
+    { id: 'stage7', number: '07', name: 'Spiral Cavern' },
+  ];
 
   /* -------------------------------------------------------------- balance */
 
@@ -106,6 +135,8 @@
     swordDamage: 10, // T1: 10 damage, so 3 hits to kill a 30 HP slime
     swordDamageT2: 15, // T2: 2 hits
     swordDamageT3: 30, // T3: 1 hit against a normal slime or mole
+    swordDamageT4: 35, // Golems now carry one extra hit's worth of armour
+    mercurySwordMultiplier: 1.15,
     pickaxeReach: 2.2 * TS,
     pickaxeCooldown: 0.3,
     swordCooldown: 0.36,
@@ -142,9 +173,12 @@
     spiderHitInvulnerability: 0.3,
     maxSpiders: 5,
     spiderSpawnEvery: 4,
-    golemHp: 100,
+    golemHp: 100, // base HP; each Golem also gets one sword hit of armour
     golemDamage: 45,
-    golemSpeed: 24,
+    golemSpeed: 42,
+    mercuryGolemHp: 80,
+    mercuryGolemDamage: 55,
+    mercuryGolemSpeed: 60,
     golemDetect: 6 * TS,
     golemRadius: 21,
     golemMoveLimit: 10 * TS,
@@ -189,6 +223,7 @@
     toolbelt: document.getElementById('toolbelt'),
     bag: document.getElementById('bag'),
     toast: document.getElementById('toast'),
+    pauseBtn: document.getElementById('pause-btn'),
     mute: document.getElementById('mute'),
     menu: document.getElementById('menu'),
     pause: document.getElementById('pause'),
@@ -199,8 +234,14 @@
     viewStorage: document.getElementById('view-storage'),
     viewPress: document.getElementById('view-press'),
     viewTrader: document.getElementById('view-trader'),
+    viewElevator: document.getElementById('view-elevator'),
+    elevatorStatus: document.getElementById('elevator-status'),
+    elevatorActivate: document.getElementById('elevator-activate'),
+    elevatorFloors: document.getElementById('elevator-floors'),
     pressHint: document.getElementById('press-hint'),
     traderHint: document.getElementById('trader-hint'),
+    tradeAxolotl: document.getElementById('trade-axolotl'),
+    tradeAxolotlStatus: document.getElementById('trade-axolotl-status'),
     storageRows: document.getElementById('storage-rows'),
     storageHint: document.getElementById('storage-hint'),
     depositAll: document.getElementById('deposit-all'),
@@ -219,6 +260,9 @@
     melterHint: document.getElementById('melter-hint'),
     forgeIngots: document.getElementById('forge-ingots'),
     forgeIronIngots: document.getElementById('forge-iron-ingots'),
+    forgeTitanium: document.getElementById('forge-titanium'),
+    forgeMercuryCount: document.getElementById('forge-mercury-count'),
+    upgradeMercury: document.getElementById('upgrade-mercury'),
     forgePickTier: document.getElementById('forge-pick-tier'),
     forgeSwordTier: document.getElementById('forge-sword-tier'),
     forgeHint: document.getElementById('forge-hint'),
@@ -235,6 +279,19 @@
     overSpiders: document.getElementById('over-spiders'),
     overGolems: document.getElementById('over-golems'),
     play: document.getElementById('play'),
+    continueSave: document.getElementById('continue-save'),
+    importSaveMenu: document.getElementById('import-save-menu'),
+    importSavePause: document.getElementById('import-save-pause'),
+    saveBrowser: document.getElementById('save-browser'),
+    exportSave: document.getElementById('export-save'),
+    saveFile: document.getElementById('save-file'),
+    menuSaveStatus: document.getElementById('menu-save-status'),
+    pauseSaveStatus: document.getElementById('pause-save-status'),
+    saveConfirm: document.getElementById('save-confirm'),
+    saveConfirmTitle: document.getElementById('save-confirm-title'),
+    saveConfirmMessage: document.getElementById('save-confirm-message'),
+    saveConfirmCancel: document.getElementById('save-confirm-cancel'),
+    saveConfirmAccept: document.getElementById('save-confirm-accept'),
     resume: document.getElementById('resume'),
     again: document.getElementById('again'),
   };
@@ -339,6 +396,8 @@
     areaIntro: 0,
     tool: 'pickaxe', // pickaxe | sword
     tools: { pickaxe: 1, sword: 1 }, // tool tiers
+    mercurySword: false, // one permanent +15% sword upgrade for this run
+    elevatorUnlocked: false, // reactivated at the Stage 7 entrance
     hp: BALANCE.playerMaxHp,
     invuln: 0,
     cooldown: 0,
@@ -404,6 +463,7 @@
       stalagmites: new Set(), // "x,y" -> a mineable formation on a FLOOR tile
       damage: new Map(), // "x,y" -> hits already taken
       decor: [],
+      elevators: [], // floor-level lift entrances beside the stairs
       pickups: [], // uncollected drops stay in their own level
       prospectors: [], // their collected ore remains with them between visits
       dynamites: [],
@@ -421,9 +481,29 @@
     };
   }
 
+  // Install lift entrances alongside both ordinary staircases where present.
+  // This remains decorative walkable floor, so neither saves nor terrain
+  // resets need a new tile type. The secret cave is intentionally excluded.
+  function placeElevators(lv) {
+    lv.elevators = [];
+    if (lv.id === 'special') return;
+    for (const stairs of [lv.stairsUp, lv.stairsDown]) {
+      if (!stairs) continue;
+      const sides = [[1, 0], [-1, 0], [0, -1], [0, 1]];
+      const spot = sides.map(([dx, dy]) => ({ tx: stairs.tx + dx, ty: stairs.ty + dy }))
+        .find(({ tx, ty }) => inBounds(lv, tx, ty) && !isSolidInLevel(lv, tx, ty) &&
+          ![STAIRS_UP, STAIRS_DOWN].includes(lv.tiles[idx(lv, tx, ty)]) &&
+          (!lv.originalTiles || (!TILES[lv.originalTiles[idx(lv, tx, ty)]].solid &&
+            !(lv.originalStalagmites && lv.originalStalagmites.has(tileKey(tx, ty))))) &&
+          !lv.elevators.some((lift) => lift.tx === tx && lift.ty === ty));
+      if (spot) lv.elevators.push({ ...spot, x: (spot.tx + 0.5) * TS, y: (spot.ty + 0.5) * TS });
+    }
+  }
+
   // Keep the layout and this run's random ore distribution as the area's
   // baseline. Re-entry restores these tiles without resetting inventory or loot.
   function captureOriginalTiles(lv) {
+    placeElevators(lv);
     lv.originalTiles = lv.tiles.slice();
     lv.originalStalagmites = new Set(lv.stalagmites);
     return lv;
@@ -742,12 +822,153 @@
     lv.upTarget = 'stage4';
     lv.tiles[idx(lv, sx, sy)] = STAIRS_UP;
     lv.spawn = { x: (sx + 0.5) * TS, y: (sy + 1.6) * TS };
+    lv.stairsDown = { tx: 42, ty: 36 };
+    lv.downTarget = 'stage6';
+    lv.tiles[idx(lv, lv.stairsDown.tx, lv.stairsDown.ty)] = STAIRS_DOWN;
     seedOre(lv, sx, sy);
     for (const [x, y, phase] of [[4.8, 6.2, 0.5], [11, 6.7, 2], [24, 9, 1.2],
       [45, 9, 2.8], [31, 22, 0.9], [19, 37, 1.9], [40, 36, 3]]) {
       lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
     }
     lv.decor.push({ kind: 'bones', x: 48.5 * TS, y: 24.5 * TS, phase: 0 });
+    return captureOriginalTiles(lv);
+  }
+
+  // Stage 6 is an open oasis. The pool centers stay stable for migrated saves,
+  // so old uncollected Axolotls remain in their familiar wet spots.
+  const LUSCIOUS_POOLS = [
+    [11, 8], [24, 10], [43, 9], [50, 23], [31, 21], [13, 24], [19, 36], [39, 35],
+  ];
+
+  function carveCaverns(lv, chambers, links) {
+    for (const room of chambers) {
+      for (let ty = Math.floor(room.y - room.ry); ty <= room.y + room.ry; ty++) {
+        for (let tx = Math.floor(room.x - room.rx); tx <= room.x + room.rx; tx++) {
+          const dx = (tx + 0.5 - room.x) / room.rx;
+          const dy = (ty + 0.5 - room.y) / room.ry;
+          if (dx * dx + dy * dy <= 1) carveRect(lv, tx, ty, 1, 1);
+        }
+      }
+    }
+    for (const [from, to] of links) {
+      const a = chambers[from], b = chambers[to];
+      carveRect(lv, Math.min(a.x, b.x) - 1, a.y - 2, Math.abs(b.x - a.x) + 3, 5);
+      carveRect(lv, b.x - 2, Math.min(a.y, b.y) - 1, 5, Math.abs(b.y - a.y) + 3);
+    }
+  }
+
+  function buildStage6() {
+    const lv = makeLevel('stage6', 'Luscious Cave', 64, 46, false);
+    // A single broad cavern, dotted with small, separate islands of mineable
+    // rock instead of walls that divide the area into rooms.
+    carveRect(lv, 1, 1, lv.w - 2, lv.h - 2, FLOOR);
+    lv.stairsUp = { tx: 6, ty: 8 };
+    lv.upTarget = 'stage5';
+    lv.tiles[idx(lv, 6, 8)] = STAIRS_UP;
+    lv.spawn = { x: 6.5 * TS, y: 9.6 * TS };
+    lv.stairsDown = { tx: 42, ty: 36 };
+    lv.downTarget = 'stage7';
+    lv.tiles[idx(lv, 42, 36)] = STAIRS_DOWN;
+    lv.wetSpots = LUSCIOUS_POOLS.map(([tx, ty]) => ({ tx, ty }));
+
+    const lanterns = [[5, 6, 0.5], [12, 7, 2], [24, 8, 1], [44, 9, 2.8],
+      [31, 22, 0.9], [19, 37, 1.8], [40, 36, 3], [54, 34, 1.4], [17, 16, 0.8]];
+    const ferns = [[4, 9], [14, 10], [22, 12], [27, 6], [47, 12], [34, 25],
+      [10, 21], [17, 35], [54, 19], [29, 39], [48, 30], [9, 39]];
+    const protectedPoints = [
+      ...LUSCIOUS_POOLS.map(([x, y]) => ({ x, y, radius: 3.1 })),
+      { x: 6, y: 8, radius: 3 }, { x: 6, y: 10, radius: 2 },
+      { x: 42, y: 36, radius: 3 },
+      ...lanterns.map(([x, y]) => ({ x, y, radius: 1.5 })),
+      ...ferns.map(([x, y]) => ({ x, y, radius: 1.5 })),
+    ];
+    const clumps = [
+      [17, 5, 2.6, 1.8], [32, 5, 3.2, 1.9], [54, 5, 2.8, 2.1],
+      [8, 15, 2.4, 1.8], [22, 16, 2.8, 2], [39, 15, 3, 1.8], [57, 15, 2.6, 2],
+      [23, 26, 2.8, 2], [40, 26, 3.1, 2], [58, 29, 2.8, 2],
+      [7, 33, 2.8, 1.8], [29, 32, 2.7, 2], [52, 37, 3, 2],
+      [33, 40, 2.6, 1.7], [21, 41, 2.5, 1.6], [47, 31, 2.8, 1.8],
+    ];
+    for (const [cx, cy, rx, ry] of clumps) {
+      for (let ty = Math.floor(cy - ry); ty <= Math.ceil(cy + ry); ty++) {
+        for (let tx = Math.floor(cx - rx); tx <= Math.ceil(cx + rx); tx++) {
+          if (!inBounds(lv, tx, ty) || lv.tiles[idx(lv, tx, ty)] !== FLOOR) continue;
+          const shape = ((tx - cx) / rx) ** 2 + ((ty - cy) / ry) ** 2;
+          if (shape > 0.9 + hash2(tx, ty, 533) * 0.18) continue;
+          if (protectedPoints.some((p) => Math.hypot(tx - p.x, ty - p.y) < p.radius)) continue;
+          lv.tiles[idx(lv, tx, ty)] = WALL;
+        }
+      }
+    }
+    seedOre(lv, 6, 8);
+    // Even the center of a large clump is mineable, not an indestructible wall.
+    for (let ty = 1; ty < lv.h - 1; ty++) for (let tx = 1; tx < lv.w - 1; tx++) {
+      if (lv.tiles[idx(lv, tx, ty)] === WALL) lv.tiles[idx(lv, tx, ty)] = STONE;
+    }
+
+    for (const [cx, cy] of LUSCIOUS_POOLS) {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const tx = cx + dx, ty = cy + dy;
+        if (dx * dx / 4 + dy * dy > 1.2 || !inBounds(lv, tx, ty)) continue;
+        if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.tiles[idx(lv, tx, ty)] = WET;
+      }
+      const x = (cx + 0.5) * TS, y = (cy + 0.5) * TS;
+      lv.pickups.push({ item: 'axolotl', count: 1, x, y, originX: x, originY: y,
+        phase: 'ground', age: 0, delay: 0, rise: 20, source: 'other', alreadyCollected: false });
+    }
+    for (const [x, y, phase] of lanterns) lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    for (const [x, y] of ferns) lv.decor.push({ kind: 'fern', x: x * TS, y: y * TS });
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage7() {
+    const lv = makeLevel('stage7', 'Spiral Cavern', 72, 72, false);
+    const center = 36, turns = TAU * 3;
+    // An Archimedean spiral with a five-tile-wide corridor: the separated
+    // coils remain visibly circular and roomy enough for a Golem to navigate.
+    for (let n = 0; n <= 1000; n++) {
+      const angle = turns * n / 1000;
+      const radius = 3 + 27 * n / 1000;
+      const px = center + radius * Math.cos(angle), py = center + radius * Math.sin(angle);
+      for (let ty = Math.floor(py - 3); ty <= Math.ceil(py + 3); ty++) {
+        for (let tx = Math.floor(px - 3); tx <= Math.ceil(px + 3); tx++) {
+          if (Math.hypot(tx + 0.5 - px, ty + 0.5 - py) <= 2.6) carveRect(lv, tx, ty, 1, 1);
+        }
+      }
+    }
+    lv.stairsUp = { tx: 66, ty: 36 };
+    lv.upTarget = 'stage6';
+    lv.tiles[idx(lv, 66, 36)] = STAIRS_UP;
+    lv.spawn = { x: 65.5 * TS, y: 34.5 * TS };
+    lv.downTarget = 'special';
+    seedOre(lv, 66, 36);
+    // A glimmering Titanium seam at the end of the spiral hides the entrance.
+    lv.secretTile = { tx: 37, ty: 36 };
+    lv.tiles[idx(lv, lv.secretTile.tx, lv.secretTile.ty)] = TITANIUM;
+    for (const [x, y, phase] of [[65, 34, 0.5], [56, 15, 1.2], [21, 11, 2],
+      [12, 41, 2.6], [39, 57, 0.7], [55, 32, 2.1], [36, 18, 1.6], [28, 39, 3], [39, 37, 0.4]]) {
+      lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildSpecialCave() {
+    const lv = makeLevel('special', 'Special Cave', 50, 40, false);
+    const chambers = [
+      { x: 8, y: 9, rx: 6, ry: 6 }, { x: 23, y: 8, rx: 8, ry: 6 },
+      { x: 39, y: 12, rx: 7, ry: 6 }, { x: 34, y: 28, rx: 8, ry: 7 },
+      { x: 13, y: 29, rx: 8, ry: 7 }, { x: 24, y: 20, rx: 8, ry: 6 },
+    ];
+    carveCaverns(lv, chambers, [[0, 1], [1, 2], [2, 3], [3, 4], [4, 0], [1, 5], [5, 3]]);
+    lv.stairsUp = { tx: 6, ty: 8 };
+    lv.upTarget = 'stage7';
+    lv.tiles[idx(lv, 6, 8)] = STAIRS_UP;
+    lv.spawn = { x: 6.5 * TS, y: 9.6 * TS };
+    seedOre(lv, 6, 8);
+    for (const [x, y, phase] of [[5, 6, 0.5], [12, 7, 2], [23, 8, 1.1], [38, 12, 2.6],
+      [24, 20, 0.9], [14, 29, 1.8], [34, 28, 3]]) {
+      lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    }
     return captureOriginalTiles(lv);
   }
 
@@ -877,7 +1098,24 @@
 
         const away = Math.hypot(tx - spawnTx, ty - spawnTy);
         const r = Math.random();
-        if (lv.id === 'stage5') {
+        if (lv.id === 'special') {
+          if (r < 0.24) lv.tiles[i] = MERCURY;
+          else if (r < 0.47) lv.tiles[i] = TITANIUM;
+          else if (r < 0.69) lv.tiles[i] = IRIDIUM;
+          else if (r < 0.86) lv.tiles[i] = QUARTZ;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage7') {
+          if (r < 0.23) lv.tiles[i] = TITANIUM;
+          else if (r < 0.46) lv.tiles[i] = IRIDIUM;
+          else if (r < 0.66) lv.tiles[i] = COBALT;
+          else if (r < 0.84) lv.tiles[i] = GOLD;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage6') {
+          if (r < 0.27) lv.tiles[i] = GOLD;
+          else if (r < 0.53) lv.tiles[i] = COBALT;
+          else if (r < 0.79) lv.tiles[i] = QUARTZ;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage5') {
           if (r < 0.3) lv.tiles[i] = BAUXITE;
           else if (r < 0.58) lv.tiles[i] = IRON;
           else lv.tiles[i] = STONE;
@@ -905,10 +1143,16 @@
       }
     }
 
-    if (lv.id === 'stage4' || lv.id === 'stage5') {
+    const guaranteedOres = {
+      stage4: [STONE, IRON, GOLD], stage5: [STONE, IRON, BAUXITE],
+      stage6: [STONE, GOLD, COBALT, QUARTZ],
+      stage7: [STONE, GOLD, COBALT, IRIDIUM, TITANIUM],
+      special: [STONE, TITANIUM, IRIDIUM, QUARTZ, MERCURY],
+    };
+    if (guaranteedOres[lv.id]) {
       // Even an unlucky random seed leaves at least one accessible vein of
       // each requested rock. Only edge rock can be selected for the fallback.
-      const ores = lv.id === 'stage5' ? [STONE, IRON, BAUXITE] : [STONE, IRON, GOLD];
+      const ores = guaranteedOres[lv.id];
       for (const wanted of ores) {
         if (lv.tiles.includes(wanted)) continue;
         for (let i = 0; i < lv.tiles.length; i++) {
@@ -1066,11 +1310,12 @@
         cell.slot.classList.add('has-item');
         cell.slot.classList.toggle('is-ingot', !!ITEMS[item.item].isIngot);
         cell.slot.classList.toggle('is-coin', !!ITEMS[item.item].isCoin);
+        cell.slot.classList.toggle('is-creature', !!ITEMS[item.item].isCreature);
         cell.gem.style.setProperty('--gem', ITEMS[item.item].color);
         cell.count.textContent = item.count > 1 ? String(item.count) : '';
         cell.slot.title = ITEMS[item.item].name;
       } else {
-        cell.slot.classList.remove('has-item', 'is-ingot', 'is-coin');
+        cell.slot.classList.remove('has-item', 'is-ingot', 'is-coin', 'is-creature');
         cell.count.textContent = '';
         cell.slot.removeAttribute('title');
       }
@@ -1090,7 +1335,7 @@
       const resource = document.createElement('span');
       resource.className = 'storage-resource';
       const gem = document.createElement('span');
-      gem.className = def.isIngot ? 'gem is-ingot' : def.isCoin ? 'gem is-coin' : 'gem';
+      gem.className = def.isIngot ? 'gem is-ingot' : def.isCoin ? 'gem is-coin' : def.isCreature ? 'gem is-creature' : 'gem';
       gem.setAttribute('aria-hidden', 'true');
       gem.style.setProperty('--gem', def.color);
       const name = document.createElement('span');
@@ -1210,23 +1455,33 @@
 
   /* ------------------------------------------------ Home Base stations */
 
-  const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage', press: 'Coin Press', trader: 'Coin Trader' };
+  const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage',
+    press: 'Coin Press', trader: 'Coin Trader', elevator: 'Elevator' };
 
-  function tierDamage() {
-    if (state.tools.sword >= 3) return BALANCE.swordDamageT3;
-    return state.tools.sword >= 2 ? BALANCE.swordDamageT2 : BALANCE.swordDamage;
+  function swordDamageFor(tier, mercurySword) {
+    const base = tier >= 4 ? BALANCE.swordDamageT4 : tier >= 3 ? BALANCE.swordDamageT3 :
+      tier >= 2 ? BALANCE.swordDamageT2 : BALANCE.swordDamage;
+    return mercurySword ? base * BALANCE.mercurySwordMultiplier : base;
   }
 
-  // Hits required by the equipped pickaxe for a given rock.
+  function tierDamage() {
+    return swordDamageFor(state.tools.sword, state.mercurySword);
+  }
+
+  // T4 removes exactly two hits from T3, but never reduces a block below one.
   function pickaxeHits(def) {
     if (!def.hits) return null;
-    if (def.hitsByTier) return def.hitsByTier[clamp(state.tools.pickaxe, 1, MAX_TIER) - 1];
-    return state.tools.pickaxe >= 2 ? 1 : def.hits;
+    const tier = clamp(state.tools.pickaxe, 1, MAX_TIER);
+    const t3 = def.hitsByTier ? def.hitsByTier[2] : 1;
+    if (tier >= 4) return Math.max(1, t3 - 2);
+    if (def.hitsByTier) return def.hitsByTier[tier - 1];
+    return tier >= 2 ? 1 : def.hits;
   }
 
   function upgradeMaterial(tier) {
     if (tier === 1) return 'ingot';
     if (tier === 2) return 'ironIngot';
+    if (tier === 3) return 'titanium';
     return null;
   }
 
@@ -1247,11 +1502,27 @@
     return null;
   }
 
+  function elevatorAt(wx, wy) {
+    return level && level.elevators.find((lift) => Math.hypot(wx - lift.x, wy - lift.y) <= 24);
+  }
+
+  function useElevator(lift) {
+    if (!lift || !level || !level.elevators.includes(lift) || state.mode !== 'playing') return false;
+    if (Math.hypot(player.x - lift.x, player.y - lift.y) > 2.5 * TS) {
+      showToast('Walk closer to the elevator.');
+      return false;
+    }
+    openStation('elevator');
+    return true;
+  }
+
   function openStation(kind) {
     if (!el.station || !Object.hasOwn(STATION_LABELS, kind)) return;
+    if (kind === 'elevator' && (!level || !level.elevators.length)) return;
     state.mode = 'station';
     state.openStation = kind;
     keys.clear();
+    clearTouchMove();
     pointer.down = false;
     stage.classList.remove('is-playing');
 
@@ -1260,11 +1531,12 @@
     el.viewStorage.classList.toggle('is-hidden', kind !== 'storage');
     el.viewPress.classList.toggle('is-hidden', kind !== 'press');
     el.viewTrader.classList.toggle('is-hidden', kind !== 'trader');
+    el.viewElevator.classList.toggle('is-hidden', kind !== 'elevator');
     el.stationPanel.classList.toggle('is-storage', kind === 'storage');
     el.station.setAttribute('aria-label', STATION_LABELS[kind]);
     el.station.classList.remove('is-hidden');
     if (kind === 'press') el.pressHint.textContent = 'Melt Bauxite first to make Aluminum.';
-    if (kind === 'trader') el.traderHint.textContent = 'Press each new coin to unlock its exchange.';
+    if (kind === 'trader') el.traderHint.textContent = 'Press each new coin to unlock its coal exchange.';
     refreshStation();
   }
 
@@ -1275,6 +1547,69 @@
     el.station.classList.add('is-hidden');
     stage.classList.add('is-playing');
     last = 0; // avoid a huge dt from the paused frames
+  }
+
+  const elevatorButtons = [];
+
+  function buildElevatorUI() {
+    el.elevatorFloors.innerHTML = '';
+    elevatorButtons.length = 0;
+    for (const floor of ELEVATOR_FLOORS) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'elevator-floor';
+      const number = document.createElement('span');
+      number.className = 'elevator-floor-number'; number.textContent = floor.number;
+      const labels = document.createElement('span'); labels.className = 'elevator-floor-name';
+      const name = document.createElement('strong'), status = document.createElement('small');
+      labels.appendChild(name); labels.appendChild(status);
+      button.appendChild(number); button.appendChild(labels);
+      button.addEventListener('click', () => travelByElevator(floor.id));
+      el.elevatorFloors.appendChild(button);
+      elevatorButtons.push({ floor, button, name, status });
+    }
+  }
+
+  function refreshElevator() {
+    const readyToReactivate = !state.elevatorUnlocked && level && level.id === 'stage7';
+    el.elevatorStatus.textContent = state.elevatorUnlocked
+      ? 'Power restored. Choose a floor you have visited.'
+      : readyToReactivate ? 'The Stage 7 controls can restore power to every elevator.'
+        : 'Offline. Reach Stage 7 to reactivate the elevator.';
+    el.elevatorActivate.classList.toggle('is-hidden', !readyToReactivate);
+    el.elevatorActivate.disabled = !readyToReactivate;
+    for (const { floor, button, name, status } of elevatorButtons) {
+      const visited = !!levels[floor.id];
+      const here = level && floor.id === level.id;
+      name.textContent = visited ? floor.name : 'Undiscovered';
+      status.textContent = !visited ? 'Not visited' : here ? 'You are here' : state.elevatorUnlocked ? 'Travel' : 'Offline';
+      button.disabled = !state.elevatorUnlocked || !visited || here;
+      button.classList.toggle('is-current', !!here);
+      button.setAttribute('aria-label', `Floor ${floor.number}: ${name.textContent} · ${status.textContent}`);
+    }
+  }
+
+  function activateElevator() {
+    if (state.mode !== 'station' || state.openStation !== 'elevator' || !level ||
+        level.id !== 'stage7' || state.elevatorUnlocked) return false;
+    state.elevatorUnlocked = true;
+    Sound.forge();
+    showToast('Elevators reactivated on every visited floor!');
+    refreshElevator();
+    return true;
+  }
+
+  function travelByElevator(id) {
+    if (state.mode !== 'station' || state.openStation !== 'elevator' || !state.elevatorUnlocked ||
+        !ELEVATOR_FLOORS.some((floor) => floor.id === id) || !levels[id] || id === level.id ||
+        !levels[id].elevators.length) return false;
+    const destination = ELEVATOR_FLOORS.find((floor) => floor.id === id);
+    closeStation();
+    enterLevel(id, `Elevator: ${destination.name}`); // normal area resets and loot handling still apply
+    const landing = level.elevators[0];
+    player.x = camera.x = landing.x;
+    player.y = camera.y = landing.y;
+    state.transitionLock = 0.6;
+    return true;
   }
 
   // Keep the open menu's numbers in step with the bag.
@@ -1318,6 +1653,10 @@
     // --- forge ---
     el.forgeIngots.textContent = String(countItem('ingot'));
     el.forgeIronIngots.textContent = String(countItem('ironIngot'));
+    el.forgeTitanium.textContent = String(countItem('titanium'));
+    el.forgeMercuryCount.textContent = `${countItem('mercury')} Mercury in bag`;
+    el.upgradeMercury.disabled = state.mercurySword || countItem('mercury') < 3;
+    el.upgradeMercury.textContent = state.mercurySword ? 'Applied' : '3 Mercury';
     for (const [tool, tierNode, btn] of [
       ['pickaxe', el.forgePickTier, el.upgradePickaxe],
       ['sword', el.forgeSwordTier, el.upgradeSword],
@@ -1327,17 +1666,19 @@
       tierNode.textContent = 'T' + tier;
       tierNode.classList.toggle('is-max', tier >= MAX_TIER);
       btn.disabled = !material || countItem(material) < UPGRADE_COST;
-      btn.textContent = material ? `Upgrade · 3 ${material === 'ingot' ? 'copper' : 'iron'}` : 'Maxed';
+      const label = material === 'ingot' ? 'copper' : material === 'ironIngot' ? 'iron' : 'titanium';
+      btn.textContent = material ? `Upgrade · 3 ${label}` : 'Maxed';
     }
     if (state.tools.pickaxe >= MAX_TIER && state.tools.sword >= MAX_TIER) {
       el.forgeHint.textContent = 'Both tools are as good as this forge can make them.';
     } else {
-      el.forgeHint.textContent = 'Iron takes 5 / 3 / 2 pickaxe hits at T1 / T2 / T3.';
+      el.forgeHint.textContent = 'T4 pickaxes need two fewer hits than T3, down to one.';
     }
 
     refreshTierBadges();
     refreshStorage();
     refreshCoins();
+    refreshElevator();
   }
 
   function selectMelterOre(ore) {
@@ -1418,6 +1759,10 @@
         ? `Available · ${coins} in bag${coins >= recipe.cost && !canTrade ? ' · bag full' : ''}`
         : `Locked · press ${kind === 'aluminum' ? 'an' : 'a'} ${ITEMS[recipe.coin].name}`;
     }
+    const axolotls = countItem('axolotl');
+    const canSell = !!planExchange('axolotl', 1, 'goldCoin', 1);
+    el.tradeAxolotl.disabled = !canSell;
+    el.tradeAxolotlStatus.textContent = `${axolotls} in bag${axolotls && !canSell ? ' · bag full' : ''}`;
   }
 
   function pressCoin(kind) {
@@ -1462,12 +1807,39 @@
     return true;
   }
 
+  function sellAxolotl() {
+    if (!level || !level.isBase) return false;
+    const plan = planExchange('axolotl', 1, 'goldCoin', 1);
+    if (!plan) {
+      refreshStation();
+      el.traderHint.textContent = countItem('axolotl') ? 'Your bag is full. Make room for the Gold Coin.' : 'No Axolotls in your bag.';
+      return false;
+    }
+    commitExchange(plan);
+    refreshStation();
+    el.traderHint.textContent = 'Sold an Axolotl for 1 Gold Coin.';
+    const station = level.stations.find((st) => st.kind === 'trader');
+    if (station) spawnPickup('goldCoin', 1, station.x, station.y - 12, { alreadyCollected: true });
+    Sound.pickup();
+    return true;
+  }
+
+  function upgradeMercurySword() {
+    if (state.mercurySword || countItem('mercury') < 3) return false;
+    removeItem('mercury', 3);
+    state.mercurySword = true;
+    Sound.forge();
+    showToast('Mercury edge: sword damage +15%!');
+    refreshStation();
+    return true;
+  }
+
   function upgradeTool(tool) {
     if (!Object.hasOwn(state.tools, tool)) return false;
     const material = upgradeMaterial(state.tools[tool]);
     if (!material) return false;
     if (countItem(material) < UPGRADE_COST) {
-      el.forgeHint.textContent = `Needs 3 ${ITEMS[material].name}s.`;
+      el.forgeHint.textContent = `Needs 3 ${ITEMS[material].name}${material === 'titanium' ? '' : 's'}.`;
       return false;
     }
     removeItem(material, UPGRADE_COST);
@@ -1487,7 +1859,59 @@
     KeyD: [1, 0], ArrowRight: [1, 0],
   };
 
+  // A captured pointer controls only movement. A second touch can still aim
+  // and swing on the canvas without either finger stealing the other's input.
+  const touchMove = { id: null, x: 0, y: 0 };
+  const touchNode = document.getElementById('touch-move');
+  const touchKnob = document.getElementById('touch-knob');
+  function clearTouchMove() {
+    touchMove.id = null; touchMove.x = touchMove.y = 0;
+    if (touchKnob) touchKnob.style.transform = 'translate(-50%, -50%)';
+  }
+  function moveTouchStick(e) {
+    if (e.pointerId !== touchMove.id || state.mode !== 'playing') return;
+    const box = touchNode.getBoundingClientRect();
+    const dx = e.clientX - (box.left + box.width / 2), dy = e.clientY - (box.top + box.height / 2);
+    const distance = Math.hypot(dx, dy), radius = Math.max(1, Math.min(box.width, box.height) * 0.32);
+    if (distance < 6) touchMove.x = touchMove.y = 0;
+    else { touchMove.x = dx / distance; touchMove.y = dy / distance; }
+    const visual = Math.min(distance, radius);
+    if (touchKnob) touchKnob.style.transform = `translate(calc(-50% + ${touchMove.x * visual}px), calc(-50% + ${touchMove.y * visual}px))`;
+    e.preventDefault();
+  }
+  if (touchNode) {
+    touchNode.addEventListener('pointerdown', (e) => {
+      if (state.mode !== 'playing' || touchMove.id !== null || e.button !== 0) return;
+      touchMove.id = e.pointerId;
+      if (touchNode.setPointerCapture) {
+        try { touchNode.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
+      }
+      moveTouchStick(e);
+    });
+    touchNode.addEventListener('pointermove', moveTouchStick);
+    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      touchNode.addEventListener(event, (e) => { if (e.pointerId === touchMove.id) clearTouchMove(); });
+    }
+  }
+
   window.addEventListener('keydown', (e) => {
+    if (pendingSaveConfirmation) {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        const next = document.activeElement === el.saveConfirmAccept ? el.saveConfirmCancel : el.saveConfirmAccept;
+        if (next.focus) next.focus();
+      } else if (e.code === 'Escape') {
+        e.preventDefault();
+        cancelSaveConfirmation();
+      } else if (MOVE_KEYS[e.code] || (e.code === 'Space' && (!e.target || e.target.tagName !== 'BUTTON'))) {
+        e.preventDefault();
+      }
+      return; // do not change the run underneath the confirmation
+    }
+    // Let focused menu buttons keep their normal keyboard activation; Space is
+    // still the equipped-tool shortcut whenever the game is being played.
+    if (e.code === 'Space' && state.mode !== 'playing' && e.target &&
+        (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT')) return;
     if (MOVE_KEYS[e.code] || e.code === 'Space') e.preventDefault();
     if (e.repeat) return;
     keys.add(e.code);
@@ -1495,14 +1919,23 @@
     switch (e.code) {
       case 'KeyQ': selectTool('pickaxe'); break;
       case 'KeyE': selectTool('sword'); break;
+      case 'KeyF':
+        if (state.mode === 'playing' && level.elevators.length) {
+          const lift = level.elevators.find((entry) => Math.hypot(player.x - entry.x, player.y - entry.y) <= 2.5 * TS);
+          if (lift) useElevator(lift);
+        }
+        break;
       case 'Space':
         if (state.mode === 'playing') swing();
-        else if (state.mode === 'menu') startGame();
+        else if (state.mode === 'menu') {
+          if (!el.continueSave.classList.contains('is-hidden') && !el.continueSave.disabled) loadBrowserSave();
+          else startGame();
+        }
         else if (state.mode === 'paused') resumeGame();
         break;
       case 'Escape':
         if (state.mode === 'station') closeStation();
-        else if (state.mode === 'playing') pauseGame();
+        else if (state.mode === 'playing') pauseGame(true);
         else if (state.mode === 'paused') resumeGame();
         break;
       case 'KeyM':
@@ -1516,6 +1949,7 @@
   window.addEventListener('keyup', (e) => keys.delete(e.code));
   window.addEventListener('blur', () => {
     keys.clear();
+    clearTouchMove();
     pointer.down = false;
     if (state.mode === 'playing') pauseGame();
   });
@@ -1534,8 +1968,10 @@
     Sound.init();
     if (state.mode !== 'playing' || e.button !== 0) return;
 
-    // Clicking a station in Home Base opens its menu.
+    // Lift buttons work in every connected area; stations remain in Home Base.
     const w = screenToWorld(pointer.x, pointer.y);
+    const lift = elevatorAt(w.x, w.y);
+    if (lift && useElevator(lift)) return;
     const st = stationAt(w.x, w.y);
     if (st) {
       openStation(st.kind);
@@ -1627,8 +2063,10 @@
     }
 
     level.damage.delete(key);
+    const secretSeam = level.secretTile && tx === level.secretTile.tx && ty === level.secretTile.ty && t === TITANIUM;
     if (stalagmite) level.stalagmites.delete(key);
-    else setTile(tx, ty, FLOOR);
+    else setTile(tx, ty, secretSeam ? STAIRS_DOWN : FLOOR);
+    if (secretSeam) showToast('The seam reveals a hidden staircase!');
 
     if (def.drop) {
       const amount = def.drop === 'stone' ? randInt(1, 2) : 1;
@@ -1671,6 +2109,7 @@
   }
 
   function damageSlime(s, amount, angle) {
+    if (s.tropical) s.provoked = true;
     s.hp -= amount;
     s.flash = 0.16;
     s.knockX += Math.cos(angle) * 150;
@@ -1744,7 +2183,16 @@
     golem.dead = true;
     state.golemsSlain += 1;
     Sound.moleDie();
-    burst(golem.x, golem.y, 16, ['#766e65', '#b6a99a', '#e4b285'], 150, 0.55, 0.14);
+    burst(golem.x, golem.y, 16, golem.mercury ? ['#79a9b0', '#bce9e9', '#f4ffff'] : ['#766e65', '#b6a99a', '#e4b285'], 150, 0.55, 0.14);
+    // Ground loot belongs to the current area, survives a full bag, and is
+    // never duplicated by another swing against the same defeated Golem.
+    if (golem.mercury) {
+      spawnPickup('mercury', randInt(2, 4), golem.x, golem.y, { startOnGround: true, source: 'golem' });
+    } else {
+      spawnPickup('stone', 2, golem.x - 6, golem.y, { startOnGround: true, source: 'golem' });
+      spawnPickup('bauxite', 3, golem.x + 6, golem.y, { startOnGround: true, source: 'golem' });
+      if (Math.random() < 0.01) spawnPickup('titanium', 1, golem.x, golem.y + 6, { startOnGround: true, source: 'golem' });
+    }
   }
 
   function damageProspector(prospector, amount, angle) {
@@ -1788,7 +2236,8 @@
         let x = s.x + Math.cos(a) * 10;
         let y = s.y + Math.sin(a) * 10;
         if (collidesAt(x, y, radius)) { x = s.x; y = s.y; }
-        slimes.push(makeSlime(x, y, tiny));
+        // Each tropical offspring is peaceful until that individual is hit.
+        slimes.push(makeSlime(x, y, tiny, false, s.tropical));
       }
       floaters.push({
         x: s.x,
@@ -1833,7 +2282,7 @@
 
   /* ---------------------------------------------------------------- slimes */
 
-  function makeSlime(x, y, tiny, large = false) {
+  function makeSlime(x, y, tiny, large = false, tropical = false) {
     const hp = large ? BALANCE.largeSlimeHp : tiny ? BALANCE.tinyHp : BALANCE.slimeHp;
     return {
       x,
@@ -1846,7 +2295,9 @@
       detect: large ? BALANCE.largeSlimeDetect : tiny ? BALANCE.tinyDetect : BALANCE.slimeDetect,
       tiny: !!tiny && !large,
       large: !!large,
-      color: large ? '#419b78' : tiny ? '#a8e88b' : '#5fbf6e',
+      tropical: !!tropical && !large,
+      provoked: false,
+      color: tropical && !large ? (tiny ? '#84d9ee' : '#3badd3') : large ? '#419b78' : tiny ? '#a8e88b' : '#5fbf6e',
       dead: false,
       flash: 0,
       attackCd: 0,
@@ -1862,27 +2313,56 @@
   }
 
   function spawnSlimeAwayFromPlayer() {
+    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6'].includes(level.id)) return null;
     const p = playerTile();
+    const tropical = level.id === 'stage6';
+    // Prefer different pools, not a crowd at a single one. Some slimes still
+    // spawn throughout the cavern, and the existing global cap stays intact.
+    const preferWater = tropical && Math.random() < 0.7;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const tx = randInt(1, level.w - 2);
-      const ty = randInt(1, level.h - 2);
-      if (isSolid(tx, ty)) continue;
+      let tx, ty;
+      if (preferWater && attempt < 40 && level.wetSpots && level.wetSpots.length) {
+        const available = level.wetSpots.filter((pool) => slimes.filter((s) => !s.dead && s.tropical &&
+          Math.hypot(s.x - (pool.tx + 0.5) * TS, s.y - (pool.ty + 0.5) * TS) < 4 * TS).length < 2);
+        if (!available.length) continue;
+        const pool = pick(available);
+        tx = pool.tx + randInt(-3, 3); ty = pool.ty + randInt(-3, 3);
+        if (Math.hypot(tx - pool.tx, ty - pool.ty) > 3.5) continue;
+      } else {
+        tx = randInt(1, level.w - 2); ty = randInt(1, level.h - 2);
+      }
+      if (!inBounds(level, tx, ty) || isSolid(tx, ty)) continue;
       if (getTile(tx, ty) === STAIRS_UP || getTile(tx, ty) === STAIRS_DOWN) continue;
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
 
       const large = level.id === 'stage4' || level.id === 'stage5';
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
       if (collidesAt(x, y, large ? BALANCE.largeSlimeRadius : BALANCE.slimeRadius)) continue;
-      const s = makeSlime(x, y, false, large);
+      if (tropical && slimes.some((s) => !s.dead && Math.hypot(s.x - x, s.y - y) < 2 * TS)) continue;
+      const s = makeSlime(x, y, false, large, tropical);
       slimes.push(s);
-      burst(s.x, s.y, 8, ['#8ce09a', '#4f9e5c'], 90, 0.45, 0.1);
+      burst(s.x, s.y, 8, s.tropical ? ['#9feefa', '#48add7'] : ['#8ce09a', '#4f9e5c'], 90, 0.45, 0.1);
       return s;
     }
     return null;
   }
 
+  function slimeWanderAngle(s) {
+    if (s.tropical && !s.provoked && level.wetSpots && Math.random() < 0.5) {
+      let closest = null, distance = Infinity;
+      for (const pool of level.wetSpots) {
+        const dx = (pool.tx + 0.5) * TS - s.x, dy = (pool.ty + 0.5) * TS - s.y;
+        const d = Math.hypot(dx, dy);
+        if (d < distance) { closest = { dx, dy }; distance = d; }
+      }
+      // In the neighborhood, wander normally; outside it, gently drift back.
+      if (closest && distance > 3 * TS) return Math.atan2(closest.dy, closest.dx) + rand(-1, 1);
+    }
+    return rand(0, TAU);
+  }
+
   function updateSlimes(dt) {
-    if (level.isBase || level.id === 'stage3') return;
+    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6'].includes(level.id)) return;
 
     const alive = slimes.filter((s) => !s.dead).length;
     const largeStage = level.id === 'stage4' || level.id === 'stage5';
@@ -1910,7 +2390,7 @@
       s.face = dx >= 0 ? 1 : -1;
 
       // Large slimes see 6 tiles, regulars 4, and tiny slimes 2.
-      s.chasing = dist <= s.detect;
+      s.chasing = (!s.tropical || s.provoked) && dist <= s.detect;
 
       let moveX = 0;
       let moveY = 0;
@@ -1924,7 +2404,7 @@
         s.wanderTimer -= dt;
         if (s.wanderTimer <= 0) {
           s.wanderTimer = rand(1.1, 2.8);
-          s.wanderAngle = rand(0, TAU);
+          s.wanderAngle = slimeWanderAngle(s);
         }
         const amble = s.speed * 0.5;
         moveX = Math.cos(s.wanderAngle) * amble;
@@ -1961,7 +2441,7 @@
       s.hopGround = Math.abs(Math.sin(s.hop));
 
       // contact damage
-      if (dist < s.r + BALANCE.playerRadius + 1 && s.attackCd <= 0) {
+      if ((!s.tropical || s.provoked) && dist < s.r + BALANCE.playerRadius + 1 && s.attackCd <= 0) {
         s.attackCd = 1;
         hurtPlayer(s.dmg, Math.atan2(s.y - player.y, s.x - player.x));
       }
@@ -1984,7 +2464,7 @@
   }
 
   function spawnMoleAwayFromPlayer() {
-    if (level.id !== 'stage2') return null;
+    if (level.id !== 'stage2' && level.id !== 'stage7') return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2);
@@ -2007,6 +2487,8 @@
     mole.lastTile = key;
     const tile = getTile(tx, ty);
     if (!TILES[tile].solid || tx <= 0 || ty <= 0 || tx >= level.w - 1 || ty >= level.h - 1) return;
+    // Only the player's pickaxe can uncover the special cave's entrance.
+    if (level.secretTile && tx === level.secretTile.tx && ty === level.secretTile.ty) return;
 
     // Roll once per entered block, not once per frame spent inside it. The
     // outer boundary is always protected, but interior rock and walls can break.
@@ -2022,7 +2504,7 @@
   }
 
   function updateMoles(dt) {
-    if (level.id !== 'stage2') return;
+    if (level.id !== 'stage2' && level.id !== 'stage7') return;
     const alive = moles.filter((mole) => !mole.dead).length;
     if (alive < BALANCE.maxMoles) {
       level.moleTimer -= dt;
@@ -2097,7 +2579,7 @@
   }
 
   function spawnSpiderAwayFromPlayer() {
-    if (level.id !== 'stage4' && level.id !== 'stage5') return null;
+    if (!['stage4', 'stage5', 'stage7'].includes(level.id)) return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
@@ -2115,7 +2597,7 @@
   }
 
   function updateSpiders(dt) {
-    if (level.id !== 'stage4' && level.id !== 'stage5') return;
+    if (!['stage4', 'stage5', 'stage7'].includes(level.id)) return;
     if (spiders.filter((spider) => !spider.dead).length < BALANCE.maxSpiders) {
       level.spiderTimer -= dt;
       if (level.spiderTimer <= 0) {
@@ -2179,11 +2661,15 @@
 
   /* ---------------------------------------------------------------- Golems */
 
-  function makeGolem(x, y) {
+  function makeGolem(x, y, mercury = false, armour = tierDamage()) {
+    // One extra swing at the player's current sword strength, for every tier
+    // and with or without Mercury Edge. Store the resulting max HP in saves.
+    const hp = (mercury ? BALANCE.mercuryGolemHp : BALANCE.golemHp) + armour;
     return {
-      kind: 'golem', x, y, r: BALANCE.golemRadius,
-      hp: BALANCE.golemHp, maxHp: BALANCE.golemHp,
-      dmg: BALANCE.golemDamage, speed: BALANCE.golemSpeed,
+      kind: 'golem', mercury: !!mercury, x, y, r: BALANCE.golemRadius,
+      hp, maxHp: hp,
+      dmg: mercury ? BALANCE.mercuryGolemDamage : BALANCE.golemDamage,
+      speed: mercury ? BALANCE.mercuryGolemSpeed : BALANCE.golemSpeed,
       detect: BALANCE.golemDetect, dead: false, flash: 0,
       attackCd: 0, knockX: 0, knockY: 0,
       facing: 0, walk: 0, chasing: false, moved: 0, disabled: 0,
@@ -2194,7 +2680,7 @@
   }
 
   function spawnGolemAwayFromPlayer() {
-    if (level.id !== 'stage5') return null;
+    if (!['stage5', 'stage7', 'special'].includes(level.id)) return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
@@ -2203,16 +2689,16 @@
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
       if (collidesAt(x, y, BALANCE.golemRadius)) continue;
-      const golem = makeGolem(x, y);
+      const golem = makeGolem(x, y, level.id === 'special');
       golems.push(golem);
-      burst(x, y, 9, ['#766d63', '#b5a696', '#d4b290'], 65, 0.4, 0.08);
+      burst(x, y, 9, golem.mercury ? ['#8cb7bb', '#daf6ed', '#73c8d1'] : ['#766d63', '#b5a696', '#d4b290'], 65, 0.4, 0.08);
       return golem;
     }
     return null;
   }
 
   function updateGolems(dt) {
-    if (level.id !== 'stage5') return;
+    if (!['stage5', 'stage7', 'special'].includes(level.id)) return;
     if (golems.filter((golem) => !golem.dead).length < BALANCE.maxGolems) {
       level.golemTimer -= dt;
       if (level.golemTimer <= 0) {
@@ -2315,7 +2801,7 @@
   }
 
   function spawnProspectorAwayFromPlayer() {
-    if (level.id !== 'stage3' && level.id !== 'stage4') return null;
+    if (!['stage3', 'stage4', 'stage7'].includes(level.id)) return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2);
@@ -2513,7 +2999,7 @@
   }
 
   function updateProspectors(dt) {
-    if (level.id !== 'stage3' && level.id !== 'stage4') return;
+    if (!['stage3', 'stage4', 'stage7'].includes(level.id)) return;
     const alive = level.prospectors.filter((prospector) => !prospector.dead).length;
     if (alive < BALANCE.maxProspectors) {
       level.prospectorTimer -= dt;
@@ -2694,24 +3180,25 @@
 
   /* --------------------------------------------------------------- physics */
 
-  function collidesAt(x, y, r) {
+  function collidesInLevel(lv, x, y, r) {
     const x0 = Math.floor((x - r) / TS);
     const x1 = Math.floor((x + r - 0.001) / TS);
     const y0 = Math.floor((y - r) / TS);
     const y1 = Math.floor((y + r - 0.001) / TS);
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
-        if (isSolid(tx, ty)) return true;
+        if (isSolidInLevel(lv, tx, ty)) return true;
       }
     }
     return false;
   }
 
+  const collidesAt = (x, y, r) => collidesInLevel(level, x, y, r);
   const collides = (x, y) => collidesAt(x, y, BALANCE.playerRadius);
 
   function updatePlayer(dt) {
-    let ix = 0;
-    let iy = 0;
+    let ix = touchMove.x;
+    let iy = touchMove.y;
     for (const code of keys) {
       const dir = MOVE_KEYS[code];
       if (dir) {
@@ -2784,6 +3271,9 @@
       stage3: { kicker: 'Stage 03', subtitle: 'The abundant riches have attracted the greedy' },
       stage4: { kicker: 'Stage 04', subtitle: 'The calcium grows into spikes here' },
       stage5: { kicker: 'Stage 05', subtitle: 'Ancient stone guardians roam among the Bauxite' },
+      stage6: { kicker: 'Stage 06', subtitle: 'A peaceful break from the monsters' },
+      stage7: { kicker: 'Stage 07', subtitle: 'The pinnacle of circles' },
+      special: { kicker: 'Secret Area', subtitle: 'A secluded mercury paradise' },
     };
     const area = descriptions[lv.id];
     el.stageName.textContent = lv.name;
@@ -2900,6 +3390,9 @@
     if (id === 'stage3' && !levels.stage3) levels.stage3 = buildStage3();
     if (id === 'stage4' && !levels.stage4) levels.stage4 = buildStage4();
     if (id === 'stage5' && !levels.stage5) levels.stage5 = buildStage5();
+    if (id === 'stage6' && !levels.stage6) levels.stage6 = buildStage6();
+    if (id === 'stage7' && !levels.stage7) levels.stage7 = buildStage7();
+    if (id === 'special' && !levels.special) levels.special = buildSpecialCave();
     if (!levels[id]) return;
     if (prev && id !== prev.id) {
       // Finish items already flying toward the player before changing maps.
@@ -2931,9 +3424,11 @@
     let spawnY = level.spawn.y;
 
     // Coming upstairs places you beside the downward stairs you just used.
-    if (level.stairsDown && (id === 'home' || (prev && prev.upTarget === id))) {
-      spawnX = (level.stairsDown.tx + 0.5) * TS;
-      spawnY = (level.stairsDown.ty - 0.6) * TS;
+    // The secret seam closes again on re-entry, so return beside that seam.
+    const exit = level.stairsDown || (prev && prev.id === 'special' ? level.secretTile : null);
+    if (exit && (id === 'home' || (prev && prev.upTarget === id))) {
+      spawnX = (exit.tx + 0.5) * TS;
+      spawnY = (exit.ty - 0.6) * TS;
     }
 
     player.x = spawnX;
@@ -2944,6 +3439,7 @@
 
     showAreaName(level);
     if (message) showToast(message);
+    else if (id === 'stage7' && prev && prev.id === 'stage6') showToast('A strange shimmer waits at the spiral\'s heart.');
     else clearToast();
     Sound.stairs();
   }
@@ -3231,6 +3727,7 @@
     const ty1 = Math.min(level.h - 1, Math.ceil((camera.y + H / 2) / TS) + 1);
 
     drawTiles(tx0, ty0, tx1, ty1, ox, oy);
+    drawElevators(ox, oy);
     drawStations(ox, oy);
     drawDecor(ox, oy);
     drawSlimes(ox, oy);
@@ -3259,8 +3756,9 @@
         const y = Math.round(ty * TS + oy);
         const h = hash2(tx, ty, 21);
 
-        if (t === FLOOR) {
+        if (t === FLOOR || t === WET) {
           drawFloor(x, y, tx, ty, h);
+          if (t === WET) drawWetFloor(x, y, tx, ty, h);
           if (level.stalagmites.has(tileKey(tx, ty))) drawStalagmite(x, y, tx, ty);
         } else if (t === STAIRS_DOWN || t === STAIRS_UP) {
           drawFloor(x, y, tx, ty, h);
@@ -3278,7 +3776,9 @@
   function drawStairCaption(x, y, tx, ty, down) {
     if (Math.hypot(player.x - (tx + 0.5) * TS, player.y - (ty + 0.5) * TS) > 110) return;
     const target = down ? level.downTarget : level.upTarget;
-    const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels', stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave' }[target];
+    const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels',
+      stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave',
+      stage6: 'Luscious Cave', stage7: 'Spiral Cavern', special: 'Special Cave' }[target];
     if (!name) return;
     ctx.save();
     ctx.textAlign = 'center';
@@ -3301,11 +3801,12 @@
       ctx.fillStyle = 'rgba(255, 210, 150, 0.045)';
       ctx.fillRect(x + 3, y + 4 + (h * 12) % 14, 6, 2);
     } else {
-      ctx.fillStyle = level.id === 'stage5'
-        ? (h > 0.5 ? '#302824' : '#292320')
-        : level.id === 'stage4'
-          ? (h > 0.5 ? '#202b2b' : '#1b2525')
-          : (h > 0.5 ? '#1b2029' : '#191d25');
+      ctx.fillStyle = level.id === 'stage6' ? (h > 0.5 ? '#294438' : '#21382f')
+        : level.id === 'stage7' ? (h > 0.5 ? '#292737' : '#242333')
+        : level.id === 'special' ? (h > 0.5 ? '#294149' : '#22363e')
+        : level.id === 'stage5' ? (h > 0.5 ? '#302824' : '#292320')
+        : level.id === 'stage4' ? (h > 0.5 ? '#202b2b' : '#1b2525')
+        : (h > 0.5 ? '#1b2029' : '#191d25');
       ctx.fillRect(x, y, TS + 1, TS + 1);
       // subtle flagstones
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -3325,6 +3826,19 @@
         ctx.stroke();
       }
     }
+  }
+
+  function drawWetFloor(x, y, tx, ty, h) {
+    ctx.fillStyle = h > 0.5 ? '#27696b' : '#225e62';
+    ctx.fillRect(x + 1, y + 1, TS - 2, TS - 2);
+    ctx.fillStyle = 'rgba(116, 210, 202, 0.19)';
+    ctx.fillRect(x + 3, y + 3, TS - 6, 2);
+    ctx.strokeStyle = 'rgba(171, 241, 221, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const ripple = Math.sin(state.time * 1.5 + hash2(tx, ty, 419) * TAU) * 2;
+    ctx.ellipse(x + 16, y + 16, 6 + ripple, 2.5, 0, 0, Math.PI);
+    ctx.stroke();
   }
 
   function drawStalagmite(x, y, tx, ty) {
@@ -3445,6 +3959,30 @@
         ctx.arc(nx - r * 0.35, ny - r * 0.38, r * 0.28, 0, TAU);
         ctx.fill();
       }
+    } else if ([COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY].includes(t)) {
+      const palette = t === COBALT ? ['#244c9a', '#588de4', '#c7e5ff']
+        : t === QUARTZ ? ['#a58eaf', '#dfcce9', '#fff8ff']
+        : t === IRIDIUM ? ['#5c408d', '#a37cda', '#e1c9ff']
+        : t === TITANIUM ? ['#526f79', '#a2c8d0', '#efffff']
+        : ['#668e95', '#bedfe0', '#f7ffff'];
+      for (let i = 0; i < 3; i++) {
+        const a = hash2(tx * 7 + i, ty * 5 + i, 197);
+        const b = hash2(tx * 5 + i, ty * 9 + i, 211);
+        const nx = x + 7 + a * (TS - 14), ny = y + 7 + b * (TS - 14);
+        const r = 3.7 + a * 1.7;
+        ctx.fillStyle = palette[0];
+        ctx.beginPath(); ctx.ellipse(nx + 0.5, ny + 1, r + 1, r * 0.8 + 1, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = palette[1];
+        ctx.beginPath();
+        if (t === MERCURY) ctx.ellipse(nx, ny, r, r * 0.72, 0, 0, TAU);
+        else {
+          ctx.moveTo(nx, ny - r - 1); ctx.lineTo(nx + r, ny - r * 0.1);
+          ctx.lineTo(nx + r * 0.45, ny + r); ctx.lineTo(nx - r, ny + r * 0.45); ctx.closePath();
+        }
+        ctx.fill();
+        ctx.fillStyle = palette[2];
+        ctx.beginPath(); ctx.ellipse(nx - r * 0.3, ny - r * 0.35, r * 0.35, r * 0.22, -0.4, 0, TAU); ctx.fill();
+      }
     } else if (t === BAUXITE) {
       // Reddish clay-like clusters are distinct from copper and iron.
       for (let i = 0; i < 3; i++) {
@@ -3522,6 +4060,25 @@
       }
     }
 
+    // The unusual Titanium seam is discoverable without revealing the cave.
+    if (t === TITANIUM && level.secretTile && tx === level.secretTile.tx && ty === level.secretTile.ty) {
+      ctx.save();
+      const glow = 0.55 + Math.sin(state.time * 3) * 0.2;
+      ctx.strokeStyle = `rgba(190, 250, 243, ${glow})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 2, y + 2, TS - 4, TS - 4);
+      ctx.fillStyle = '#e9fffb';
+      ctx.beginPath(); ctx.moveTo(x + 25, y + 3); ctx.lineTo(x + 27, y + 8);
+      ctx.lineTo(x + 31, y + 10); ctx.lineTo(x + 27, y + 12);
+      ctx.lineTo(x + 25, y + 17); ctx.lineTo(x + 23, y + 12);
+      ctx.lineTo(x + 19, y + 10); ctx.lineTo(x + 23, y + 8); ctx.closePath(); ctx.fill();
+      if (Math.hypot(player.x - (tx + 0.5) * TS, player.y - (ty + 0.5) * TS) < 100) {
+        ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5; ctx.fillText('Shimmering Titanium', x + 16, y - 6);
+      }
+      ctx.restore();
+    }
+
     // cracks from a pickaxe hit that did not finish the job
     const taken = level.damage.get(tx + ',' + ty) || 0;
     if (taken > 0 && def.hits > 1) {
@@ -3567,6 +4124,39 @@
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  function drawElevators(ox, oy) {
+    for (const lift of level.elevators) {
+      const x = lift.x + ox, y = lift.y + oy;
+      if (x < -70 || y < -90 || x > W + 70 || y > H + 70) continue;
+      const powered = state.elevatorUnlocked;
+      const ready = !powered && level.id === 'stage7';
+      const near = Math.hypot(player.x - lift.x, player.y - lift.y) <= 2.5 * TS;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath(); ctx.ellipse(x, y + 16, 21, 6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#29353b'; ctx.fillRect(x - 19, y - 25, 38, 42);
+      ctx.fillStyle = '#647a7b'; ctx.fillRect(x - 17, y - 23, 34, 36);
+      ctx.fillStyle = powered ? '#345e5b' : '#39494b'; ctx.fillRect(x - 14, y - 20, 28, 32);
+      ctx.fillStyle = powered ? '#4d8179' : '#4b5a5b';
+      ctx.fillRect(x - 12, y - 18, 11, 28); ctx.fillRect(x + 1, y - 18, 11, 28);
+      ctx.fillStyle = 'rgba(231, 245, 224, 0.24)'; ctx.fillRect(x - 10, y - 16, 2, 24); ctx.fillRect(x + 3, y - 16, 2, 24);
+      ctx.fillStyle = '#18272b'; ctx.fillRect(x - 18, y - 29, 36, 7);
+      ctx.fillStyle = powered ? '#8cedbd' : ready ? '#ffc861' : '#a97956';
+      ctx.fillRect(x - 5, y - 27, 10, 3);
+      ctx.fillStyle = '#b8b5a1'; ctx.fillRect(x - 18, y + 11, 36, 4);
+      ctx.strokeStyle = powered ? '#c8fff0' : '#d4bd90'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x - 3, y - 3); ctx.lineTo(x, y - 6); ctx.lineTo(x + 3, y - 3);
+      ctx.moveTo(x - 3, y + 2); ctx.lineTo(x, y + 5); ctx.lineTo(x + 3, y + 2); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+      ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+      ctx.fillStyle = powered ? '#b8f5dc' : ready ? '#ffda97' : '#cbb8a0';
+      const label = near ? (ready ? 'Reactivate · click / F' : powered ? 'Elevator · click / F' : 'Elevator offline · click')
+        : powered ? 'Elevator' : 'Elevator · offline';
+      ctx.fillText(label, x, y - 35);
+      ctx.restore();
+    }
   }
 
   function drawStations(ox, oy) {
@@ -3778,6 +4368,13 @@
         ctx.beginPath();
         ctx.ellipse(x - 4, y - 2, 8, 5, 0, 0, TAU);
         ctx.fill();
+      } else if (d.kind === 'fern') {
+        ctx.strokeStyle = '#5e9b76'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, y + 9); ctx.lineTo(x, y - 8); ctx.stroke();
+        for (const side of [-1, 1]) for (let i = 0; i < 3; i++) {
+          ctx.fillStyle = i === 1 ? '#79b68a' : '#4f916d';
+          ctx.beginPath(); ctx.ellipse(x + side * (4 + i), y + 3 - i * 5, 5, 2.2, side * 0.5, 0, TAU); ctx.fill();
+        }
       } else if (d.kind === 'bones') {
         ctx.strokeStyle = 'rgba(214, 208, 190, 0.55)';
         ctx.lineWidth = 3;
@@ -3862,6 +4459,19 @@
         ctx.fill();
       }
 
+      if (s.tropical) {
+        // Dark sunglasses with a tiny glint make the peaceful blue slimes
+        // recognizable even when they split into smaller offspring.
+        ctx.fillStyle = '#132737';
+        ctx.beginPath(); ctx.ellipse(x - rx * 0.32, hopY - ry * 0.12, rx * 0.27, ry * 0.2, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(x + rx * 0.32, hopY - ry * 0.12, rx * 0.27, ry * 0.2, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#223c49'; ctx.lineWidth = Math.max(1, s.r * 0.1);
+        ctx.beginPath(); ctx.moveTo(x - rx * 0.07, hopY - ry * 0.13); ctx.lineTo(x + rx * 0.07, hopY - ry * 0.13); ctx.stroke();
+        ctx.fillStyle = 'rgba(200, 244, 255, 0.75)';
+        ctx.fillRect(x - rx * 0.43, hopY - ry * 0.22, rx * 0.12, ry * 0.05);
+        ctx.fillRect(x + rx * 0.22, hopY - ry * 0.22, rx * 0.12, ry * 0.05);
+      }
+
       // hit flash
       if (s.flash > 0) {
         ctx.globalAlpha = clamp(s.flash / 0.16, 0, 1) * 0.75;
@@ -3901,36 +4511,41 @@
       ctx.rotate(golem.facing + Math.PI / 2);
       const stride = disabled ? 0 : Math.sin(golem.walk) * 2;
       // Arms and feet are separate rounded boulders around a wide torso.
-      ctx.fillStyle = '#514c49';
+      ctx.fillStyle = golem.mercury ? '#405c63' : '#514c49';
       ctx.beginPath(); ctx.ellipse(-13, 16 + stride, 9, 8, -0.2, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.ellipse(13, 16 - stride, 9, 8, 0.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = disabled ? '#777e7e' : '#86776a';
+      ctx.fillStyle = golem.mercury ? (disabled ? '#78949a' : '#82afb5') : disabled ? '#777e7e' : '#86776a';
       ctx.beginPath(); ctx.ellipse(-20, 1 + stride, 9, 14, -0.2, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.ellipse(20, 1 - stride, 9, 14, 0.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = golem.flash > 0 ? '#e4d9ca' : disabled ? '#929b9a' : '#aa9987';
+      ctx.fillStyle = golem.flash > 0 ? (golem.mercury ? '#f2ffff' : '#e4d9ca') : golem.mercury ? (disabled ? '#a7bdc1' : '#b6d9db') : disabled ? '#929b9a' : '#aa9987';
       ctx.beginPath();
       ctx.moveTo(-17, -13); ctx.lineTo(-11, -20); ctx.lineTo(12, -20);
       ctx.lineTo(18, -11); ctx.lineTo(16, 13); ctx.lineTo(9, 19);
       ctx.lineTo(-12, 18); ctx.lineTo(-18, 10); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = '#554f4a'; ctx.lineWidth = 2;
+      ctx.strokeStyle = golem.mercury ? '#6296a0' : '#554f4a'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(-13, -10); ctx.lineTo(-6, -4); ctx.lineTo(-9, 4);
       ctx.moveTo(11, -14); ctx.lineTo(6, -7); ctx.lineTo(10, 0); ctx.stroke();
-      ctx.fillStyle = '#615b56';
+      if (golem.mercury) {
+        ctx.strokeStyle = 'rgba(247,255,255,0.65)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-13, 7); ctx.quadraticCurveTo(0, 3, 13, 7); ctx.stroke();
+      }
+      ctx.fillStyle = golem.mercury ? '#5e878e' : '#615b56';
       ctx.beginPath(); ctx.ellipse(0, -13, 12, 9, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = disabled ? '#bac9c9' : '#ffbf79';
+      ctx.fillStyle = disabled ? '#bac9c9' : golem.mercury ? '#a5f4fa' : '#ffbf79';
       ctx.fillRect(-8, -15, 5, 2.5); ctx.fillRect(3, -15, 5, 2.5);
       ctx.restore();
       if (golem.hp < golem.maxHp) {
         const width = 42, pct = clamp(golem.hp / golem.maxHp, 0, 1);
         ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(x - width / 2, y - 36, width, 4);
-        ctx.fillStyle = '#df9b6e'; ctx.fillRect(x - width / 2, y - 36, width * pct, 4);
+        ctx.fillStyle = golem.mercury ? '#9bdfe4' : '#df9b6e'; ctx.fillRect(x - width / 2, y - 36, width * pct, 4);
       }
       if (Math.hypot(player.x - golem.x, player.y - golem.y) < 150 || disabled) {
         ctx.save(); ctx.textAlign = 'center';
         ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
         ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
-        ctx.fillStyle = disabled ? '#c9ecf6' : '#ead0b4';
-        ctx.fillText(disabled ? 'Golem · disabled' : 'Golem', x, y - (golem.hp < golem.maxHp ? 42 : 34));
+        ctx.fillStyle = disabled ? '#c9ecf6' : golem.mercury ? '#cbf6f4' : '#ead0b4';
+        const name = golem.mercury ? 'Mercury Golem' : 'Golem';
+        ctx.fillText(disabled ? `${name} · disabled` : name, x, y - (golem.hp < golem.maxHp ? 42 : 34));
         ctx.restore();
       }
     }
@@ -4340,15 +4955,22 @@
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, W, H);
 
-    // Home Base is cosy and lit; the cave is not.
+    // The lush oasis and mercury grotto have a little more ambient light,
+    // while keeping the same dungeon atmosphere and player lantern.
     lctx.globalCompositeOperation = 'source-over';
-    lctx.fillStyle = level.isBase ? 'rgba(4, 7, 12, 0.5)' : 'rgba(3, 5, 10, 0.88)';
+    lctx.fillStyle = level.isBase ? 'rgba(4, 7, 12, 0.5)'
+      : level.id === 'stage6' ? 'rgba(3, 12, 10, 0.7)'
+      : level.id === 'special' ? 'rgba(3, 9, 13, 0.76)'
+      : 'rgba(3, 5, 10, 0.88)';
     lctx.fillRect(0, 0, W, H);
 
     lctx.globalCompositeOperation = 'destination-out';
     punch(player.x + ox, player.y + oy, 320, 0.95);
     for (const d of level.decor) {
       if (d.kind === 'lantern') punch(d.x + ox, d.y - 7 + oy, 165, 0.72);
+    }
+    for (const lift of level.elevators) {
+      punch(lift.x + ox, lift.y - 8 + oy, 110, state.elevatorUnlocked || level.id === 'stage7' ? 0.55 : 0.3);
     }
     if (level.stairsDown) punch((level.stairsDown.tx + 0.5) * TS + ox, (level.stairsDown.ty + 0.5) * TS + oy, 130, 0.6);
 
@@ -4533,26 +5155,40 @@
       ctx.shadowBlur = 5;
       ctx.strokeStyle = 'rgba(26, 25, 27, 0.85)';
       ctx.lineWidth = 1.5;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      if (ITEMS[p.item].isIngot) {
-        ctx.moveTo(-9, 5); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.lineTo(9, 5);
-      } else if (ITEMS[p.item].isCoin) {
-        ctx.arc(0, 0, 8, 0, TAU);
+      if (ITEMS[p.item].isCreature) {
+        // A small pink axolotl with feathery gills, not an ore-shaped gem.
+        ctx.strokeStyle = '#d77595'; ctx.lineWidth = 2;
+        for (const side of [-1, 1]) {
+          ctx.beginPath(); ctx.moveTo(side * 7, -1); ctx.lineTo(side * 13, -6);
+          ctx.moveTo(side * 8, 1); ctx.lineTo(side * 14, 1);
+          ctx.moveTo(side * 7, 3); ctx.lineTo(side * 12, 7); ctx.stroke();
+        }
+        ctx.fillStyle = '#f4a8bd';
+        ctx.beginPath(); ctx.ellipse(0, 0, 9, 7, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#8c536b'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.shadowBlur = 0; ctx.fillStyle = '#4e3442';
+        ctx.beginPath(); ctx.arc(-3.5, -1, 1, 0, TAU); ctx.arc(3.5, -1, 1, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#b96d88'; ctx.beginPath(); ctx.moveTo(-2, 3); ctx.quadraticCurveTo(0, 4.5, 2, 3); ctx.stroke();
       } else {
-        ctx.moveTo(0, -9); ctx.lineTo(8, -4); ctx.lineTo(7, 4);
-        ctx.lineTo(1, 8); ctx.lineTo(-7, 5); ctx.lineTo(-8, -3);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
-      if (ITEMS[p.item].isIngot) ctx.fillRect(-5, -3, 10, 2);
-      else {
+        ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.moveTo(-4, -4); ctx.lineTo(0, -7); ctx.lineTo(3, -4); ctx.lineTo(-1, -2);
-        ctx.closePath(); ctx.fill();
+        if (ITEMS[p.item].isIngot) {
+          ctx.moveTo(-9, 5); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.lineTo(9, 5);
+        } else if (ITEMS[p.item].isCoin) {
+          ctx.arc(0, 0, 8, 0, TAU);
+        } else {
+          ctx.moveTo(0, -9); ctx.lineTo(8, -4); ctx.lineTo(7, 4);
+          ctx.lineTo(1, 8); ctx.lineTo(-7, 5); ctx.lineTo(-8, -3);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        if (ITEMS[p.item].isIngot) ctx.fillRect(-5, -3, 10, 2);
+        else {
+          ctx.beginPath();
+          ctx.moveTo(-4, -4); ctx.lineTo(0, -7); ctx.lineTo(3, -4); ctx.lineTo(-1, -2);
+          ctx.closePath(); ctx.fill();
+        }
       }
       if (p.count > 1) {
         ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
@@ -4600,6 +5236,10 @@
   /* ------------------------------------------------------------ game flow */
 
   function startGame() {
+    cancelSaveConfirmation(false);
+    clearTouchMove();
+    saveLoadRevision++;
+    browserSaveForRun = null;
     Sound.init();
 
     levels.home = buildHome();
@@ -4608,12 +5248,17 @@
     levels.stage3 = null;
     levels.stage4 = null;
     levels.stage5 = null;
+    levels.stage6 = null;
+    levels.stage7 = null;
+    levels.special = null;
 
     for (let i = 0; i < inventory.length; i++) inventory[i] = null;
     syncBag();
 
     state.tools.pickaxe = 1;
     state.tools.sword = 1;
+    state.mercurySword = false;
+    state.elevatorUnlocked = false;
     melter.coal = 0;
     melter.copper = 0;
     melter.iron = 0;
@@ -4667,19 +5312,24 @@
     keys.clear();
   }
 
-  function pauseGame() {
+  function pauseGame(force = false) {
     if (state.mode !== 'playing') return;
-    // Ignore focus blips in the first moment of a run, otherwise clicking the
-    // start button inside an iframe can pause the game before you see it.
-    if (state.time < 1) return;
+    // Ignore focus blips in the first moment of a run, but allow a deliberate
+    // pause from the button or Escape immediately.
+    if (!force && state.time < 1) return;
     state.mode = 'paused';
     keys.clear();
+    clearTouchMove();
     stage.classList.remove('is-playing');
     el.pause.classList.remove('is-hidden');
+    setSaveStatus(el.pauseSaveStatus, 'One browser save slot; saving replaces its previous contents. Download a backup file.');
+    if (el.resume.focus) el.resume.focus({ preventScroll: true });
   }
 
   function resumeGame() {
     if (state.mode !== 'paused') return;
+    cancelSaveConfirmation(false);
+    saveLoadRevision++;
     state.mode = 'playing';
     stage.classList.add('is-playing');
     el.pause.classList.add('is-hidden');
@@ -4692,6 +5342,7 @@
     state.mode = 'dead';
     state.cooldown = 0;
     keys.clear();
+    clearTouchMove();
     pointer.down = false;
     stage.classList.remove('is-playing');
     el.overOre.textContent = String(state.oreHauled);
@@ -4710,6 +5361,7 @@
   // Wake up in Home Base: half of each resource in the bag is gone; stored
   // resources and the tools you earned are not.
   function respawnAtBase() {
+    saveLoadRevision++;
     settleFlyingPickups(level);
     halveResources();
     slimes.length = 0;
@@ -4742,6 +5394,621 @@
     el.mute.setAttribute('aria-pressed', Sound.muted ? 'true' : 'false');
   }
 
+  /* ------------------------------------------------------------- save files */
+
+  // One deliberate browser save, plus portable JSON files. A new run never
+  // overwrites the browser slot until the player explicitly saves again.
+  const SAVE_FORMAT = 'mining-simulator-save';
+  const SAVE_VERSION = 3;
+  const SUPPORTED_SAVE_VERSIONS = [1, 2, SAVE_VERSION];
+  // Keep the original browser key so existing manual slots remain visible.
+  const SAVE_KEY = 'cuddly-train.mining-simulator.save.v1';
+  const LEGACY_NEW_ITEMS = new Set(['cobalt', 'quartz', 'iridium', 'titanium', 'mercury', 'axolotl']);
+  const MAX_SAVE_SIZE = 2 * 1024 * 1024;
+  const MAX_SAVED_COUNT = 1000000000;
+  let saveLoadRevision = 0; // invalidate file reads if the player resumes or starts another run
+  let browserSaveForRun = null; // last slot loaded/saved by this run, for safe replacement
+  let pendingSaveConfirmation = null;
+  let pendingFileSelection = null;
+  const AREA_BUILDERS = {
+    home: buildHome, stage1: buildStage1, stage2: buildStage2,
+    stage3: buildStage3, stage4: buildStage4, stage5: buildStage5,
+    stage6: buildStage6, stage7: buildStage7, special: buildSpecialCave,
+  };
+  const AREA_NAMES = {
+    home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels',
+    stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave',
+    stage6: 'Luscious Cave', stage7: 'Spiral Cavern', special: 'Special Cave',
+  };
+  const AREA_TIMERS = ['slimeTimer', 'moleTimer', 'spiderTimer', 'golemTimer', 'prospectorTimer'];
+  const SAVE_STATS = ['oreHauled', 'slimesSlain', 'molesSlain', 'prospectorsSlain', 'spidersSlain', 'golemsSlain'];
+  const ENEMY_COMMON = ['x', 'y', 'hp', 'flash', 'attackCd', 'knockX', 'knockY', 'wanderAngle', 'wanderTimer'];
+  const ENEMY_FIELDS = {
+    slime: [...ENEMY_COMMON, 'hop', 'face', 'hopGround'],
+    mole: [...ENEMY_COMMON, 'angle', 'drillSpin'],
+    spider: [...ENEMY_COMMON, 'bite', 'facing', 'walk', 'stuckTime'],
+    golem: [...ENEMY_COMMON, 'facing', 'walk', 'stuckTime', 'moved', 'disabled'],
+    prospector: [...ENEMY_COMMON, 'throwCd', 'facing', 'walk', 'swingTime', 'mineProgress', 'mineTick', 'scanTimer', 'stuckTime'],
+  };
+
+  function setSaveStatus(node, message, isError = false) {
+    if (!node) return;
+    node.textContent = message;
+    node.classList.toggle('is-error', isError);
+  }
+
+  // An in-game confirmation also works in embedded previews where browser
+  // modal dialogs may be blocked. Keep focus inside until it is dismissed.
+  function requestSaveConfirmation(title, message, acceptLabel, onAccept, returnFocus, onCancel) {
+    pendingSaveConfirmation = { onAccept, returnFocus, onCancel };
+    el.saveConfirmTitle.textContent = title;
+    el.saveConfirmMessage.textContent = message;
+    el.saveConfirmAccept.textContent = acceptLabel;
+    el.saveConfirm.classList.remove('is-hidden');
+    if (el.saveConfirmCancel.focus) el.saveConfirmCancel.focus();
+  }
+
+  function cancelSaveConfirmation(restoreFocus = true) {
+    const pending = pendingSaveConfirmation;
+    pendingSaveConfirmation = null;
+    el.saveConfirm.classList.add('is-hidden');
+    if (pending && restoreFocus) {
+      if (pending.onCancel) pending.onCancel();
+      if (pending.returnFocus && pending.returnFocus.focus) pending.returnFocus.focus();
+    }
+  }
+
+  function acceptSaveConfirmation() {
+    const pending = pendingSaveConfirmation;
+    if (!pending) return;
+    cancelSaveConfirmation(false);
+    pending.onAccept();
+  }
+
+  function snapshotEnemy(enemy, kind) {
+    const saved = Object.fromEntries(ENEMY_FIELDS[kind].map((field) => [field, enemy[field]]));
+    if (kind === 'slime') {
+      saved.tiny = enemy.tiny; saved.large = enemy.large;
+      saved.tropical = enemy.tropical; saved.provoked = enemy.provoked;
+    }
+    if (kind === 'golem') { saved.mercury = enemy.mercury; saved.maxHp = enemy.maxHp; }
+    if (kind === 'mole') { saved.lastTile = enemy.lastTile; saved.inWall = enemy.inWall; }
+    if (kind === 'prospector') {
+      saved.haul = { gold: enemy.haul.gold, silver: enemy.haul.silver };
+      const target = enemy.oreTarget;
+      saved.oreTarget = target ? {
+        tx: target.tx, ty: target.ty, tile: target.tile,
+        goalTx: target.goalTx, goalTy: target.goalTy,
+        route: target.route.map((point) => ({ tx: point.tx, ty: point.ty })),
+        routeIndex: target.routeIndex,
+      } : null;
+    }
+    return saved;
+  }
+
+  function snapshotArea(lv) {
+    return {
+      tiles: Array.from(lv.tiles),
+      originalTiles: Array.from(lv.originalTiles),
+      stalagmites: Array.from(lv.stalagmites),
+      originalStalagmites: Array.from(lv.originalStalagmites),
+      damage: Array.from(lv.damage),
+      pickups: lv.pickups.map((p) => ({
+        item: p.item, count: p.count, x: p.x, y: p.y, originX: p.originX, originY: p.originY,
+        phase: p.phase, age: p.age, delay: p.delay, rise: p.rise,
+        source: p.source, alreadyCollected: p.alreadyCollected,
+      })),
+      prospectors: lv.prospectors.filter((p) => !p.dead).map((p) => snapshotEnemy(p, 'prospector')),
+      dynamites: lv.dynamites.map((d) => ({ fromX: d.fromX, fromY: d.fromY, x: d.x, y: d.y,
+        targetX: d.targetX, targetY: d.targetY, age: d.age })),
+      explosions: lv.explosions.map((e) => ({ x: e.x, y: e.y, age: e.age, duration: e.duration })),
+      timers: Object.fromEntries(AREA_TIMERS.map((name) => [name, lv[name]])),
+    };
+  }
+
+  function createSaveText() {
+    if (!level || !['playing', 'paused', 'station'].includes(state.mode)) {
+      throw new Error('Start or resume a run before saving.');
+    }
+    const areas = {};
+    for (const id of Object.keys(AREA_BUILDERS)) {
+      if (levels[id]) areas[id] = snapshotArea(levels[id]);
+    }
+    const save = {
+      format: SAVE_FORMAT, version: SAVE_VERSION, savedAt: new Date().toISOString(),
+      currentLevel: level.id,
+      state: {
+        hp: state.hp, time: state.time, tool: state.tool,
+        tools: { pickaxe: state.tools.pickaxe, sword: state.tools.sword },
+        mercurySword: state.mercurySword, elevatorUnlocked: state.elevatorUnlocked,
+        invuln: state.invuln, cooldown: state.cooldown, transitionLock: state.transitionLock,
+        swingDir: state.swingDir,
+        stats: Object.fromEntries(SAVE_STATS.map((name) => [name, state[name]])),
+      },
+      player: { x: player.x, y: player.y, faceX: player.faceX, faceY: player.faceY,
+        aim: player.aim, walk: player.walk },
+      inventory: inventory.map((cell) => cell ? { item: cell.item, count: cell.count } : null),
+      storage: Object.fromEntries(Object.keys(ITEMS).map((item) => [item, storage[item]])),
+      melter: { coal: melter.coal, copper: melter.copper, iron: melter.iron,
+        bauxite: melter.bauxite, selectedOre: melter.selectedOre },
+      traderUnlocked: { copper: traderUnlocked.copper, silver: traderUnlocked.silver,
+        gold: traderUnlocked.gold, aluminum: traderUnlocked.aluminum },
+      areas,
+      enemies: {
+        slimes: slimes.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'slime')),
+        moles: moles.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'mole')),
+        spiders: spiders.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'spider')),
+        golems: golems.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'golem')),
+      },
+    };
+    const text = JSON.stringify(save);
+    if (text.length > MAX_SAVE_SIZE) throw new Error('This save is too large to store or export.');
+    return text;
+  }
+
+  // Treat imported files as untrusted: validate and construct an independent
+  // game first. No current progress is modified if any part of the file fails.
+  function saveError(message = 'The save is incomplete or damaged.') { throw new Error(message); }
+  function saveObject(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) saveError();
+    return value;
+  }
+  function saveNumber(value, min = -1e9, max = 1e9) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) saveError();
+    return value;
+  }
+  function saveInteger(value, min, max) {
+    if (!Number.isSafeInteger(value) || value < min || value > max) saveError();
+    return value;
+  }
+  function saveBoolean(value) {
+    if (typeof value !== 'boolean') saveError();
+    return value;
+  }
+  function saveArray(value, maxLength) {
+    if (!Array.isArray(value) || value.length > maxLength) saveError();
+    return value;
+  }
+  function saveTileKey(key, lv) {
+    if (typeof key !== 'string' || !/^(0|[1-9]\d*),(0|[1-9]\d*)$/.test(key)) saveError();
+    const [tx, ty] = key.split(',').map(Number);
+    if (!Number.isSafeInteger(tx) || !Number.isSafeInteger(ty) || !inBounds(lv, tx, ty)) saveError();
+    return { tx, ty };
+  }
+  function savePosition(value, size) { return saveNumber(value, -256, size + 256); }
+
+  function restoreEnemy(raw, kind, lv, version, legacyArmour = BALANCE.swordDamage) {
+    saveObject(raw);
+    const x = saveNumber(raw.x, 0, lv.w * TS), y = saveNumber(raw.y, 0, lv.h * TS);
+    let enemy;
+    if (kind === 'slime') {
+      const tiny = saveBoolean(raw.tiny), large = saveBoolean(raw.large);
+      const tropical = version >= 2 ? saveBoolean(raw.tropical) : false;
+      const provoked = version >= 2 ? saveBoolean(raw.provoked) : false;
+      if ((tiny && large) || (tropical && large) || (!tropical && provoked)) saveError();
+      enemy = makeSlime(x, y, tiny, large, tropical);
+      enemy.provoked = provoked;
+    } else if (kind === 'mole') enemy = makeMole(x, y);
+    else if (kind === 'spider') enemy = makeSpider(x, y);
+    else if (kind === 'golem') {
+      const mercury = version >= 2 ? saveBoolean(raw.mercury) : false;
+      const base = mercury ? BALANCE.mercuryGolemHp : BALANCE.golemHp;
+      let armour = legacyArmour;
+      if (version >= 3) {
+        const maxHp = saveNumber(raw.maxHp, base, base + 100);
+        const allowed = [1, 2, 3, 4].flatMap((tier) => [swordDamageFor(tier, false), swordDamageFor(tier, true)]);
+        armour = maxHp - base;
+        if (!allowed.some((amount) => Math.abs(amount - armour) < 1e-8)) saveError();
+      } else if (saveNumber(raw.hp) > base) saveError();
+      // Old live Golems keep their exact current HP, rather than healing on migration.
+      enemy = makeGolem(x, y, mercury, armour);
+    } else enemy = makeProspector(x, y);
+    for (const field of ENEMY_FIELDS[kind]) enemy[field] = saveNumber(raw[field]);
+    if (enemy.hp <= 0 || enemy.hp > enemy.maxHp) saveError();
+    if (kind === 'golem' && (enemy.moved < 0 || enemy.moved > BALANCE.golemMoveLimit ||
+        enemy.disabled < 0 || enemy.disabled > BALANCE.golemDisabledTime)) saveError();
+    if (kind === 'mole') {
+      saveTileKey(raw.lastTile, lv);
+      enemy.lastTile = raw.lastTile;
+      enemy.inWall = saveBoolean(raw.inWall);
+    }
+    if (kind === 'prospector') {
+      saveObject(raw.haul);
+      enemy.haul = { gold: saveInteger(raw.haul.gold, 0, MAX_SAVED_COUNT),
+        silver: saveInteger(raw.haul.silver, 0, MAX_SAVED_COUNT) };
+      if (raw.oreTarget !== null) {
+        const target = saveObject(raw.oreTarget);
+        const tx = saveInteger(target.tx, 0, lv.w - 1), ty = saveInteger(target.ty, 0, lv.h - 1);
+        const goalTx = saveInteger(target.goalTx, 0, lv.w - 1), goalTy = saveInteger(target.goalTy, 0, lv.h - 1);
+        if (![STONE, GOLD, SILVER].includes(target.tile)) saveError();
+        const route = saveArray(target.route, lv.w * lv.h).map((point) => {
+          saveObject(point);
+          return { tx: saveInteger(point.tx, 0, lv.w - 1), ty: saveInteger(point.ty, 0, lv.h - 1) };
+        });
+        enemy.oreTarget = { tx, ty, tile: target.tile, goalTx, goalTy, route,
+          routeIndex: saveInteger(target.routeIndex, 0, route.length) };
+      }
+    }
+    // Chase routes are recomputed for the restored terrain on the next frame.
+    return enemy;
+  }
+
+  function restorePickup(raw, lv) {
+    saveObject(raw);
+    if (typeof raw.item !== 'string' || !Object.hasOwn(ITEMS, raw.item)) saveError();
+    if (!['ground', 'flying'].includes(raw.phase) || !['other', 'mining', 'melter', 'prospector', 'golem'].includes(raw.source)) saveError();
+    const p = {
+      item: raw.item, count: saveInteger(raw.count, 1, MAX_SAVED_COUNT),
+      x: savePosition(raw.x, lv.w * TS), y: savePosition(raw.y, lv.h * TS),
+      originX: savePosition(raw.originX, lv.w * TS), originY: savePosition(raw.originY, lv.h * TS),
+      phase: raw.phase, age: saveNumber(raw.age, 0), delay: saveNumber(raw.delay, 0),
+      rise: saveNumber(raw.rise, 0, 1000), source: raw.source,
+      alreadyCollected: saveBoolean(raw.alreadyCollected),
+    };
+    if (p.phase === 'ground' && p.alreadyCollected) saveError();
+    return p;
+  }
+
+  function restoreArea(raw, id, version) {
+    saveObject(raw);
+    const lv = AREA_BUILDERS[id]();
+    const size = lv.w * lv.h;
+    // Version 2's chamber layout remains playable until the player leaves.
+    // The fresh open-cavern baseline will be applied on the next re-entry.
+    const redesignedStage6 = version < 3 && id === 'stage6' ? lv.originalTiles.slice() : null;
+    function tiles(values) {
+      if (!Array.isArray(values) || values.length !== size) saveError();
+      for (const t of values) {
+        if (!Number.isInteger(t) || !Object.hasOwn(TILES, t) || t === STALAGMITE) saveError();
+      }
+      return Uint8Array.from(values);
+    }
+    lv.tiles = tiles(raw.tiles);
+    lv.originalTiles = tiles(raw.originalTiles);
+    // Version 1 predates the Stage 5 exit. Add it to both the current terrain
+    // and its reset snapshot, preserving every other tile and all progress.
+    if (version === 1 && id === 'stage5') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    if (lv.secretTile) {
+      const seam = idx(lv, lv.secretTile.tx, lv.secretTile.ty);
+      if (lv.originalTiles[seam] !== TITANIUM || ![TITANIUM, STAIRS_DOWN].includes(lv.tiles[seam])) saveError();
+    }
+    for (const map of [lv.tiles, lv.originalTiles]) {
+      for (let x = 0; x < lv.w; x++) {
+        if (map[idx(lv, x, 0)] !== WALL || map[idx(lv, x, lv.h - 1)] !== WALL) saveError();
+      }
+      for (let y = 0; y < lv.h; y++) {
+        if (map[idx(lv, 0, y)] !== WALL || map[idx(lv, lv.w - 1, y)] !== WALL) saveError();
+      }
+      if (lv.stairsUp && map[idx(lv, lv.stairsUp.tx, lv.stairsUp.ty)] !== STAIRS_UP) saveError();
+      if (lv.stairsDown && map[idx(lv, lv.stairsDown.tx, lv.stairsDown.ty)] !== STAIRS_DOWN) saveError();
+    }
+    function formations(values, map) {
+      const result = new Set();
+      for (const key of saveArray(values, size)) {
+        const { tx, ty } = saveTileKey(key, lv);
+        if (result.has(key) || map[idx(lv, tx, ty)] !== FLOOR) saveError();
+        result.add(key);
+      }
+      return result;
+    }
+    lv.stalagmites = formations(raw.stalagmites, lv.tiles);
+    lv.originalStalagmites = formations(raw.originalStalagmites, lv.originalTiles);
+    lv.damage = new Map();
+    for (const entry of saveArray(raw.damage, size)) {
+      if (!Array.isArray(entry) || entry.length !== 2) saveError();
+      const { tx, ty } = saveTileKey(entry[0], lv);
+      const def = lv.stalagmites.has(entry[0]) ? TILES[STALAGMITE] : TILES[lv.tiles[idx(lv, tx, ty)]];
+      if (lv.damage.has(entry[0]) || !def.hits || def.hits <= 1) saveError();
+      lv.damage.set(entry[0], saveInteger(entry[1], 1, 1000));
+    }
+    if (isSolidInLevel(lv, Math.floor(lv.spawn.x / TS), Math.floor(lv.spawn.y / TS))) saveError();
+    lv.pickups = saveArray(raw.pickups, 10000).map((p) => restorePickup(p, lv));
+    lv.prospectors = saveArray(raw.prospectors, 1024).map((p) => restoreEnemy(p, 'prospector', lv, version));
+    lv.dynamites = saveArray(raw.dynamites, 1024).map((d) => {
+      saveObject(d);
+      return { fromX: savePosition(d.fromX, lv.w * TS), fromY: savePosition(d.fromY, lv.h * TS),
+        x: savePosition(d.x, lv.w * TS), y: savePosition(d.y, lv.h * TS),
+        targetX: savePosition(d.targetX, lv.w * TS), targetY: savePosition(d.targetY, lv.h * TS),
+        age: saveNumber(d.age, 0) };
+    });
+    lv.explosions = saveArray(raw.explosions, 1024).map((e) => {
+      saveObject(e);
+      return { x: savePosition(e.x, lv.w * TS), y: savePosition(e.y, lv.h * TS),
+        age: saveNumber(e.age, 0), duration: saveNumber(e.duration, 0.001, 1000) };
+    });
+    saveObject(raw.timers);
+    for (const name of AREA_TIMERS) lv[name] = saveNumber(raw.timers[name]);
+    if (redesignedStage6) {
+      lv.originalTiles = redesignedStage6;
+      lv.originalStalagmites = new Set();
+    }
+    placeElevators(lv);
+    const expectedElevators = id === 'special' ? 0 : Number(!!lv.stairsUp) + Number(!!lv.stairsDown);
+    if (lv.elevators.length !== expectedElevators) saveError('An elevator entrance is blocked in this save.');
+    return lv;
+  }
+
+  function prepareSaveText(text) {
+    if (typeof text !== 'string' || text.length > MAX_SAVE_SIZE) saveError('The save file is too large or unreadable.');
+    let data;
+    try { data = JSON.parse(text); } catch (err) { saveError('The save file is not valid JSON.'); }
+    saveObject(data);
+    if (data.format !== SAVE_FORMAT) saveError('This is not a Mining Simulator save file.');
+    if (!SUPPORTED_SAVE_VERSIONS.includes(data.version)) saveError('This save was made for an unsupported version of the game.');
+    if (typeof data.savedAt !== 'string' || data.savedAt.length > 40 || !Number.isFinite(Date.parse(data.savedAt))) saveError();
+    if (typeof data.currentLevel !== 'string' || !Object.hasOwn(AREA_BUILDERS, data.currentLevel)) saveError();
+
+    const savedState = saveObject(data.state), tools = saveObject(savedState.tools), stats = saveObject(savedState.stats);
+    if (!['pickaxe', 'sword'].includes(savedState.tool)) saveError();
+    const nextState = {
+      hp: saveNumber(savedState.hp, 0.000001, BALANCE.playerMaxHp),
+      time: saveNumber(savedState.time, 0), tool: savedState.tool,
+      tools: { pickaxe: saveInteger(tools.pickaxe, 1, data.version === 1 ? 3 : MAX_TIER),
+        sword: saveInteger(tools.sword, 1, data.version === 1 ? 3 : MAX_TIER) },
+      mercurySword: data.version >= 2 ? saveBoolean(savedState.mercurySword) : false,
+      elevatorUnlocked: data.version >= 3 ? saveBoolean(savedState.elevatorUnlocked) : false,
+      invuln: saveNumber(savedState.invuln, 0), cooldown: saveNumber(savedState.cooldown, 0),
+      transitionLock: saveNumber(savedState.transitionLock, -1, 1000), swingDir: saveNumber(savedState.swingDir),
+      stats: Object.fromEntries(SAVE_STATS.map((name) => [name, saveInteger(stats[name], 0, MAX_SAVED_COUNT)])),
+    };
+    const rawPlayer = saveObject(data.player);
+    const nextPlayer = { x: saveNumber(rawPlayer.x, 0), y: saveNumber(rawPlayer.y, 0),
+      faceX: saveNumber(rawPlayer.faceX, -1, 1), faceY: saveNumber(rawPlayer.faceY, -1, 1),
+      aim: saveNumber(rawPlayer.aim), walk: saveNumber(rawPlayer.walk) };
+    if (!Array.isArray(data.inventory) || data.inventory.length !== inventory.length) saveError();
+    const nextInventory = data.inventory.map((cell) => {
+      if (cell === null) return null;
+      saveObject(cell);
+      if (typeof cell.item !== 'string' || !Object.hasOwn(ITEMS, cell.item)) saveError();
+      return { item: cell.item, count: saveInteger(cell.count, 1, STACK_MAX) };
+    });
+    const rawStorage = saveObject(data.storage);
+    const nextStorage = Object.fromEntries(Object.keys(ITEMS).map((item) =>
+      [item, data.version === 1 && LEGACY_NEW_ITEMS.has(item) && !Object.hasOwn(rawStorage, item)
+        ? 0 : saveInteger(rawStorage[item], 0, MAX_SAVED_COUNT)]));
+    const rawMelter = saveObject(data.melter);
+    if (typeof rawMelter.selectedOre !== 'string' || !Object.hasOwn(INGOT_FOR_ORE, rawMelter.selectedOre)) saveError();
+    const nextMelter = { coal: saveInteger(rawMelter.coal, 0, MAX_SAVED_COUNT),
+      copper: saveInteger(rawMelter.copper, 0, MAX_SAVED_COUNT),
+      iron: saveInteger(rawMelter.iron, 0, MAX_SAVED_COUNT),
+      bauxite: saveInteger(rawMelter.bauxite, 0, MAX_SAVED_COUNT), selectedOre: rawMelter.selectedOre };
+    for (const ore of Object.keys(INGOT_FOR_ORE)) if (ore !== nextMelter.selectedOre && nextMelter[ore] > 0) saveError();
+    const rawUnlocks = saveObject(data.traderUnlocked);
+    const nextUnlocks = Object.fromEntries(Object.keys(COINS).map((kind) => [kind, saveBoolean(rawUnlocks[kind])]));
+    if (!nextUnlocks.copper) saveError();
+
+    const savedAreas = saveObject(data.areas), nextLevels = {};
+    for (const id of Object.keys(AREA_BUILDERS)) {
+      nextLevels[id] = Object.hasOwn(savedAreas, id) ? restoreArea(savedAreas[id], id, data.version) : null;
+    }
+    if (!nextLevels.home || !nextLevels[data.currentLevel] || (nextState.elevatorUnlocked && !nextLevels.stage7)) saveError();
+    const lv = nextLevels[data.currentLevel];
+    if (nextPlayer.x > lv.w * TS || nextPlayer.y > lv.h * TS ||
+        collidesInLevel(lv, nextPlayer.x, nextPlayer.y, BALANCE.playerRadius)) saveError('The saved player position is invalid.');
+    const rawEnemies = saveObject(data.enemies);
+    const nextEnemies = {};
+    const legacyArmour = swordDamageFor(nextState.tools.sword, nextState.mercurySword);
+    for (const [list, kind] of [['slimes', 'slime'], ['moles', 'mole'], ['spiders', 'spider'], ['golems', 'golem']]) {
+      nextEnemies[list] = saveArray(rawEnemies[list], 1024).map((enemy) => restoreEnemy(enemy, kind, lv, data.version, legacyArmour));
+    }
+    return { currentLevel: data.currentLevel, state: nextState, player: nextPlayer,
+      inventory: nextInventory, storage: nextStorage, melter: nextMelter,
+      traderUnlocked: nextUnlocks, levels: nextLevels, enemies: nextEnemies };
+  }
+
+  function applyPreparedSave(saved) {
+    cancelSaveConfirmation(false);
+    clearTouchMove();
+    saveLoadRevision++;
+    browserSaveForRun = null;
+    for (const id of Object.keys(AREA_BUILDERS)) levels[id] = saved.levels[id];
+    level = levels[saved.currentLevel];
+    for (let i = 0; i < inventory.length; i++) inventory[i] = saved.inventory[i];
+    for (const item of Object.keys(ITEMS)) storage[item] = saved.storage[item];
+    for (const key of ['coal', 'copper', 'iron', 'bauxite', 'selectedOre']) melter[key] = saved.melter[key];
+    for (const kind of Object.keys(COINS)) traderUnlocked[kind] = saved.traderUnlocked[kind];
+    for (const [list, values] of [[slimes, saved.enemies.slimes], [moles, saved.enemies.moles],
+      [spiders, saved.enemies.spiders], [golems, saved.enemies.golems]]) {
+      list.length = 0;
+      list.push(...values);
+    }
+    particles.length = floaters.length = melterBursts.length = 0;
+    state.hp = saved.state.hp;
+    state.time = saved.state.time;
+    state.tools.pickaxe = saved.state.tools.pickaxe;
+    state.tools.sword = saved.state.tools.sword;
+    state.mercurySword = saved.state.mercurySword;
+    state.elevatorUnlocked = saved.state.elevatorUnlocked;
+    state.invuln = saved.state.invuln;
+    state.cooldown = saved.state.cooldown;
+    state.transitionLock = saved.state.transitionLock;
+    state.swingDir = saved.state.swingDir;
+    state.shack = 0;
+    for (const name of SAVE_STATS) state[name] = saved.state.stats[name];
+    for (const name of ['x', 'y', 'faceX', 'faceY', 'aim', 'walk']) player[name] = saved.player[name];
+    player.vx = player.vy = player.hurtFlash = 0;
+    const worldWidth = level.w * TS, worldHeight = level.h * TS;
+    camera.x = worldWidth > W ? clamp(player.x, W / 2, worldWidth - W / 2) : worldWidth / 2;
+    camera.y = worldHeight > H ? clamp(player.y, H / 2, worldHeight - H / 2) : worldHeight / 2;
+    pointer.down = false; pointer.inside = false;
+    keys.clear();
+    state.mode = 'paused';
+    state.openStation = null;
+    el.menu.classList.add('is-hidden');
+    el.over.classList.add('is-hidden');
+    el.station.classList.add('is-hidden');
+    el.pause.classList.remove('is-hidden');
+    el.hud.classList.remove('is-hidden');
+    el.dock.classList.remove('is-hidden');
+    stage.classList.remove('is-playing');
+    showAreaName(level);
+    selectTool(saved.state.tool);
+    syncBag(); syncVitals(); refreshStation(); clearToast();
+    if (el.resume.focus) el.resume.focus({ preventScroll: true });
+    last = 0;
+  }
+
+  function loadSaveText(text) {
+    const prepared = prepareSaveText(text);
+    applyPreparedSave(prepared);
+    return true;
+  }
+
+  function browserSaveText() {
+    if (!window.localStorage) throw new Error('Browser storage is unavailable. Download a save file instead.');
+    return window.localStorage.getItem(SAVE_KEY);
+  }
+
+  function refreshSaveMenu() {
+    let text = null, message = 'Pause your game to save your progress.', error = false;
+    try {
+      text = browserSaveText();
+      if (text) {
+        if (text.length > MAX_SAVE_SIZE) throw new Error('The browser save is too large.');
+        const header = JSON.parse(text);
+        if (!header || header.format !== SAVE_FORMAT || !SUPPORTED_SAVE_VERSIONS.includes(header.version) ||
+            !Object.hasOwn(AREA_NAMES, header.currentLevel) || typeof header.savedAt !== 'string' ||
+            !Number.isFinite(Date.parse(header.savedAt))) throw new Error('The browser save cannot be read.');
+        message = `Saved in ${AREA_NAMES[header.currentLevel]} · ${new Date(header.savedAt).toLocaleString()}`;
+      }
+    } catch (err) {
+      text = null;
+      message = 'Browser save unavailable or damaged. Load a backup file or start a new game.';
+      error = true;
+    }
+    const hasSave = !!text;
+    el.continueSave.classList.toggle('is-hidden', !hasSave);
+    el.continueSave.disabled = !hasSave;
+    el.play.classList.toggle('btn-quiet', hasSave);
+    el.play.textContent = hasSave ? 'New game' : 'Enter the base';
+    setSaveStatus(el.menuSaveStatus, message, error);
+  }
+
+  function writeBrowserSave(text, revision, mode) {
+    if (saveLoadRevision !== revision || state.mode !== mode) {
+      setSaveStatus(el.pauseSaveStatus, 'The run changed; pause and save again.', true);
+      return false;
+    }
+    try {
+      if (!window.localStorage) throw new Error('Storage unavailable');
+      window.localStorage.setItem(SAVE_KEY, text);
+      browserSaveForRun = text;
+      refreshSaveMenu();
+      setSaveStatus(el.pauseSaveStatus, 'Saved in this browser. Choose Continue on the title screen.');
+      return true;
+    } catch (err) {
+      setSaveStatus(el.pauseSaveStatus, 'Could not save in this browser. The previous save was kept; download a save file instead.', true);
+      return false;
+    }
+  }
+
+  function saveToBrowser() {
+    let text, existing;
+    try {
+      text = createSaveText();
+      prepareSaveText(text); // never replace a good save with an unreadable one
+    } catch (err) {
+      setSaveStatus(el.pauseSaveStatus, `Could not save: ${err.message} Your previous browser save was kept.`, true);
+      return false;
+    }
+    try {
+      existing = browserSaveText();
+    } catch (err) {
+      setSaveStatus(el.pauseSaveStatus, 'Could not save in this browser. The previous save was kept; download a save file instead.', true);
+      return false;
+    }
+    const revision = saveLoadRevision, mode = state.mode;
+    if (existing && existing !== browserSaveForRun) {
+      requestSaveConfirmation('Replace browser save?',
+        'This will replace the existing browser save with your current run.', 'Replace save',
+        () => writeBrowserSave(text, revision, mode), el.saveBrowser,
+        () => setSaveStatus(el.pauseSaveStatus, 'Browser save unchanged.'));
+      return false;
+    }
+    return writeBrowserSave(text, revision, mode);
+  }
+
+  function loadBrowserSave() {
+    try {
+      const text = browserSaveText();
+      if (!text) throw new Error('No browser save was found.');
+      loadSaveText(text);
+      browserSaveForRun = text;
+      setSaveStatus(el.pauseSaveStatus, 'Browser save loaded. Press Keep going when ready.');
+      return true;
+    } catch (err) {
+      setSaveStatus(el.menuSaveStatus, `Could not load the browser save. ${err.message}`, true);
+      return false;
+    }
+  }
+
+  function downloadSaveFile() {
+    try {
+      const text = createSaveText();
+      prepareSaveText(text);
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'mining-simulator-save.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      setSaveStatus(el.pauseSaveStatus, 'Save file download started. Keep it as a backup.');
+      return true;
+    } catch (err) {
+      setSaveStatus(el.pauseSaveStatus, `Could not download the save. ${err.message}`, true);
+      return false;
+    }
+  }
+
+  function openSaveFilePicker() {
+    pendingFileSelection = { mode: state.mode, revision: saveLoadRevision };
+    el.saveFile.value = '';
+    el.saveFile.click();
+  }
+
+  function chooseSaveFile() {
+    if (state.mode === 'menu') { openSaveFilePicker(); return; }
+    if (state.mode !== 'paused') return;
+    const revision = saveLoadRevision;
+    requestSaveConfirmation('Load a save file?',
+      'Loading a file replaces your current unsaved progress.', 'Choose file',
+      () => { if (state.mode === 'paused' && saveLoadRevision === revision) openSaveFilePicker(); },
+      el.importSavePause, () => setSaveStatus(el.pauseSaveStatus, 'Load canceled. Your current run is unchanged.'));
+  }
+
+  async function importSaveFile() {
+    const file = el.saveFile.files && el.saveFile.files[0];
+    const selection = pendingFileSelection;
+    pendingFileSelection = null;
+    el.saveFile.value = '';
+    if (!file) return;
+    const startMode = state.mode;
+    const startRevision = saveLoadRevision;
+    const status = startMode === 'menu' ? el.menuSaveStatus : el.pauseSaveStatus;
+    try {
+      if (selection && (selection.mode !== startMode || selection.revision !== startRevision)) {
+        throw new Error('The run changed while choosing a file; try loading it again.');
+      }
+      if (file.size > MAX_SAVE_SIZE) throw new Error('The save file is too large.');
+      const text = await file.text();
+      if (state.mode !== startMode || saveLoadRevision !== startRevision || !['menu', 'paused'].includes(startMode)) {
+        throw new Error('The run changed while the file was being read; try loading it again.');
+      }
+      loadSaveText(text);
+      setSaveStatus(el.pauseSaveStatus, 'Save file loaded. Save to browser to keep it on this device.');
+    } catch (err) {
+      if (state.mode === 'playing') showToast('Save not loaded. Pause and try again.');
+      else setSaveStatus(status, `Could not load the save file. ${err.message}`, true);
+    }
+  }
+
   // Wire the station menu. Null-guarded on purpose: a missing element should
   // never be able to stop the whole game from booting.
   const bind = (node, event, handler) => {
@@ -4759,6 +6026,9 @@
   bind(el.meltBtn, 'click', melt);
   bind(el.upgradePickaxe, 'click', () => upgradeTool('pickaxe'));
   bind(el.upgradeSword, 'click', () => upgradeTool('sword'));
+  bind(el.upgradeMercury, 'click', upgradeMercurySword);
+  bind(el.tradeAxolotl, 'click', sellAxolotl);
+  bind(el.elevatorActivate, 'click', activateElevator);
   bind(el.depositAll, 'click', depositEverything);
   bind(el.withdrawAll, 'click', withdrawEverything);
   if (document.querySelectorAll) {
@@ -4768,6 +6038,15 @@
   }
 
   el.play.addEventListener('click', startGame);
+  el.continueSave.addEventListener('click', loadBrowserSave);
+  el.importSaveMenu.addEventListener('click', chooseSaveFile);
+  el.importSavePause.addEventListener('click', chooseSaveFile);
+  el.saveFile.addEventListener('change', importSaveFile);
+  el.saveBrowser.addEventListener('click', saveToBrowser);
+  el.exportSave.addEventListener('click', downloadSaveFile);
+  el.saveConfirmCancel.addEventListener('click', () => cancelSaveConfirmation());
+  el.saveConfirmAccept.addEventListener('click', acceptSaveConfirmation);
+  el.pauseBtn.addEventListener('click', () => pauseGame(true));
   el.again.addEventListener('click', respawnAtBase);
   el.resume.addEventListener('click', resumeGame);
   el.mute.addEventListener('click', toggleMute);
@@ -4801,6 +6080,7 @@
     buildBag();
     buildStorage();
     buildToolbelt();
+    buildElevatorUI();
     levels.home = buildHome();
     level = levels.home;
     player.x = level.spawn.x;
@@ -4811,6 +6091,7 @@
     syncVitals();
     refreshTierBadges();
     refreshStation();
+    refreshSaveMenu();
     requestAnimationFrame(frame);
   }
 
@@ -4833,7 +6114,8 @@
     BALANCE,
     TILES,
     ITEMS,
-    FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, BAUXITE, STAIRS_DOWN, STAIRS_UP,
+    FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, BAUXITE,
+    WET, COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY, STAIRS_DOWN, STAIRS_UP,
     get level() { return level; },
     levels,
     getTile,
@@ -4847,10 +6129,15 @@
     traderUnlocked,
     openStation,
     closeStation,
+    useElevator,
+    activateElevator,
+    travelByElevator,
     melt,
     pressCoin,
     tradeCoin,
+    sellAxolotl,
     upgradeTool,
+    upgradeMercurySword,
     selectMelterOre,
     loadSlot,
     emptySlot,
@@ -4874,6 +6161,9 @@
     buildStage3,
     buildStage4,
     buildStage5,
+    buildStage6,
+    buildStage7,
+    buildSpecialCave,
     makeSlime,
     makeMole,
     makeSpider,
@@ -4881,6 +6171,11 @@
     makeProspector,
     pointer,
     pickaxeTarget,
+    saveKey: SAVE_KEY,
+    createSaveText,
+    loadSaveText,
+    saveToBrowser,
+    loadBrowserSave,
     start: startGame,
   };
 

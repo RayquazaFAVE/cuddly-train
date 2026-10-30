@@ -1,8 +1,8 @@
 # Mining Simulator ⛏️
 
 A top-down dungeon mining game. Start safe in **Home Base**, explore **Cave Entrance**,
-then descend through **Dreadful Tunnels**, **Auag Cavern**, and **Stalag Cavern** to
-**Alumina Cave**.
+then descend through **Dreadful Tunnels**, **Auag Cavern**, **Stalag Cavern**,
+**Alumina Cave**, **Luscious Cave** and **Spiral Cavern**. A hidden cave waits beyond.
 
 No dependencies, no build step. Open `index.html` and play, or serve the folder:
 
@@ -39,8 +39,39 @@ shown in Render's deploy log, wait for the deploy to go live, then hard-refresh 
 | `Q` | Equip the **pickaxe** |
 | `E` | Equip the **sword** |
 | Left click / `Space` | Swing the equipped tool toward the cursor |
+| Touch | Drag the **MOVE** stick to move; tap the field to aim and swing, and tap the tool belt to change tools |
+| `F`, or click / tap a nearby elevator | Open its floor menu |
 | Left click a station | Open the Melter, Storage Chest, Forge, Coin Press or Coin Trader (in Home Base) |
-| `Esc` | Pause · `M` mute |
+| `Esc` / pause button (top-right) | Pause, save or load · `M` mute |
+
+## Saving and loading
+
+Saving is **manual**. Pause with `Esc` or the top-right pause button, then choose:
+
+- **Save to browser** writes one save slot for this browser and site. Choose **Continue
+  saved game** on the title screen after reopening or refreshing. Saving again replaces
+  the previous browser save; starting a new game does not replace it until you save. The
+  game asks before a different run or imported file replaces an existing browser save.
+- **Download save file** creates `mining-simulator-save.json` as a portable backup. Keep
+  the file somewhere safe or move it to another device.
+- **Load save file** on the title or pause screen restores a downloaded backup. Loading
+  while a run is paused asks for confirmation before replacing unsaved progress. The
+  imported file does not replace the browser slot until you choose **Save to browser**.
+
+A loaded game starts paused. The save includes inventory, health, upgrades, storage,
+Melter contents, unlocked trades and elevator power, visited floors, cave layouts and
+current mining damage, ground loot, Prospectors and active enemies. Leaving and returning
+to an area still resets its tiles and stalagmites to that run's original layout.
+
+Version 1 and 2 saves still load. Older Alumina saves gain the Stage 6 staircase. If an
+older save has visited Luscious Cave, its current terrain and loot are preserved on load;
+the redesigned open layout appears the next time you leave and return. Loot is moved to
+reachable floor if needed. The elevator must still be reactivated on Stage 7.
+
+Browser saves stay on this device and are tied to the browser and site address; clearing
+site data, private browsing, or switching browsers can remove or hide them. Browser storage
+can also be blocked or full. Download a save file for a backup, especially before clearing
+browser data or moving devices. No save is sent to a server.
 
 ## How a run works
 
@@ -48,11 +79,23 @@ You begin in Home Base, a warm little room with lanterns, crates, a bedroll and 
 stairs down. Walking onto the stairs takes you to Cave Entrance. The stairs in its far
 chamber lead down to Dreadful Tunnels, whose lower gallery descends into Auag Cavern.
 Stairs in Auag Cavern lead to Stalag Cavern, whose far chamber descends into Alumina Cave.
-Each stage also has stairs back up. Your inventory and health carry between areas. When you
-re-enter an area, its tiles and stalagmites return to their original state for that run:
+Continue down to Luscious Cave and then Spiral Cavern. Each stage also has stairs back up.
+Your inventory and health carry between areas. When you re-enter an area, its tiles and
+stalagmites return to their original state for that run:
 mined blocks and ore reappear, and partial cracks are cleared. Uncollected drops and
 Prospector hauls remain safe. On arrival, the stage title appears at the top of the screen,
 then shrinks into a small area bubble.
+
+### Elevator
+
+The lift entrances next to the ordinary stairs start offline. Reach **Stage 7 · Spiral
+Cavern**, walk up to its elevator, and click or tap it (or press **F**) to **reactivate**
+the system. Then use the elevators beside the stairs to travel between **Home Base and
+any Stage 1–7 floor you have already visited**. Unvisited destinations stay locked. The
+Secret Cave has no elevator and is never a destination: reach it through the hidden seam.
+
+Elevator travel follows the usual area-reset and loot rules. Reactivation and visited floors
+survive death and are included in saves; a new run starts with the elevator offline again.
 
 ### Stage 1 · Cave Entrance
 
@@ -110,10 +153,45 @@ and Bauxite**. Bauxite yields one piece and takes **5 / 3 / 2 hits** with a T1 /
 pickaxe. Melt one Bauxite with one Coal at Home Base to produce **Aluminum**. Large Slimes,
 Spiders and Golems spawn here; the area's tiles reset when you leave and return.
 
+### Stage 6 · Luscious Cave
+
+“A peaceful break from the monsters” is a broad, open oasis with scattered small clumps of
+mineable **Stone, Gold, Cobalt and Quartz**. Walk into the shallow wet spots to collect pink
+**Axolotls**; the Coin Trader buys each one for **1 Gold Coin**. Uncollected Axolotls stay in
+this cave if you leave. Blue, sunglasses-wearing **Tropical Slimes** tend to spawn and wander
+near the water without forming tight crowds. They are peaceful until you hit them, and each
+new offspring is peaceful until attacked itself. There are no other enemies in this area.
+
+### Stage 7 · Spiral Cavern
+
+“The pinnacle of circles” is a winding spiral containing **Gold, Cobalt, Iridium and
+Titanium**. Spiders, Prospectors, Drill Moles and regular Golems patrol it. Titanium is used
+for T4 upgrades; Cobalt, Quartz and Iridium can be collected and stored but have no recipes
+yet. Look for a **shimmering Titanium seam at the spiral's heart**. Mine it to reveal a
+hidden staircase. Like the rest of the terrain it reseals when the area is re-entered.
+
+### Special Cave
+
+“A secluded mercury paradise” contains **Titanium, Iridium, Quartz and Mercury**, with
+Mercury found only here. Its only enemy is the **Mercury Golem**. At the Forge, **3 raw
+Mercury** add a permanent, one-time **15% sword-damage increase** for the run, including
+future sword tiers. The enhancement survives death and is saved with your game.
+
+New ore yields one piece per block. Mining requirements are:
+
+| Ore | T1 | T2 | T3 | T4 |
+| --- | --- | --- | --- | --- |
+| Cobalt | 7 | 5 | 4 | 2 |
+| Quartz | 5 | 4 | 3 | 1 |
+| Iridium | 8 | 6 | 4 | 2 |
+| Titanium | 9 | 7 | 5 | 3 |
+| Mercury | 8 | 6 | 4 | 2 |
+
 ### Prospectors
 
-Prospectors appear in Auag Cavern and Stalag Cavern. They wander at the same speed as wandering slimes. They search within **4 tiles** for
-Gold or Silver, walk around obstacles (or mine intervening stone), and collect the ore they
+Prospectors appear in Auag Cavern, Stalag Cavern and Spiral Cavern. They wander at the same
+speed as wandering slimes. They search within **4 tiles** for Gold or Silver, walk around
+obstacles (or mine intervening stone), and collect the ore they
 mine. If defeated, a Prospector drops **all** the Gold and Silver it collected. Their haul
 and any uncollected drops remain in their cavern if you leave and come back.
 
@@ -152,29 +230,41 @@ within **2**. Outside that radius a slime loses interest and wanders in a random
 at **half speed**, picking a new heading whenever it walks into a wall. Slimes hop as they
 move — quick little bounces while chasing, a slower amble when wandering.
 
-**Large Slimes** in Stalag Cavern and Alumina Cave have **60 HP** and deal **40 damage**: double a regular
-slime. They spot you from **6 tiles** away but move at **half a regular slime's speed**.
+**Large Slimes** in Stalag Cavern and Alumina Cave have **60 HP** and deal **40 damage**:
+double a regular slime. They spot you from **6 tiles** away but move at **half a regular slime's speed**.
 Defeating one splits it into **two regular slimes**, which can then split into tiny slimes.
 
 ### Spiders
 
-Spiders skitter quickly through Stalag Cavern and Alumina Cave and navigate around
+Spiders skitter quickly through Stalag Cavern, Alumina Cave and Spiral Cavern and navigate around
 obstacles. They have **15 HP**, deal **5 damage** per bite, and can attack every
 **0.4 seconds**. Spider bites give a shorter **0.3-second** recovery window, so their
 quick attacks can land repeatedly.
 
 ### Golems
 
-Golems are slow, bulky stone guardians found in Alumina Cave. They have **100 HP**, deal
-**45 damage**, and move at **24 pixels per second** while chasing. After every **10 tiles
-of actual travel**, a Golem becomes **disabled for 3 seconds**: it cannot move or deal
-contact damage, even if you stand next to it. A blue ring and label show when it is safe
-to attack. Hitting a disabled Golem does not push it; attempted movement into walls does
-not count toward its distance.
+Golems are bulky stone guardians found in Alumina Cave and Spiral Cavern. They deal
+**45 damage** and chase at **42 pixels per second**. **Mercury Golems** in the Special
+Cave deal **55 damage** and chase faster, at **60 pixels per second**.
+
+Newly spawned regular Golems have **100 base HP plus one hit of your current sword's
+damage**; Mercury Golems have **80 base HP plus one sword hit**. This adds exactly one
+swing to the previous requirement at each sword tier, including Mercury Edge. Their
+maximum HP is set when they spawn and persists while they live. Previously saved living
+Golems retain their current HP when loaded.
+
+After every **10 tiles of actual travel**, either Golem is **disabled for 3 seconds**:
+it cannot move or deal contact damage, even if you stand next to it. A blue ring and label
+show when it is safe to attack. Hitting a disabled Golem does not push it; attempted
+movement into walls does not count toward its distance.
+
+A defeated regular Golem drops **2 Stone and 3 Bauxite**, with a **1% chance of 1
+Titanium** as well. A Mercury Golem drops **2–4 Mercury**. Drops remain in their cave if
+your bag is full, just like other ground loot.
 
 ### Drill Moles
 
-Drill Moles appear in Dreadful Tunnels. Like normal slimes they have **30 HP** and deal
+Drill Moles appear in Dreadful Tunnels and Spiral Cavern. Like normal slimes they have **30 HP** and deal
 **20 damage**, but they do not split. They chase from up to **5 tiles** away, and can
 burrow straight through solid blocks. Each time a mole enters a block, it has a **1 in 10**
 chance of destroying it. Blocks destroyed by moles drop nothing; the outer map boundary
@@ -185,13 +275,12 @@ remains intact.
 Click a workstation or the chest to open its menu; `Esc` or **Close** to leave. The game
 pauses while a menu is open.
 
-**The Storage Chest** keeps all resources and coins, including Bauxite and Aluminum, safe
-at home. Each row shows how many are in your bag and how many are stored. Click
-**Store** or **Take** to move
+**The Storage Chest** keeps all resources, Axolotls and coins safe at home. Each row shows
+how many are in your bag and how many are stored. Click **Store** or **Take** to move
 one item; Shift-click either button to move as many as possible. **Deposit all** and
 **Take all** work across every resource. Stored resources survive cave deaths, and anything
-that doesn't fit in your bag stays in the chest. Storage lasts for the current run; like
-the rest of the game, it is reset when starting a new run or reloading the page.
+that doesn't fit in your bag stays in the chest. Storage is included in saves and resets
+when starting a new run.
 
 **The Melter** turns Copper and Iron into matching ingots, and Bauxite into Aluminum:
 
@@ -204,7 +293,7 @@ The top slot holds one kind of ore at a time. Shift-click it to return its conte
 switching types; anything that doesn't fit stays in the Melter. The Melt button needs room
 in the bag for the ingot.
 
-**The Forge** spends ingots on permanent tool upgrades:
+**The Forge** spends materials on permanent tool upgrades:
 
 | Upgrade | Cost | Effect |
 | --- | --- | --- |
@@ -212,16 +301,21 @@ in the bag for the ingot.
 | Sword T1 → T2 | 3 Copper Ingots | **15** damage per hit — a normal slime or mole takes 2 hits |
 | Pickaxe T2 → T3 | 3 Iron Ingots | Stone, coal and copper take 1 hit; iron takes 2 |
 | Sword T2 → T3 | 3 Iron Ingots | **30** damage per hit — a normal slime or mole takes 1 hit |
+| Pickaxe T3 → T4 | 3 raw Titanium | Two fewer hits than T3, minimum 1 |
+| Sword T3 → T4 | 3 raw Titanium | **35** damage per hit — a newly spawned normal Golem takes 4 hits |
+| Mercury edge | 3 raw Mercury, once | Permanently multiply sword damage by **1.15** |
 
-A tool must reach T2 before it can be upgraded to T3. Your current tiers show on the tool
-belt and in the Forge. Upgrades are kept through death; only resources in the bag are lost.
+A tool must reach each tier before upgrading to the next. Your current tiers show on the
+tool belt and in the Forge. Upgrades are kept through death; only resources in the bag are
+lost. The existing Large Slime has 60 HP: the 35-damage T4 sword kills it in two hits,
+while a newly spawned normal Golem has 135 HP and takes four.
 
 **The Coin Press** turns **1 raw Copper, Silver or Gold** into its matching coin. It also
 turns **1 Aluminum** into an Aluminum Coin; Bauxite must first be melted into Aluminum.
 The station uses materials in your bag. Pressing the first Silver, Gold or Aluminum Coin
 unlocks that coin's trade at the Coin Trader.
 
-**The Coin Trader** exchanges coins in your bag for Coal:
+**The Coin Trader** exchanges coins in your bag for Coal and buys Axolotls:
 
 | Trade | Availability |
 | --- | --- |
@@ -229,6 +323,7 @@ unlocks that coin's trade at the Coin Trader.
 | 1 Silver Coin → 1 Coal | Unlock by pressing a Silver Coin |
 | 1 Gold Coin → 2 Coal | Unlock by pressing a Gold Coin |
 | 1 Aluminum Coin → 4 Coal | Unlock by pressing an Aluminum Coin |
+| 1 Axolotl → 1 Gold Coin | Available from the start |
 
 Unlocked trades remain available through death, but reset on a new run. Pressing or trading
 never consumes ingredients unless the complete result fits in the bag; a stack used up by
@@ -278,15 +373,22 @@ node --test tests/game.test.js
 Notes on the implementation:
 
 - **Levels** are tile grids (32 px tiles). Stage 1 connects rooms, Stage 2 combines straight
-  galleries and openings, and Stages 3–5 connect broad cavern chambers.
-- **Ore seeding** converts walls near walkable tiles into each area's rock resources. The
-  outer boundary stays intact. Stage 4's stalagmites are separate objects placed only on
-  floor tiles, with routes kept open for players and Large Slimes.
+  galleries and openings, Stages 3–5 connect broad chambers, Stage 6 is an open cavern with
+  small rock clumps, and Stage 7 forms three coils around a hidden seam.
+- **Ore seeding** converts walls near walkable tiles into each area's rock resources; Stage 6's
+  clumps are completely mineable. The outer boundary stays intact. Stage 4's stalagmites are
+  separate objects placed only on floor tiles, with routes kept open for players and Large Slimes.
 - **Mining** is hit-based rather than time-based. Iron, Gold, Silver and Bauxite have
   per-tier hit tables, and partial damage is remembered per tile until you leave and return.
+  The shimmering Titanium seam becomes stairs when mined and resets on re-entry.
 - **Area resets** restore the original terrain, ore and stalagmites generated for the current
   run on each return. Stored items, upgrades, machines and uncollected loot are preserved;
   drops or Prospectors trapped by restored obstacles are moved onto reachable floor.
+- **Save files** are versioned JSON. A complete file is validated before any active state is
+  replaced; loading reconstructs the visited areas without triggering their re-entry reset.
+  Version-1 and version-2 saves migrate to version 3 without changing the browser-slot key.
+- **Elevators** use visited area records and a saved reactivation flag. Their menu excludes
+  the Special Cave, and a trip uses the same terrain reset and loot relocation as the stairs.
 - **Moles** ignore interior collisions and roll once when entering a solid tile. Their
   break chance is not repeatedly applied each frame, and destroyed blocks drop nothing.
 - **Prospectors** pathfind to reachable ore, carry what they mine, and switch to combat when
@@ -296,7 +398,8 @@ Notes on the implementation:
   is within the arc of your aim. Golems count actual movement and pause without contact
   damage after ten tiles. Damage numbers and enemy health bars are drawn in world space.
 - **Coins** are exchanged atomically against a copy of the bag, then committed only if the
-  output fits. Unlocks live for the current run and are not lost on death.
+  output fits. Unlocks live for the current run and are not lost on death; Axolotl sales
+  also commit atomically.
 - **Splitting** makes two regular slimes from a Large Slime, and two tinies from a regular
   slime. A swing snapshots the enemy list first, so newly spawned slimes cannot be damaged
   by the blow that made them.

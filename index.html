@@ -6,7 +6,7 @@
 <title>Mining Simulator</title>
 <meta name="description" content="A dungeon mining game. Explore caves, fight monsters, smelt ore, and trade coins." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/style.css?v=10" />
+<link rel="stylesheet" href="css/style.css?v=14" />
 </head>
 <body>
   <main id="stage">
@@ -26,7 +26,16 @@
         <span id="stage-name" class="stage-name">Home Base</span>
         <span id="area-subtitle" class="area-subtitle"></span>
       </div>
-      <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
+      <div class="hud-actions">
+        <button id="pause-btn" class="icon-btn" type="button" title="Pause and save" aria-label="Pause and save">Ⅱ</button>
+        <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
+      </div>
+    </div>
+
+    <!-- Touch movement is separate from the field, so a second finger can aim and swing. -->
+    <div id="touch-move" class="touch-move" aria-label="Touch joystick for movement">
+      <span class="touch-move-label" aria-hidden="true">MOVE</span>
+      <span id="touch-knob" class="touch-knob" aria-hidden="true"></span>
     </div>
 
     <!-- ------------------------------------------------- tool belt + bag -->
@@ -92,11 +101,12 @@
         <!-- FORGE -->
         <div id="view-forge" class="station-view is-hidden">
           <h2>Forge</h2>
-          <p class="tagline">Copper for T2. Iron for T3.</p>
+          <p class="tagline">Copper Ingots for T2, Iron Ingots for T3, raw Titanium for T4.</p>
 
-          <div class="forge-bank" aria-label="Ingots in your bag">
+          <div class="forge-bank" aria-label="Upgrade materials in your bag">
             <span class="forge-stock"><span class="gem forge-copper" aria-hidden="true"></span><span id="forge-ingots">0</span><span class="forge-of">Copper</span></span>
             <span class="forge-stock"><span class="gem forge-iron" aria-hidden="true"></span><span id="forge-iron-ingots">0</span><span class="forge-of">Iron</span></span>
+            <span class="forge-stock"><span class="gem forge-titanium" aria-hidden="true"></span><span id="forge-titanium">0</span><span class="forge-of">Titanium</span></span>
           </div>
 
           <div class="forge-row">
@@ -112,7 +122,11 @@
             </div>
           </div>
 
-          <p class="hint" id="forge-hint">Each upgrade costs 3 ingots of the next tier.</p>
+          <div class="mercury-upgrade">
+            <div><strong>Mercury edge</strong><small>+15% sword damage · permanent</small><small id="forge-mercury-count">0 Mercury in bag</small></div>
+            <button id="upgrade-mercury" class="coin-action" type="button">3 Mercury</button>
+          </div>
+          <p class="hint" id="forge-hint">Each tool upgrade costs 3 of its matching material.</p>
           <button class="btn btn-quiet" type="button" data-close-station>Close</button>
         </div>
 
@@ -151,8 +165,8 @@
         <div id="view-trader" class="station-view is-hidden">
           <span class="storage-eyebrow">HOME BASE MARKET</span>
           <h2>Coin Trader</h2>
-          <p class="tagline">Trade coins from your bag for coal.</p>
-          <div class="coin-table" aria-label="Coal exchange rates">
+          <p class="tagline">Trade coins for Coal or sell an Axolotl for a Gold Coin.</p>
+          <div class="coin-table" aria-label="Coin and Axolotl exchange rates">
             <div class="coin-row">
               <span class="coin-icon is-copper" aria-hidden="true">C</span>
               <span class="coin-details"><strong>2 Copper Coins → 1 Coal</strong><small id="trade-copper-status">Available · 0 coins in bag</small></span>
@@ -173,8 +187,24 @@
               <span class="coin-details"><strong>1 Aluminum Coin → 4 Coal</strong><small id="trade-aluminum-status">Locked · press an Aluminum Coin</small></span>
               <button id="trade-aluminum" class="coin-action" type="button" aria-label="Trade Aluminum Coin for Coal">Locked</button>
             </div>
+            <div class="coin-row">
+              <span class="coin-icon is-axolotl" aria-hidden="true">✿</span>
+              <span class="coin-details"><strong>1 Axolotl → 1 Gold Coin</strong><small id="trade-axolotl-status">0 Axolotls in bag</small></span>
+              <button id="trade-axolotl" class="coin-action" type="button" aria-label="Sell an Axolotl for one Gold Coin">Sell</button>
+            </div>
           </div>
-          <p class="hint" id="trader-hint">Press each new coin to unlock its exchange.</p>
+          <p class="hint" id="trader-hint">Press each new coin to unlock its coal exchange.</p>
+          <button class="btn btn-quiet" type="button" data-close-station>Close</button>
+        </div>
+
+        <!-- ELEVATOR -->
+        <div id="view-elevator" class="station-view is-hidden">
+          <span class="storage-eyebrow">CAVE TRANSIT</span>
+          <h2>Elevator</h2>
+          <p id="elevator-status" class="tagline" role="status" aria-live="polite">Offline. Reactivate the lift on Stage 7.</p>
+          <button id="elevator-activate" class="btn btn-small elevator-activate is-hidden" type="button">Reactivate elevator</button>
+          <div id="elevator-floors" class="elevator-floors" aria-label="Elevator destinations"></div>
+          <p class="hint elevator-hint">Only visited floors are available. The Secret Cave has no elevator.</p>
           <button class="btn btn-quiet" type="button" data-close-station>Close</button>
         </div>
 
@@ -213,9 +243,14 @@
           <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></li>
           <li><kbd>Q</kbd><span>Pickaxe — mine rock and ore</span></li>
           <li><kbd>E</kbd><span>Sword — fight whatever is down there</span></li>
+          <li><kbd>F</kbd><span>Use an elevator when you're nearby</span></li>
           <li><span class="mouse-ico"></span><span>Left click to swing the equipped tool</span></li>
+          <li class="touch-howto"><span>Touch: drag MOVE, tap the field to swing</span></li>
         </ul>
+        <button id="continue-save" class="btn save-continue is-hidden" type="button">Continue saved game</button>
         <button id="play" class="btn" type="button">Enter the base</button>
+        <button id="import-save-menu" class="btn btn-quiet save-secondary" type="button">Load save file</button>
+        <p id="menu-save-status" class="save-status" role="status" aria-live="polite">Pause your game to save your progress.</p>
         <p class="hint">Find the stairs to reach Cave Entrance · <kbd>Esc</kbd> to pause</p>
       </div>
     </section>
@@ -225,7 +260,26 @@
         <h2>Paused</h2>
         <p class="tagline">The lantern is still lit.</p>
         <button id="resume" class="btn" type="button">Keep going</button>
+        <div class="save-actions" aria-label="Save and load progress">
+          <button id="save-browser" class="btn btn-quiet save-primary" type="button">Save to browser</button>
+          <div class="save-file-actions">
+            <button id="export-save" class="btn btn-quiet" type="button">Download save file</button>
+            <button id="import-save-pause" class="btn btn-quiet" type="button">Load save file</button>
+          </div>
+        </div>
+        <p id="pause-save-status" class="save-status" role="status" aria-live="polite">One browser save slot; saving replaces its previous contents. Download a backup file.</p>
         <p class="hint">Press <kbd>Esc</kbd> to continue</p>
+      </div>
+    </section>
+
+    <section id="save-confirm" class="overlay is-hidden">
+      <div class="panel confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="save-confirm-title" aria-describedby="save-confirm-message">
+        <h2 id="save-confirm-title">Are you sure?</h2>
+        <p id="save-confirm-message" class="tagline"></p>
+        <div class="confirm-actions">
+          <button id="save-confirm-cancel" class="btn btn-quiet" type="button">Cancel</button>
+          <button id="save-confirm-accept" class="btn" type="button">Continue</button>
+        </div>
       </div>
     </section>
 
@@ -264,6 +318,7 @@
       </div>
     </section>
   </main>
+  <input id="save-file" type="file" accept=".json,application/json" hidden aria-label="Choose a Mining Simulator save file" />
 
   <!-- If the game script fails to load or boot, say so instead of leaving a
        dead button on screen. A stale cached script is the usual culprit. -->
@@ -308,6 +363,6 @@
     });
   })();
   </script>
-  <script src="js/game.js?v=12"></script>
+  <script src="js/game.js?v=17"></script>
 </body>
 </html>

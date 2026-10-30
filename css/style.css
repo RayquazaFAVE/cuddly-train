@@ -43,6 +43,44 @@ html, body {
    over the dock, and the in-world reticle is only extra feedback. */
 #stage.is-playing #game { cursor: crosshair; }
 
+/* A thumb stick only appears on touch-capable screens; desktop mouse input
+   stays on the canvas. The dock remains above it in stacking order. */
+.touch-move { display: none; }
+.touch-howto { display: none !important; }
+@media (any-pointer: coarse) {
+  #stage.is-playing .touch-move {
+    display: block;
+    position: absolute;
+    z-index: 3;
+    left: max(10px, env(safe-area-inset-left));
+    bottom: max(82px, calc(75px + env(safe-area-inset-bottom)));
+    width: 112px; height: 112px;
+    border: 1px solid rgba(220, 231, 226, 0.28);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(35, 50, 58, 0.48), rgba(9, 15, 22, 0.66));
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.3), inset 0 0 0 7px rgba(255, 255, 255, 0.025);
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .touch-howto { display: flex !important; }
+  .touch-move-label {
+    position: absolute; top: 10px; left: 0; right: 0; text-align: center;
+    color: rgba(222, 235, 232, 0.65); font-size: 9px; font-weight: 800; letter-spacing: 0.13em;
+    pointer-events: none;
+  }
+  .touch-knob {
+    position: absolute; left: 50%; top: 50%; width: 42px; height: 42px;
+    transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    border: 1px solid rgba(236, 246, 239, 0.42);
+    background: linear-gradient(145deg, rgba(193, 216, 205, 0.38), rgba(67, 91, 94, 0.6));
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+  }
+}
+@media (any-pointer: coarse) and (max-width: 360px) {
+  #stage.is-playing .touch-move { width: 88px; height: 88px; left: 7px; bottom: 75px; }
+  .touch-knob { width: 36px; height: 36px; }
+}
+
 /* ----------------------------------------------------------------- HUD --- */
 
 .hud {
@@ -203,6 +241,7 @@ html, body {
 
 .icon-btn:hover { background: rgba(38, 50, 66, 0.9); transform: translateY(-1px); }
 .icon-btn.is-off { color: #5c6a79; }
+.hud-actions { display: flex; gap: 7px; pointer-events: auto; }
 
 /* --------------------------------------------------- dock (tools + bag) --- */
 
@@ -330,6 +369,11 @@ html, body {
 .slot.is-coin .gem, .gem.is-coin {
   clip-path: circle(46% at 50% 50%);
   background: radial-gradient(circle at 38% 32%, #fff9 0, var(--gem) 38%, #17130f 95%);
+}
+.slot.is-creature .gem, .gem.is-creature {
+  clip-path: polygon(4% 20%, 20% 33%, 23% 20%, 38% 29%, 50% 24%, 62% 29%, 77% 20%, 80% 33%, 96% 20%, 89% 49%, 96% 65%, 80% 62%, 75% 84%, 25% 84%, 20% 62%, 4% 65%, 11% 49%);
+  background: radial-gradient(circle at 37% 48%, #44303b 0 5%, transparent 7%),
+    radial-gradient(circle at 63% 48%, #44303b 0 5%, transparent 7%), var(--gem);
 }
 
 .slot-count {
@@ -520,7 +564,9 @@ kbd {
 }
 
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 4px 0 22px; }
-#over .panel { max-height: calc(100vh - 24px); overflow-y: auto; }
+#over .panel, #menu .panel, #pause .panel, #save-confirm .panel { max-height: calc(100vh - 24px); overflow-y: auto; }
+#save-confirm { z-index: 8; background: rgba(2, 4, 7, 0.76); }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .stat {
   flex: 1;
@@ -695,6 +741,15 @@ kbd {
 
 .btn-quiet:hover { background: rgba(255, 255, 255, 0.06); color: var(--cream); }
 
+/* Saving is deliberate: new runs never overwrite the browser save by themselves. */
+.save-continue.is-hidden { display: none; }
+.save-actions { margin-top: 10px; }
+.save-primary { margin-top: 0; color: #f5d89f; border-color: rgba(255, 200, 97, 0.28); }
+.save-file-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.save-file-actions .btn { min-width: 0; padding: 10px 5px; font-size: 12px; line-height: 1.25; }
+.save-status { margin: 12px 0 0; color: #a8b9c7; font-size: 11px; line-height: 1.4; }
+.save-status.is-error { color: #ffaaaa; }
+
 .btn:disabled {
   cursor: not-allowed;
   filter: grayscale(0.7) brightness(0.75);
@@ -707,6 +762,8 @@ kbd {
 
 .forge-bank {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   justify-content: center;
   gap: 14px;
@@ -723,6 +780,7 @@ kbd {
 .forge-bank .gem { position: static; transform: none; width: 16px; height: 16px; display: block; }
 .forge-bank .forge-copper { --gem: #e8a86a; }
 .forge-bank .forge-iron { --gem: #c3dce9; }
+.forge-bank .forge-titanium { --gem: #a9d9dd; }
 .forge-of { font-size: 11px; font-weight: 700; color: var(--dim); }
 
 .forge-row { display: flex; gap: 10px; margin-bottom: 4px; }
@@ -751,6 +809,23 @@ kbd {
 
 .forge-tier.is-max { color: #8ce09a; }
 
+.mercury-upgrade {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(168, 231, 230, 0.24);
+  border-radius: 12px;
+  background: rgba(111, 175, 181, 0.09);
+  text-align: left;
+}
+.mercury-upgrade div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mercury-upgrade strong { color: #d9f4ef; font-size: 12px; }
+.mercury-upgrade small { color: #a2bac1; font-size: 10px; line-height: 1.3; }
+.mercury-upgrade .coin-action { flex-shrink: 0; }
+
 .loss-note {
   margin: -8px 0 18px;
   font-size: 12.5px;
@@ -763,6 +838,31 @@ kbd {
 }
 
 .loss-note strong { color: #ffd6d6; }
+
+/* --------------------------------------------------------- Cave elevator */
+.elevator-activate { min-height: 44px; margin: 0 0 14px; }
+.elevator-activate.is-hidden { display: none; }
+.elevator-floors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; text-align: left; }
+.elevator-floor {
+  display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 52px;
+  padding: 7px 9px; border: 1px solid rgba(141, 220, 205, 0.26); border-radius: 10px;
+  background: rgba(93, 168, 150, 0.1); color: #e4f3ed; text-align: left; cursor: pointer;
+  font-family: var(--font);
+}
+.elevator-floor:hover:not(:disabled), .elevator-floor:focus-visible {
+  background: rgba(103, 200, 174, 0.22); border-color: rgba(161, 235, 213, 0.7);
+}
+.elevator-floor:disabled { opacity: 0.48; cursor: default; }
+.elevator-floor.is-current { opacity: 0.85; border-color: rgba(255, 200, 97, 0.34); }
+.elevator-floor-number {
+  display: grid; place-items: center; flex: 0 0 29px; width: 29px; height: 29px;
+  border-radius: 8px; background: rgba(5, 14, 18, 0.65); color: #9cdac8;
+  font-size: 10px; font-weight: 900; letter-spacing: 0.04em;
+}
+.elevator-floor-name { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.elevator-floor-name strong { font-size: 11px; line-height: 1.2; overflow-wrap: anywhere; }
+.elevator-floor-name small { font-size: 9px; color: #a0b2bb; }
+.elevator-hint { margin-bottom: 4px; }
 
 /* ------------------------------------------------------- Coins & trading */
 
@@ -798,6 +898,7 @@ kbd {
 .coin-icon.is-silver { color: #cfdee8; }
 .coin-icon.is-gold { color: #f3c65e; }
 .coin-icon.is-aluminum { color: #eef6f7; }
+.coin-icon.is-axolotl { color: #f7afc5; }
 .coin-details { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .coin-details strong { color: #edf1f2; font-size: 12px; line-height: 1.25; }
 .coin-details small { color: #98a8b6; font-size: 10px; line-height: 1.3; }
