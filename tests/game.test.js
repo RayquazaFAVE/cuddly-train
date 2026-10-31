@@ -641,7 +641,7 @@ test('Drill Moles match slime health and damage, take sword hits, and do not spl
   game.pointer.inside = true;
   game.pointer.x = mole.x - game.camera.x + 1280 / 2;
   game.pointer.y = mole.y - game.camera.y + 800 / 2;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     game.state.cooldown = 0;
     game.swing();
   }
@@ -652,8 +652,7 @@ test('Drill Moles match slime health and damage, take sword hits, and do not spl
   const stronger = game.makeMole(game.player.x + 32, game.player.y);
   game.moles.push(stronger);
   game.state.tools.sword = 3;
-  game.state.cooldown = 0;
-  game.swing();
+  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(stronger.dead, true);
 });
 
@@ -763,8 +762,8 @@ test('Stage 2 remains stable as both enemy types spawn and move over time', () =
   game.state.invuln = 999;
   step(400);
   assert.equal(game.state.mode, 'playing');
-  assert.ok(game.moles.length > 0 && game.moles.length <= 3);
-  assert.ok(game.slimes.length > 0 && game.slimes.length <= 7);
+  assert.ok(game.moles.length > 0 && game.moles.length <= game.BALANCE.maxMoles);
+  assert.ok(game.slimes.length > 0 && game.slimes.length <= game.BALANCE.maxSlimes);
   for (const enemy of [...game.moles, ...game.slimes]) {
     assert.ok(Number.isFinite(enemy.x) && Number.isFinite(enemy.y));
     assert.ok(enemy.x > 0 && enemy.x < game.level.w * 32);
@@ -1022,10 +1021,7 @@ test('a defeated prospector drops all collected ore even with a full bag or a le
   game.player.x = prospector.x - 32;
   game.player.y = prospector.y;
   aimSwordAt(game, prospector);
-  game.state.cooldown = 0;
-  game.swing();
-  game.state.cooldown = 0;
-  game.swing();
+  for (let i = 0; i < 3; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(prospector.dead, true);
   assert.equal(game.state.prospectorsSlain, 1);
   assert.equal(game.pickups.length, 2);
@@ -1125,7 +1121,7 @@ test('prospector-mined ore is dropped on defeat and collected exactly once', () 
   game.player.x = prospector.x - 32;
   game.player.y = prospector.y;
   aimSwordAt(game, prospector);
-  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
+  for (let i = 0; i < 3; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(prospector.dead, true);
   assert.equal(game.pickups.length, 2);
   step(30);
@@ -1156,7 +1152,7 @@ test('large prospector hauls stack and preserve overflow until there is room', (
   game.player.x = prospector.x - 32;
   game.player.y = prospector.y;
   aimSwordAt(game, prospector);
-  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
+  for (let i = 0; i < 3; i++) { game.state.cooldown = 0; game.swing(); }
   step(30);
   const total = (item) => game.countItem(item) + game.pickups.filter((p) => p.item === item).reduce((n, p) => n + p.count, 0);
   assert.equal(total('gold'), 150);
@@ -1267,7 +1263,7 @@ test('prospectors wait eight seconds between dynamite throws', () => {
 });
 
 test('every area restores all original tiles and clears mining damage when revisited', () => {
-  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'special']) {
+  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'stage8', 'stage9', 'stage10', 'stage11', 'stage12', 'stage13', 'special']) {
     const { game } = createGame();
     if (id !== 'home') game.enterLevel(id);
     const area = game.level;
@@ -1689,10 +1685,9 @@ test('defeated Large Slimes split into two untouched regular slimes', () => {
   aimSwordAt(game, large);
   game.state.cooldown = 0;
   game.swing();
-  assert.equal(large.hp, 30);
+  assert.equal(large.hp, 90);
   assert.equal(game.slimes.length, 1);
-  game.state.cooldown = 0;
-  game.swing();
+  for (let i = 0; i < 3; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(large.dead, true);
   const children = game.slimes.filter((slime) => !slime.dead);
   assert.equal(children.length, 2);
@@ -1708,8 +1703,7 @@ test('defeated Large Slimes split into two untouched regular slimes', () => {
   children[1].x = game.player.x - 120;
   children[1].y = game.player.y;
   aimSwordAt(game, children[0]);
-  game.state.cooldown = 0;
-  game.swing();
+  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(children[0].dead, true);
   assert.equal(game.slimes.filter((slime) => !slime.dead && slime.tiny).length, 2);
 });
@@ -1763,9 +1757,8 @@ test('Spiders path around stalagmites and can be defeated without splitting', ()
   game.state.tools.sword = 1;
   game.state.cooldown = 0;
   game.swing();
-  assert.equal(spider.hp, 5);
-  game.state.cooldown = 0;
-  game.swing();
+  assert.equal(spider.hp, 20);
+  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(spider.dead, true);
   assert.equal(game.state.spidersSlain, 1);
   assert.equal(game.slimes.length, 0, 'spiders do not split');
@@ -2217,7 +2210,7 @@ test('a Golem navigates around a wall and sword kills count in the death screen'
   assert.equal(game.getTile(12, 10), game.WALL);
   game.player.x = golem.x - 35; game.player.y = golem.y;
   aimSwordAt(game, golem);
-  for (let i = 0; i < 4; i++) { game.state.cooldown = 0; game.swing(); }
+  for (let i = 0; i < 8; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(golem.dead, true);
   assert.equal(game.state.golemsSlain, 1);
   assert.equal(game.slimes.length, 0);
@@ -2244,7 +2237,7 @@ test('both coin stations open by mouse or touch without overlapping existing sta
     assert.equal(elements[view].classList.contains('is-hidden'), false);
     game.closeStation();
   }
-  assert.equal((html.match(/data-close-station/g) || []).length, 6);
+  assert.equal((html.match(/data-close-station/g) || []).length, 7);
 });
 
 test('the Coin Press unlocks each higher denomination only after pressing its first coin', () => {
@@ -2844,7 +2837,7 @@ test('naturally spawned enemies and timers in every cave remain saveable during 
   const storage = createMemoryStorage();
   const live = createGame({ storage });
   live.game.state.invuln = 999; // avoid ending this serialization smoke test in combat
-  for (const id of ['stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'special']) {
+  for (const id of ['stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'stage8', 'stage9', 'stage10', 'stage11', 'stage12', 'stage13', 'special']) {
     live.game.enterLevel(id);
     live.step(100);
     assert.equal(live.game.level.id, id);
@@ -2908,6 +2901,7 @@ function moveToStairs(game, step, stairs) {
 
 function suppressNewEnemySpawns(area) {
   area.slimeTimer = area.moleTimer = area.spiderTimer = area.golemTimer = area.prospectorTimer = 999;
+  area.ghostTimer = area.graveDiggerTimer = area.infectedSkeletonTimer = 999;
 }
 
 function reachableForRadius(game, area, radius) {
@@ -2990,6 +2984,8 @@ test('the new caves contain their requested ores, and only the secret cave conta
   const checks = [
     ['stage6', ['GOLD', 'COBALT', 'QUARTZ']],
     ['stage7', ['GOLD', 'COBALT', 'IRIDIUM', 'TITANIUM']],
+    ['stage8', ['STONE', 'SILVER', 'QUARTZ', 'RUBY']],
+    ['stage9', ['DARKSTONE', 'RUBY', 'SAPPHIRE']],
     ['special', ['TITANIUM', 'IRIDIUM', 'QUARTZ', 'MERCURY']],
   ];
   for (const [areaName, ores] of checks) {
@@ -3101,7 +3097,7 @@ test('Tropical Slimes wander harmlessly until individually attacked; their offsp
   step(1);
   assert.equal(a.chasing, true);
   assert.equal(game.state.hp, 80);
-  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
+  for (let i = 0; i < 5; i++) { game.state.cooldown = 0; game.swing(); }
   assert.equal(a.dead, true);
   const children = game.slimes.filter((s) => s !== a && s !== b);
   assert.equal(children.length, 2);
@@ -3117,7 +3113,7 @@ test('Mercury Golems are faster and harder-hitting, but less healthy and use the
   assert.ok(mercury.hp < normal.hp);
   assert.ok(mercury.speed > normal.speed);
   assert.ok(mercury.dmg > normal.dmg);
-  assert.equal(mercury.hp, 90); assert.equal(mercury.speed, 60); assert.equal(mercury.dmg, 55);
+  assert.equal(mercury.hp, 180); assert.equal(mercury.speed, 60); assert.equal(mercury.dmg, 55);
   mercury.x = game.player.x + 5; mercury.y = game.player.y;
   mercury.disabled = 1;
   game.golems.push(mercury);
@@ -3129,7 +3125,7 @@ test('Mercury Golems are faster and harder-hitting, but less healthy and use the
   assert.equal(game.state.hp, 45, 'reactivated Mercury Golem deals 55 damage');
 });
 
-test('T4 costs raw Titanium, improves pickaxe thresholds and kills a reinforced Golem in four hits', () => {
+test('T4 costs raw Titanium, improves pickaxe thresholds and kills a reinforced Golem in eight hits', () => {
   const { game, elements } = createGame();
   game.state.tools.pickaxe = 3; game.state.tools.sword = 3;
   const t3 = Object.fromEntries(Object.entries(game.TILES).filter(([, def]) => def.hits).map(([id, def]) => [id, game.pickaxeHits(def)]));
@@ -3152,18 +3148,18 @@ test('T4 costs raw Titanium, improves pickaxe thresholds and kills a reinforced 
   const golem = game.makeGolem(game.player.x + 32, game.player.y);
   game.golems.push(golem);
   aimSwordAt(game, golem); game.state.tools.sword = 4;
-  for (let i = 0; i < 3; i++) { game.state.cooldown = 0; game.swing(); }
-  assert.equal(golem.hp, 30); assert.equal(golem.dead, false);
+  for (let i = 0; i < 7; i++) { game.state.cooldown = 0; game.swing(); }
+  assert.equal(golem.hp, 25); assert.equal(golem.dead, false);
   game.state.cooldown = 0; game.swing();
   assert.equal(golem.dead, true);
   const large = game.makeSlime(game.player.x + 32, game.player.y, false, true);
-  assert.equal(large.hp, 60, 'existing Large Slime health is preserved');
+  assert.equal(large.hp, 120, 'Large Slime health is doubled');
   game.slimes.push(large);
-  for (let i = 0; i < 2; i++) { game.state.cooldown = 0; game.swing(); }
-  assert.equal(large.dead, true, 'two T4 hits remain lethal to the existing 60-HP Large Slime');
+  for (let i = 0; i < 4; i++) { game.state.cooldown = 0; game.swing(); }
+  assert.equal(large.dead, true, 'four T4 hits defeat the 120-HP Large Slime');
 });
 
-test('Mercury enhancement costs three once, adds 15% at every tier, survives death, and resets on a new run', () => {
+test('Mercury enhancement costs three once, keeps base sword damage, survives death, and resets on a new run', () => {
   const { game, elements } = createGame();
   game.state.tools.sword = 4;
   game.addItem('mercury', 2); game.openStation('forge');
@@ -3172,12 +3168,12 @@ test('Mercury enhancement costs three once, adds 15% at every tier, survives dea
   game.addItem('mercury', 4);
   elements['upgrade-mercury'].click();
   assert.equal(game.state.mercurySword, true);
-  assert.equal(game.tierDamage(), 40.25);
+  assert.equal(game.tierDamage(), 35);
   assert.equal(game.countItem('mercury'), 3);
   assert.equal(game.upgradeMercurySword(), false);
   assert.equal(game.countItem('mercury'), 3);
   game.state.tools.sword = 1;
-  assert.equal(game.tierDamage(), 11.5);
+  assert.equal(game.tierDamage(), 10);
   game.closeStation(); game.enterLevel('stage6'); game.respawnAtBase();
   assert.equal(game.state.mercurySword, true);
   game.start();
@@ -3228,10 +3224,10 @@ test('a real version-1 browser save is detected and migrated without losing any 
   assert.equal(game.storage.bauxite, 11);
   assert.equal(game.melter.coal, 3); assert.equal(game.melter.bauxite, 2);
   assert.equal(game.traderUnlocked.gold, true);
-  assert.equal(game.golems[0].hp, 71); assert.equal(game.golems[0].disabled, 2);
+  assert.equal(game.golems[0].hp, 142); assert.equal(game.golems[0].disabled, 2);
   const exit = 36 * 64 + 42;
   const migrated = JSON.parse(game.createSaveText());
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 9);
   for (const field of ['tiles', 'originalTiles']) {
     const expected = legacy.areas.stage5[field].slice(); expected[exit] = game.STAIRS_DOWN;
     assert.deepEqual(migrated.areas.stage5[field], expected, `only the new staircase changes ${field}`);
@@ -3259,7 +3255,7 @@ test('current saves preserve the secret entrance, Axolotls, Mercury upgrade and 
   assert.equal(tropicalLoaded.game.slimes[0].hp, 22);
   assert.equal(tropicalLoaded.game.level.pickups.filter((p) => p.item === 'axolotl').length, 8);
   assert.equal(tropicalLoaded.game.state.mercurySword, true);
-  assert.equal(tropicalLoaded.game.tierDamage(), 40.25);
+  assert.equal(tropicalLoaded.game.tierDamage(), 35);
   game.enterLevel('stage7'); suppressNewEnemySpawns(game.level);
   const seam = game.level.secretTile;
   aimPickaxeAt(game, { tx: seam.tx, ty: seam.ty, adjacentX: seam.tx + 1, adjacentY: seam.ty });
@@ -3356,7 +3352,7 @@ test('Mercury Golems deactivate after ten tiles of actual movement, then reactiv
 
 test('new cave lanterns and ferns sit on open terrain rather than inside rocks', () => {
   const { game } = createGame();
-  for (const id of ['stage6', 'stage7', 'special']) {
+  for (const id of ['stage6', 'stage7', 'stage8', 'stage9', 'stage11', 'stage12', 'stage13', 'special']) {
     game.enterLevel(id);
     for (const decor of game.level.decor) {
       const tx = Math.floor(decor.x / 32), ty = Math.floor(decor.y / 32);
@@ -3368,7 +3364,7 @@ test('new cave lanterns and ferns sit on open terrain rather than inside rocks',
 // Elevator update, adaptive Golem armour and loot, and the redesigned oasis.
 test('elevator entrances sit beside every ordinary staircase and never in the secret cave', () => {
   const { game } = createGame();
-  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'special']) {
+  for (const id of ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'stage8', 'stage9', 'stage10', 'stage11', 'stage12', 'stage13', 'special']) {
     if (id !== 'home') game.enterLevel(id);
     const area = game.level;
     const stairs = id === 'special' ? [] : [area.stairsUp, area.stairsDown].filter(Boolean);
@@ -3395,7 +3391,7 @@ test('elevator stays offline until reactivated on Stage 7, then travels only to 
   assert.equal(game.useElevator(lift), true);
   assert.equal(game.state.mode, 'station');
   assert.match(elements['elevator-status'].textContent, /Stage 7/);
-  assert.equal(elements['elevator-floors'].children.length, 8);
+  assert.equal(elements['elevator-floors'].children.length, 14);
   assert.ok(elements['elevator-floors'].children.every((button) => button.disabled));
   assert.equal(game.activateElevator(), false);
   assert.equal(game.travelByElevator('stage7'), false);
@@ -3459,7 +3455,7 @@ test('elevator trips use normal terrain resets and preserve inventory, unlock an
   assert.equal(game.level.id, 'stage6', 'landing beside the lift must not retrigger stairs');
 
   const saved = JSON.parse(game.createSaveText());
-  assert.equal(saved.version, 3); assert.equal(saved.state.elevatorUnlocked, true);
+  assert.equal(saved.version, 9); assert.equal(saved.state.elevatorUnlocked, true);
   const restored = createGame({ autoStart: false });
   restored.game.loadSaveText(JSON.stringify(saved));
   assert.equal(restored.game.state.elevatorUnlocked, true);
@@ -3492,7 +3488,7 @@ test('v2 oasis saves keep current tiles and loot, then adopt the open layout saf
   assert.deepEqual(Array.from(game.level.tiles), legacy.areas.stage6.tiles, 'do not alter the occupied cave immediately');
   assert.deepEqual(Array.from(game.level.damage, ([key, value]) => [key, value]), legacy.areas.stage6.damage, 'partial mining survives load');
   assert.equal(game.player.x, legacy.player.x); assert.equal(game.player.y, legacy.player.y);
-  assert.equal(game.slimes[0].hp, 17); assert.equal(game.slimes[0].provoked, true);
+  assert.equal(game.slimes[0].hp, 34); assert.equal(game.slimes[0].provoked, true);
   assert.notDeepEqual(Array.from(game.level.originalTiles), legacy.areas.stage6.originalTiles);
   const newLayout = Array.from(game.level.originalTiles);
   const pickupsBefore = Array.from(game.level.pickups, (p) => `${p.item}:${p.count}`).sort();
@@ -3518,7 +3514,7 @@ test('v2 oasis saves keep current tiles and loot, then adopt the open layout saf
   assert.doesNotThrow(() => next.game.loadSaveText(next.game.createSaveText()));
 });
 
-test('newly spawned Golems take exactly one additional hit at every sword tier, with or without Mercury Edge', () => {
+test('newly spawned Golems have doubled adaptive health at every sword tier, with or without Mercury Edge', () => {
   const { game } = createGame();
   game.enterLevel('stage5'); suppressNewEnemySpawns(game.level);
   game.player.x = 10.5 * 32; game.player.y = 10.5 * 32;
@@ -3528,46 +3524,48 @@ test('newly spawned Golems take exactly one additional hit at every sword tier, 
     for (const mercuryGolem of [false, true]) {
       const base = mercuryGolem ? 80 : 100;
       const golem = game.makeGolem(game.player.x + 32, game.player.y, mercuryGolem);
-      assert.equal(golem.maxHp, base + damage);
+      assert.equal(golem.maxHp, 2 * (base + damage));
       assert.equal(golem.hp, golem.maxHp);
       assert.equal(golem.speed, mercuryGolem ? 60 : 42);
       game.golems.length = 0; game.golems.push(golem);
       aimSwordAt(game, golem);
       game.state.tools.sword = tier; // the shared aim helper defaults to T3
-      const oldHits = Math.ceil(base / damage);
+      const oldHits = Math.ceil(2 * (base + damage) / damage) - 1;
       for (let hit = 0; hit < oldHits; hit++) { game.state.cooldown = 0; game.swing(); }
       assert.equal(golem.dead, false, `tier ${tier}, Mercury Edge ${mercurySword}, Mercury Golem ${mercuryGolem}`);
       game.state.cooldown = 0; game.swing();
-      assert.equal(golem.dead, true, 'the next swing kills it');
+      assert.equal(golem.dead, true, 'the next swing kills it at its doubled health');
     }
   }
 });
 
-test('v3 persists Golem maximum HP and legacy live Golems keep their absolute health', () => {
+test('current saves persist Golem maximum HP and legacy Golems keep their relative health', () => {
   const current = createGame();
   current.game.enterLevel('special'); suppressNewEnemySpawns(current.game.level);
   current.game.state.tools.sword = 4; current.game.state.mercurySword = true;
   const enemy = current.game.makeGolem(current.game.player.x + 32, current.game.player.y, true);
   enemy.hp = 41; current.game.golems.push(enemy);
   const saved = JSON.parse(current.game.createSaveText());
-  assert.equal(saved.enemies.golems[0].maxHp, 120.25);
+  assert.equal(saved.enemies.golems[0].maxHp, 230);
   // Changing the current sword after spawning must not recalculate a live Golem.
   saved.state.tools.sword = 1; saved.state.mercurySword = false;
   const restored = createGame({ autoStart: false }); restored.game.loadSaveText(JSON.stringify(saved));
   assert.equal(restored.game.golems[0].hp, 41);
-  assert.equal(restored.game.golems[0].maxHp, 120.25);
+  assert.equal(restored.game.golems[0].maxHp, 230);
   assert.equal(restored.game.golems[0].speed, 60);
 
   const legacy = structuredClone(saved);
   legacy.version = 2; delete legacy.state.elevatorUnlocked; delete legacy.enemies.golems[0].maxHp;
+  // A genuine v2 Home has the original 19×13 layout, not the expanded v4 map.
+  legacy.areas.home = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-elevator-v2.json'), 'utf8')).areas.home;
   const migrated = createGame({ autoStart: false }); migrated.game.loadSaveText(JSON.stringify(legacy));
-  assert.equal(migrated.game.golems[0].hp, 41, 'migration never heals an enemy');
-  assert.equal(migrated.game.golems[0].maxHp, 90);
+  assert.equal(migrated.game.golems[0].hp, 82, 'migration doubles the remaining health');
+  assert.equal(migrated.game.golems[0].maxHp, 180);
   assert.equal(migrated.game.golems[0].speed, 60);
   const genuineV1 = createGame({ autoStart: false });
   genuineV1.game.loadSaveText(fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-stage6-v1.json'), 'utf8'));
-  assert.equal(genuineV1.game.golems[0].hp, 71);
-  assert.equal(genuineV1.game.golems[0].maxHp, 115, 'saved T2 sword adds 15 armour without healing');
+  assert.equal(genuineV1.game.golems[0].hp, 142);
+  assert.equal(genuineV1.game.golems[0].maxHp, 230, 'base and saved T2 armour are doubled');
 });
 
 test('Golem loot is guaranteed, Titanium has a strict 1% threshold, and Mercury ranges from 2 to 4', () => {
@@ -3714,7 +3712,7 @@ test('malformed v3 lift and armour data fails atomically', () => {
 
 test('an activated elevator visits every previously visited normal floor but never the special cave', () => {
   const { game, elements } = createGame();
-  const ids = ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7'];
+  const ids = ['home', 'stage1', 'stage2', 'stage3', 'stage4', 'stage5', 'stage6', 'stage7', 'stage8', 'stage9', 'stage10', 'stage11', 'stage12', 'stage13'];
   for (const id of [...ids.slice(1), 'special', 'stage7']) game.enterLevel(id);
   let lift = game.level.elevators[0]; game.player.x = lift.x; game.player.y = lift.y;
   assert.equal(game.useElevator(lift), true); assert.equal(game.activateElevator(), true);
@@ -3751,7 +3749,7 @@ test('randomized cave generation always leaves both staircase lifts usable', () 
   let seed = 431723;
   math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   for (let run = 0; run < 12; run++) for (const build of [game.buildStage1, game.buildStage2,
-    game.buildStage3, game.buildStage4, game.buildStage5, game.buildStage6, game.buildStage7]) {
+    game.buildStage3, game.buildStage4, game.buildStage5, game.buildStage6, game.buildStage7, game.buildStage8, game.buildStage9, game.buildStage10, game.buildStage11, game.buildStage12, game.buildStage13]) {
     const area = build(), stairs = [area.stairsUp, area.stairsDown].filter(Boolean);
     assert.equal(area.elevators.length, stairs.length, `${area.id}, run ${run}`);
     const reachable = reachableWalkableTiles(game, area);
@@ -3790,4 +3788,2387 @@ test('a v2 ground pickup under a new clump is relocated and remains collectible'
   loaded.game.player.x = drop.x; loaded.game.player.y = drop.y; loaded.step(30);
   assert.equal(loaded.game.countItem('quartz'), 5);
   assert.equal(loaded.game.pickups.includes(drop), false);
+});
+
+// Haunted Descent, gem polishing and authentic pre-expansion migrations.
+test('Stage 8 is a winding, grave-lined route with its own stairs and requested title', () => {
+  const { game, elements, step } = createGame();
+  game.enterLevel('stage7'); suppressNewEnemySpawns(game.level);
+  const spiral = game.level, exit = spiral.stairsDown, seam = spiral.secretTile;
+  assert.deepEqual({ tx: exit.tx, ty: exit.ty }, { tx: 40, ty: 36 });
+  assert.ok(reachableWalkableTiles(game, spiral).has(`${exit.tx},${exit.ty}`));
+  assert.equal(spiral.downTarget, 'stage8');
+  assert.equal(game.getTile(seam.tx, seam.ty), game.TITANIUM);
+  moveToStairs(game, step, exit);
+  assert.equal(game.level.id, 'stage8');
+  assert.equal(elements['stage-name'].textContent, 'Haunted Descent');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 08');
+  assert.equal(elements['area-subtitle'].textContent, 'ooOOOOooo!! spoooOOOOoooky ghosts!');
+  assert.equal(game.level.upTarget, 'stage7');
+  const area = game.level, reachable = reachableWalkableTiles(game, area);
+  assert.ok(area.graves.length >= 12);
+  assert.ok(reachable.has('61,42'), 'the winding path reaches its far end');
+  assert.ok(reachable.size < area.w * area.h / 2, 'walls separate the winding turns');
+  for (const grave of area.graves) {
+    assert.equal(game.isSolid(grave.tx, grave.ty), false);
+    assert.ok(reachable.has(`${grave.tx},${grave.ty}`), 'gravestones sit on reachable floor');
+  }
+  moveToStairs(game, step, area.stairsUp);
+  assert.equal(game.level.id, 'stage7');
+  assert.equal(Math.floor(game.player.x / 32), exit.tx, 'returning from Stage 8 uses the ordinary stair');
+  assert.equal(game.getTile(seam.tx, seam.ty), game.TITANIUM);
+});
+
+test('the ordinary Stage 8 stair and the Titanium secret stair route independently in both directions', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage7'); suppressNewEnemySpawns(game.level);
+  const area = game.level, seam = area.secretTile;
+  game.setTile(seam.tx, seam.ty, game.STAIRS_DOWN);
+  moveToStairs(game, step, seam);
+  assert.equal(game.level.id, 'special');
+  moveToStairs(game, step, game.level.stairsUp);
+  assert.equal(game.level, area);
+  assert.equal(Math.floor(game.player.x / 32), seam.tx, 'secret return lands beside the secret seam, not the new exit');
+  assert.equal(game.getTile(seam.tx, seam.ty), game.TITANIUM, 'the seam reseals on re-entry');
+  moveToStairs(game, step, area.stairsDown);
+  assert.equal(game.level.id, 'stage8');
+  moveToStairs(game, step, game.level.stairsUp);
+  assert.equal(Math.floor(game.player.x / 32), area.stairsDown.tx);
+});
+
+test('Ruby can be mined with the mouse, collected, stored and reset on cave re-entry', () => {
+  const { game, elements, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const ore = findReachableOre(game, game.RUBY);
+  aimPickaxeAt(game, ore);
+  game.state.tools.pickaxe = 4;
+  const hits = game.pickaxeHits(game.TILES[game.RUBY]);
+  for (let i = 0; i < hits; i++) {
+    game.state.cooldown = 0;
+    elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: game.pointer.x, clientY: game.pointer.y });
+  }
+  assert.equal(game.getTile(ore.tx, ore.ty), game.FLOOR);
+  assert.ok(game.pickups.some((p) => p.item === 'ruby'));
+  step(28);
+  assert.equal(game.countItem('ruby'), 1);
+  assert.equal(game.depositToStorage('ruby', 1), 1);
+  assert.equal(game.storage.ruby, 1);
+  game.enterLevel('stage7'); game.enterLevel('stage8');
+  assert.equal(game.getTile(ore.tx, ore.ty), game.RUBY);
+  assert.equal(game.storage.ruby, 1);
+});
+
+test('Stage 8 naturally spawns only Ghosts and Grave Diggers near gravestones', () => {
+  const { game, step } = createGame();
+  for (const area of ['home', 'stage1', 'stage7', 'special']) {
+    game.enterLevel(area);
+    assert.equal(game.spawnGhostAwayFromPlayer(), null);
+    assert.equal(game.spawnGraveDiggerAwayFromPlayer(), null);
+  }
+  game.enterLevel('stage8');
+  game.level.ghostTimer = game.level.graveDiggerTimer = 0;
+  game.state.invuln = 999;
+  step(1);
+  assert.equal(game.ghosts.length, 1);
+  assert.equal(game.graveDiggers.length, 1);
+  for (const creature of [...game.ghosts, ...game.graveDiggers]) {
+    assert.ok(game.level.graves.some((g) => Math.hypot(g.x - creature.x, g.y - creature.y) < 2 * 32));
+    assert.ok(Math.hypot(creature.x - game.player.x, creature.y - game.player.y) >= 6 * 32);
+  }
+  assert.equal(game.slimes.length + game.moles.length + game.spiders.length + game.golems.length + game.prospectors.length, 0);
+  game.enterLevel('stage7');
+  assert.equal(game.ghosts.length + game.graveDiggers.length, 0, 'enemies do not follow between areas');
+});
+
+test('Ghosts detect at four tiles and dash exactly three tiles through walls at double chase speed', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  for (let y = 8; y <= 12; y++) for (let x = 8; x <= 20; x++) game.setTile(x, y, game.FLOOR);
+  game.setTile(12, 10, game.WALL);
+  const ghost = game.makeGhost(10.5 * 32, 10.5 * 32);
+  ghost.dashCooldown = 7; game.ghosts.push(ghost);
+  game.player.x = ghost.x + 4.1 * 32; game.player.y = ghost.y;
+  game.state.invuln = 999;
+  step(1);
+  assert.equal(ghost.chasing, false);
+  game.player.x = ghost.x + 3 * 32; game.player.y = ghost.y; ghost.dashCooldown = 0;
+  const startX = ghost.x, startY = ghost.y;
+  step(1);
+  assert.equal(ghost.chasing, true);
+  assert.ok(Math.abs(ghost.x - startX - game.BALANCE.ghostChaseSpeed * 2 * 0.05) < 1e-8);
+  assert.equal(ghost.dashCooldown, 7);
+  while (ghost.dashRemaining > 0) step(1);
+  assert.ok(Math.abs(ghost.x - startX - 3 * 32) < 1e-7, 'dash distance is exactly three tiles');
+  assert.ok(Math.abs(ghost.y - startY) < 1e-7, 'dash follows a straight line');
+  assert.equal(game.getTile(12, 10), game.WALL, 'the wall is neither blocking nor destroyed');
+  assert.ok(ghost.dashCooldown > 6.5);
+  for (let i = 0; i < 60; i++) {
+    ghost.x = 10.5 * 32; ghost.y = 10.5 * 32;
+    game.player.x = ghost.x + 3 * 32; game.player.y = ghost.y;
+    step(1);
+    assert.equal(ghost.dashRemaining, 0, 'no early dash during recharge');
+  }
+  assert.ok(ghost.dashCooldown > 3 && ghost.dashCooldown < 4);
+  let newDash = false;
+  for (let i = 0; i < 80 && !newDash; i++) {
+    ghost.x = 10.5 * 32; ghost.y = 10.5 * 32;
+    game.player.x = ghost.x + 3 * 32; game.player.y = ghost.y;
+    step(1); newDash = ghost.dashRemaining > 0;
+  }
+  assert.ok(newDash, 'the dash becomes available again after seven seconds');
+});
+
+test('Ghosts prefer graves while wandering and ignore Mercury poison', () => {
+  const { game, step, math } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const grave = game.level.graves[0];
+  const ghost = game.makeGhost(grave.x + 5 * 32, grave.y);
+  ghost.wanderTimer = 0; ghost.dashCooldown = 7;
+  game.player.x = 6.5 * 32; game.player.y = 24.5 * 32;
+  game.ghosts.push(ghost); math.random = () => 0.5;
+  const nearest = () => Math.min(...game.level.graves.map((g) => Math.hypot(g.x - ghost.x, g.y - ghost.y)));
+  const before = nearest(); step(1);
+  assert.ok(nearest() < before, 'idle ghosts steer back toward a nearby grave');
+  game.player.x = ghost.x - 26; game.player.y = ghost.y;
+  aimSwordAt(game, ghost); game.state.tools.sword = 4; game.state.mercurySword = true;
+  for (let hit = 1; hit <= 5; hit++) {
+    game.state.cooldown = 0; game.swing();
+    if (hit < 5) { assert.equal(ghost.dead, false); assert.equal(ghost.hp, 175 - hit * 35); }
+  }
+  assert.equal(ghost.dead, true);
+  assert.equal(game.state.ghostsSlain, 1);
+});
+
+test('Grave Diggers flee on detection, become hostile when hit, and take six Titanium hits', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  for (let y = 8; y <= 12; y++) for (let x = 8; x <= 20; x++) game.setTile(x, y, game.FLOOR);
+  const digger = game.makeGraveDigger(12.5 * 32, 10.5 * 32, 0);
+  digger.digCooldown = 15; game.graveDiggers.push(digger);
+  game.player.x = digger.x + 3 * 32; game.player.y = digger.y;
+  const x = digger.x; step(1);
+  assert.equal(digger.fleeing, true); assert.equal(digger.provoked, false);
+  assert.ok(digger.x < x, 'an unprovoked digger runs away');
+  game.player.x = digger.x + 25; game.player.y = digger.y;
+  aimSwordAt(game, digger); game.state.tools.sword = 4; game.state.mercurySword = false;
+  for (let hit = 1; hit <= 6; hit++) {
+    game.state.cooldown = 0; game.swing();
+    assert.equal(digger.provoked, true);
+    if (hit < 6) { assert.equal(digger.dead, false); assert.equal(digger.hp, 210 - hit * 35); }
+  }
+  assert.equal(digger.dead, true);
+  assert.equal(game.state.graveDiggersSlain, 1);
+});
+
+test('a Grave Digger shovel spin visibly winds up and hurts every adjacent tile except itself', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  for (let y = 8; y <= 13; y++) for (let x = 17; x <= 24; x++) game.setTile(x, y, game.FLOOR);
+  const digger = game.makeGraveDigger(20.5 * 32, 10.5 * 32, 0);
+  const bystander = game.makeGraveDigger(20.5 * 32, 11.5 * 32, 0);
+  const ghost = game.makeGhost(19.5 * 32, 10.5 * 32);
+  const outside = game.makeGhost(22.5 * 32, 10.5 * 32);
+  bystander.speed = 0; bystander.digCooldown = 15;
+  ghost.speed = outside.speed = 0; ghost.dashCooldown = outside.dashCooldown = 7;
+  game.graveDiggers.push(digger);
+  game.player.x = 21.5 * 32; game.player.y = digger.y;
+  aimSwordAt(game, digger); game.state.tools.sword = 4; game.state.cooldown = 0; game.swing();
+  assert.equal(digger.hp, 175); assert.equal(digger.provoked, true);
+  game.graveDiggers.push(bystander); game.ghosts.push(ghost, outside);
+  step(1);
+  assert.ok(digger.spinWindup > 0, 'the attack has a warning period');
+  assert.equal(game.state.hp, 100); assert.equal(ghost.hp, 175);
+  step(14);
+  assert.equal(game.state.hp, 40);
+  assert.equal(ghost.hp, 115, 'a ghost in the adjacent tile is hit');
+  assert.equal(bystander.hp, 150, 'another Grave Digger can be hit');
+  assert.equal(outside.hp, 175, 'a creature two tiles away is outside the spin');
+  assert.equal(digger.hp, 175, 'the attacker never damages itself');
+  assert.equal(bystander.provoked, false, 'a shovel hit is not a player attack');
+  assert.ok(digger.spinFlash > 0);
+  game.player.x = digger.x + 26; game.player.y = digger.y; game.state.invuln = 0;
+  step(1);
+  assert.equal(game.state.hp, 24, 'the ordinary shovel attack is weaker than the spin');
+});
+
+test('an actual grave dig summons exactly three Ghosts and respects the overall population cap', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const index = game.level.graves.length - 1, grave = game.level.graves[index];
+  const digger = game.makeGraveDigger(grave.x, grave.y, index);
+  digger.speed = 0; digger.digCooldown = 0; game.graveDiggers.push(digger);
+  for (let i = 0; i < 15; i++) {
+    const g = game.makeGhost(grave.x + 2 * 32, grave.y + i);
+    g.speed = 0; g.dashCooldown = 7; game.ghosts.push(g);
+  }
+  game.player.x = game.level.spawn.x; game.player.y = game.level.spawn.y;
+  step(1);
+  assert.ok(digger.digWindup > 0); assert.equal(game.ghosts.length, 15);
+  step(24);
+  assert.equal(game.ghosts.length, 18, 'a completed dig always produces three');
+  assert.equal(digger.digWindup, 0); assert.equal(digger.digCooldown, 15);
+  digger.digCooldown = 0;
+  step(30);
+  assert.equal(digger.digWindup, 0, 'there is no partial dig when three ghosts cannot fit');
+  assert.equal(game.ghosts.length, 18);
+});
+
+test('all nine raw gems polish and sell through the actual station buttons', () => {
+  const { game, elements } = createGame();
+  const kinds = ['cobalt', 'quartz', 'iridium', 'ruby', 'calcite', 'sapphire', 'blackAmethyst', 'amethyst', 'diamond'];
+  const polished = ['polishedCobalt', 'polishedQuartz', 'polishedIridium', 'polishedRuby', 'polishedCalcite', 'polishedSapphire', 'polishedBlackAmethyst', 'polishedAmethyst', 'polishedDiamond'];
+  assert.equal(game.level.w, 27); assert.equal(game.level.h, 17);
+  const station = game.level.stations.find((s) => s.kind === 'polisher');
+  assert.ok(station);
+  kinds.forEach((kind) => game.addItem(kind, 1));
+  elements.game.dispatch('pointerdown', { pointerType: 'touch',
+    clientX: station.x - game.camera.x + 640, clientY: station.y - game.camera.y + 400 });
+  assert.equal(game.state.openStation, 'polisher');
+  assert.equal(elements['view-polisher'].classList.contains('is-hidden'), false);
+  assert.equal(elements['polisher-gems'].children.length, 9);
+  for (let i = 0; i < kinds.length; i++) {
+    const button = elements['polisher-gems'].children[i].children[2];
+    assert.equal(button.disabled, false); button.click();
+    assert.equal(game.countItem(kinds[i]), 0); assert.equal(game.countItem(polished[i]), 1);
+    assert.equal(button.disabled, true);
+  }
+  game.closeStation(); game.openStation('trader');
+  assert.equal(elements['trader-gems'].children.length, 9);
+  for (let i = 0; i < kinds.length; i++) {
+    const button = elements['trader-gems'].children[i].children[2];
+    assert.equal(button.disabled, false); button.click();
+    assert.equal(game.countItem(polished[i]), 0);
+  }
+  assert.equal(game.countItem('goldCoin'), 10);
+  assert.equal(game.countItem('aluminumCoin'), 1);
+  assert.equal(game.traderUnlocked.gold, false, 'selling gems does not bypass the coin-press unlock');
+});
+
+test('gem polishing and sales are atomic in full bags and survive storage and death', () => {
+  const first = createGame(), game = first.game;
+  game.addItem('stone', 891); game.addItem('ruby', 2); game.openStation('polisher');
+  assert.equal(game.polishGem('ruby'), false);
+  assert.equal(game.countItem('ruby'), 2); assert.equal(game.countItem('polishedRuby'), 0);
+  game.removeItem('ruby', 1);
+  assert.equal(game.polishGem('ruby'), true, 'spending the last raw gem frees a slot');
+  assert.equal(game.countItem('polishedRuby'), 1);
+  game.closeStation(); game.openStation('trader');
+  assert.equal(game.sellPolishedGem('ruby'), true, 'selling the last polished gem frees a slot');
+  assert.equal(game.countItem('goldCoin'), 1);
+  const second = createGame(), g = second.game;
+  g.addItem('stone', 891); g.addItem('polishedQuartz', 2); g.openStation('trader');
+  assert.equal(g.sellPolishedGem('quartz'), false);
+  assert.equal(g.countItem('polishedQuartz'), 2); assert.equal(g.countItem('goldCoin'), 0);
+  g.removeItem('polishedQuartz', 1);
+  assert.equal(g.sellPolishedGem('quartz'), true);
+  g.closeStation();
+  g.storage.polishedRuby = 7; g.removeItem('stone', 99); g.addItem('polishedRuby', 4);
+  g.respawnAtBase();
+  assert.equal(g.storage.polishedRuby, 7);
+  assert.equal(g.countItem('polishedRuby'), 2, 'the usual half-bag death penalty applies');
+  assert.equal(g.polishGem('coal'), false); assert.equal(g.sellPolishedGem('coal'), false);
+});
+
+test('genuine version-3 Stage 7 saves gain the new exit without losing the revealed seam or progress', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-haunted-v3.json'), 'utf8');
+  const old = JSON.parse(text), slot = createMemoryStorage(); slot.setItem('cuddly-train.mining-simulator.save.v1', text);
+  const loaded = createGame({ storage: slot, autoStart: false });
+  assert.equal(loaded.elements['continue-save'].disabled, false);
+  loaded.elements['continue-save'].click();
+  const { game, elements, step } = loaded;
+  assert.equal(game.level.id, 'stage7'); assert.equal(game.state.mode, 'paused');
+  assert.equal(game.state.elevatorUnlocked, true); assert.equal(game.state.mercurySword, true);
+  assert.equal(game.state.tools.sword, 4);
+  assert.equal(game.golems[0].hp, old.enemies.golems[0].hp * 2);
+  assert.equal(game.getTile(37, 36), game.STAIRS_DOWN);
+  assert.equal(game.getTile(40, 36), game.STAIRS_DOWN);
+  const now = JSON.parse(game.createSaveText());
+  assert.equal(now.version, 9);
+  for (const field of ['tiles', 'originalTiles']) {
+    const expected = old.areas.stage7[field].slice(); expected[36 * 72 + 40] = game.STAIRS_DOWN;
+    assert.deepEqual(now.areas.stage7[field], expected, `only the new stair changes ${field}`);
+  }
+  assert.deepEqual(now.areas.stage7.damage, old.areas.stage7.damage);
+  assert.deepEqual(now.inventory, old.inventory);
+  assert.equal(slot.getItem(game.saveKey), text, 'migration never overwrites the original browser save');
+  elements.resume.click(); moveToStairs(game, step, game.level.secretTile);
+  assert.equal(game.level.id, 'special');
+  moveToStairs(game, step, game.level.stairsUp);
+  assert.equal(Math.floor(game.player.x / 32), 37);
+  moveToStairs(game, step, game.level.stairsDown);
+  assert.equal(game.level.id, 'stage8');
+});
+
+test('genuine old Home saves expand without moving players or losing ground pickups', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-haunted-home-v3.json'), 'utf8');
+  const old = JSON.parse(text), loaded = createGame({ autoStart: false });
+  loaded.game.loadSaveText(text);
+  const { game, elements, step } = loaded;
+  assert.equal(game.level.id, 'home'); assert.equal(game.level.w, 27); assert.equal(game.level.h, 17);
+  assert.equal(game.player.x, old.player.x); assert.equal(game.player.y, old.player.y);
+  assert.equal(game.isSolid(16, 10), false);
+  assert.equal(game.isSolid(17, 10), false, 'the old east wall opens into the expansion');
+  assert.equal(game.isSolid(16, 11), false, 'the old south wall opens into the expansion');
+  assert.equal(game.getTile(9, 9), game.STAIRS_DOWN);
+  assert.deepEqual(JSON.parse(JSON.stringify(game.pickups)), old.areas.home.pickups);
+  const reachable = reachableWalkableTiles(game, game.level);
+  for (const station of game.level.stations) {
+    assert.ok(reachable.has(`${Math.floor(station.x / 32)},${Math.floor(station.y / 32)}`), `${station.kind} remains reachable`);
+  }
+  assert.equal(game.countItem('cobalt'), old.inventory.find((c) => c && c.item === 'cobalt').count);
+  const drop = game.pickups.find((p) => p.item === 'iron');
+  assert.ok(drop); elements.resume.click();
+  game.player.x = drop.x; game.player.y = drop.y; step(30);
+  assert.ok(!game.pickups.includes(drop), 'the original ground pickup remains collectible');
+});
+
+test('current saves round-trip active haunted enemy attacks, gems, timers and elevator unlock', () => {
+  const first = createGame(), { game } = first;
+  game.enterLevel('stage7');
+  let lift = game.level.elevators[0]; game.player.x = lift.x; game.player.y = lift.y;
+  assert.equal(game.useElevator(lift), true); assert.equal(game.activateElevator(), true); game.closeStation();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const ghost = game.makeGhost(12.5 * 32, 10.5 * 32);
+  ghost.hp = 105; ghost.dashRemaining = 48; ghost.dashX = 1; ghost.dashY = 0; ghost.dashCooldown = 6.5;
+  const grave = game.level.graves[1], digger = game.makeGraveDigger(grave.x, grave.y, 1);
+  digger.hp = 140; digger.provoked = true; digger.spinWindup = 0.35; digger.spinCooldown = 7.65;
+  game.ghosts.push(ghost); game.graveDiggers.push(digger);
+  game.addItem('ruby', 4); game.addItem('polishedRuby', 2); game.storage.polishedQuartz = 8;
+  game.state.ghostsSlain = 3; game.state.graveDiggersSlain = 2;
+  const expected = comparableSave(game), saved = JSON.stringify({ ...expected, savedAt: new Date().toISOString() });
+  const loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(saved);
+  assert.deepEqual(comparableSave(loaded.game), expected);
+  assert.equal(loaded.game.ghosts[0].dashRemaining, 48);
+  assert.equal(loaded.game.graveDiggers[0].spinWindup, 0.35);
+  assert.equal(loaded.game.graveDiggers[0].provoked, true);
+  assert.equal(loaded.game.countItem('ruby'), 4); assert.equal(loaded.game.countItem('polishedRuby'), 2);
+  assert.equal(loaded.game.storage.polishedQuartz, 8);
+  assert.equal(loaded.game.state.elevatorUnlocked, true);
+  loaded.elements.resume.click();
+  lift = loaded.game.level.elevators[0]; loaded.game.player.x = lift.x; loaded.game.player.y = lift.y;
+  assert.equal(loaded.game.useElevator(lift), true);
+  assert.equal(loaded.game.travelByElevator('stage7'), true);
+  lift = loaded.game.level.elevators[0]; loaded.game.player.x = lift.x; loaded.game.player.y = lift.y;
+  assert.equal(loaded.game.useElevator(lift), true);
+  assert.equal(loaded.game.travelByElevator('stage8'), true, 'visited Stage 8 remains a lift destination');
+});
+
+test('malformed haunted saves fail atomically instead of replacing a good run', () => {
+  const { game } = createGame(); game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const grave = game.level.graves[0];
+  game.ghosts.push(game.makeGhost(grave.x, grave.y)); game.graveDiggers.push(game.makeGraveDigger(grave.x, grave.y, 0));
+  game.addItem('ruby', 3);
+  const before = comparableSave(game), cases = [];
+  const excessiveDash = structuredClone(before); excessiveDash.enemies.ghosts[0].dashRemaining = 97; cases.push(excessiveDash);
+  const invalidVector = structuredClone(before); invalidVector.enemies.ghosts[0].dashRemaining = 10; cases.push(invalidVector);
+  const invalidHP = structuredClone(before); invalidHP.enemies.ghosts[0].hp = 176; cases.push(invalidHP);
+  const invalidGrave = structuredClone(before); invalidGrave.enemies.graveDiggers[0].graveIndex = 999; cases.push(invalidGrave);
+  const invalidFlag = structuredClone(before); invalidFlag.enemies.graveDiggers[0].provoked = 'yes'; cases.push(invalidFlag);
+  const invalidSpin = structuredClone(before); invalidSpin.enemies.graveDiggers[0].spinWindup = 2; cases.push(invalidSpin);
+  for (const invalid of cases) {
+    invalid.savedAt = new Date().toISOString();
+    assert.throws(() => game.loadSaveText(JSON.stringify(invalid)));
+    assert.deepEqual(comparableSave(game), before);
+  }
+});
+
+test('simultaneous grave digs reserve three Ghosts each without exceeding the cap', () => {
+  const { game, step } = createGame();
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const indices = [game.level.graves.length - 1, game.level.graves.length - 2];
+  for (const index of indices) {
+    const grave = game.level.graves[index], digger = game.makeGraveDigger(grave.x, grave.y, index);
+    digger.speed = 0; digger.digCooldown = 0; game.graveDiggers.push(digger);
+  }
+  const grave = game.level.graves[indices[0]];
+  for (let i = 0; i < 6; i++) {
+    const ghost = game.makeGhost(grave.x + 40, grave.y + i);
+    ghost.speed = 0; ghost.dashCooldown = 7; game.ghosts.push(ghost);
+  }
+  step(1);
+  assert.ok(game.graveDiggers.every((d) => d.digWindup > 0));
+  step(24);
+  assert.equal(game.ghosts.length, 12, 'both complete digs spawn exactly three apiece');
+  assert.ok(game.graveDiggers.every((d) => d.digCooldown === 15));
+});
+
+test('a saved Ghost dash and grave dig finish normally after loading', () => {
+  const source = createGame(), { game } = source;
+  game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const ghost = game.makeGhost(16.5 * 32, 6.5 * 32);
+  ghost.dashX = 1; ghost.dashY = 0; ghost.dashRemaining = 48; ghost.dashCooldown = 6;
+  game.ghosts.push(ghost);
+  const index = game.level.graves.length - 1, grave = game.level.graves[index];
+  const digger = game.makeGraveDigger(grave.x, grave.y, index);
+  digger.digCooldown = 0; digger.digWindup = 0.6; game.graveDiggers.push(digger);
+  const text = game.createSaveText(), restored = createGame({ autoStart: false });
+  restored.game.loadSaveText(text); restored.elements.resume.click();
+  const ghost2 = restored.game.ghosts[0], digger2 = restored.game.graveDiggers[0], startX = ghost2.x;
+  let frames = 0;
+  while (ghost2.dashRemaining > 0 && frames++ < 20) restored.step(1);
+  assert.equal(ghost2.dashRemaining, 0);
+  assert.ok(Math.abs(ghost2.x - startX - 48) < 1e-7, 'the saved remaining dash distance is retained');
+  while (digger2.digWindup > 0 && frames++ < 40) restored.step(1);
+  assert.equal(digger2.digWindup, 0);
+  assert.equal(restored.game.ghosts.length, 4, 'the saved dig completes with all three Ghosts');
+});
+
+// Pitch-Black Depths, ranged infected skeletons, natural recovery and v5 saves.
+test('Stage 8 stairs lead to Pitch-Black Depths and back, with the requested banner and visited lift', () => {
+  const { game, elements, step } = createGame();
+  game.enterLevel('stage7');
+  let lift = game.level.elevators[0]; game.player.x = lift.x; game.player.y = lift.y;
+  assert.equal(game.useElevator(lift), true); assert.equal(game.activateElevator(), true);
+  assert.equal(elements['elevator-floors'].children[9].disabled, true, 'Stage 9 is locked until visited');
+  game.closeStation(); game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const haunted = game.level, exit = haunted.stairsDown;
+  assert.deepEqual({ tx: exit.tx, ty: exit.ty }, { tx: 61, ty: 42 });
+  assert.equal(haunted.downTarget, 'stage9');
+  assert.ok(reachableWalkableTiles(game, haunted).has('61,42'));
+  moveToStairs(game, step, exit);
+  assert.equal(game.level.id, 'stage9');
+  assert.equal(game.level.upTarget, 'stage8');
+  assert.equal(elements['stage-name'].textContent, 'Pitch-Black Depths');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 09');
+  assert.equal(elements['area-subtitle'].textContent, 'Its eerie in the darkness of this cave');
+  assert.equal(game.level.elevators.length, 2);
+  const depth = game.level;
+  suppressNewEnemySpawns(depth);
+  moveToStairs(game, step, depth.stairsUp);
+  assert.equal(game.level, haunted);
+  assert.equal(Math.floor(game.player.x / 32), exit.tx);
+  assert.equal(Math.floor(game.player.y / 32), exit.ty - 1);
+  lift = game.level.elevators[0]; game.player.x = lift.x; game.player.y = lift.y;
+  assert.equal(game.useElevator(lift), true);
+  assert.equal(elements['elevator-floors'].children[9].disabled, false, 'visited Stage 9 is a destination');
+  elements['elevator-floors'].children[9].click();
+  assert.equal(game.level, depth);
+  assert.equal(game.state.mode, 'playing');
+});
+
+test('randomized Depths have reachable Ruby, Sapphire and Darkstone, no Stone, and walkable graves', () => {
+  const { game, math } = createGame();
+  let seed = 734129;
+  math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let run = 0; run < 16; run++) {
+    game.level.id === 'stage9' && game.enterLevel('home');
+    game.levels.stage9 = null; game.enterLevel('stage9');
+    const area = game.level, reachable = reachableWalkableTiles(game, area);
+    assert.equal(area.tiles.includes(game.STONE), false);
+    for (const tile of [game.DARKSTONE, game.RUBY, game.SAPPHIRE]) {
+      assert.ok(area.tiles.includes(tile));
+      assert.doesNotThrow(() => findReachableOre(game, tile), `reachable ore ${tile}, run ${run}`);
+    }
+    assert.ok(area.graves.length >= 15);
+    assert.ok(reachable.has('62,44'), 'the far end of the cave remains reachable');
+    for (const grave of area.graves) assert.ok(reachable.has(`${grave.tx},${grave.ty}`));
+    assert.ok(reachable.has(`${area.elevators[0].tx},${area.elevators[0].ty}`));
+  }
+});
+
+test('Sapphire and Darkstone mine with mouse and Space, collect, store and reset normally', () => {
+  for (const [tileName, item] of [['SAPPHIRE', 'sapphire'], ['DARKSTONE', 'darkstone']]) {
+    const { game, elements, listeners, step } = createGame();
+    game.enterLevel('stage9'); suppressNewEnemySpawns(game.level);
+    const area = game.level, ore = findReachableOre(game, game[tileName]);
+    aimPickaxeAt(game, ore); game.state.tools.pickaxe = 4;
+    const hits = game.pickaxeHits(game.TILES[game[tileName]]);
+    for (let i = 0; i < hits; i++) {
+      game.state.cooldown = 0;
+      if (i % 2 === 0) elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: game.pointer.x, clientY: game.pointer.y });
+      else listeners.keydown[0]({ code: 'Space', target: { tagName: 'BODY' }, preventDefault: noop });
+    }
+    assert.equal(game.getTile(ore.tx, ore.ty), game.FLOOR);
+    const pickup = game.pickups.find((p) => p.item === item);
+    assert.ok(pickup, `${item} should drop`);
+    assert.ok(item === 'sapphire' ? pickup.count === 1 : pickup.count >= 1 && pickup.count <= 2);
+    step(30);
+    const collected = game.countItem(item); assert.ok(collected >= 1);
+    assert.equal(game.depositToStorage(item, collected), collected);
+    game.enterLevel('stage8'); game.enterLevel('stage9');
+    assert.equal(game.level, area); assert.equal(game.getTile(ore.tx, ore.ty), game[tileName]);
+    assert.equal(game.storage[item], collected);
+  }
+});
+
+test('Sapphire polishing and sale remain atomic with full bags and obey storage/death rules', () => {
+  const { game } = createGame();
+  game.addItem('stone', 891); game.addItem('sapphire', 2);
+  assert.equal(game.polishGem('sapphire'), false, 'a full bag cannot consume a gem without room for its result');
+  assert.equal(game.countItem('sapphire'), 2); assert.equal(game.countItem('polishedSapphire'), 0);
+  game.removeItem('sapphire', 1);
+  assert.equal(game.polishGem('sapphire'), true, 'the emptied input slot can hold the result');
+  assert.equal(game.countItem('polishedSapphire'), 1);
+  assert.equal(game.sellPolishedGem('sapphire'), true);
+  assert.equal(game.countItem('goldCoin'), 1);
+  game.removeItem('stone', 198); game.addItem('sapphire', 6); game.addItem('darkstone', 8);
+  game.storage.polishedSapphire = 4; game.respawnAtBase();
+  assert.equal(game.countItem('sapphire'), 3); assert.equal(game.countItem('darkstone'), 4);
+  assert.equal(game.storage.polishedSapphire, 4);
+});
+
+test('Stage 9 naturally spawns only Ghosts, Grave Diggers and disguised Infected Skeletons', () => {
+  const { game, step } = createGame();
+  for (const id of ['home', 'stage7', 'stage8', 'special']) {
+    game.enterLevel(id); assert.equal(game.spawnInfectedSkeletonAwayFromPlayer(), null);
+  }
+  game.enterLevel('stage9');
+  game.level.ghostTimer = game.level.graveDiggerTimer = game.level.infectedSkeletonTimer = 0;
+  step(1);
+  assert.equal(game.ghosts.length, 1); assert.equal(game.graveDiggers.length, 1);
+  assert.equal(game.infectedSkeletons.length, 1);
+  assert.equal(game.slimes.length + game.moles.length + game.spiders.length + game.golems.length + game.prospectors.length, 0);
+  const skeleton = game.infectedSkeletons[0], grave = game.level.graves[skeleton.graveIndex];
+  assert.equal(skeleton.hidden, true); assert.equal(skeleton.x, grave.x); assert.equal(skeleton.y, grave.y);
+  assert.ok(Math.hypot(skeleton.x - game.player.x, skeleton.y - game.player.y) >= 7 * 32);
+  assert.equal(game.boneProjectiles.length, 0);
+  game.enterLevel('stage8');
+  assert.equal(game.infectedSkeletons.length, 0, 'enemies do not follow to another area');
+});
+
+function openDepthArena(game) {
+  game.enterLevel('stage9'); suppressNewEnemySpawns(game.level);
+  for (let y = 4; y <= 18; y++) for (let x = 4; x <= 35; x++) {
+    if (![game.STAIRS_UP, game.STAIRS_DOWN].includes(game.getTile(x, y))) game.setTile(x, y, game.FLOOR);
+  }
+  game.state.transitionLock = 999;
+}
+
+test('an infected grave stays hidden outside four tiles, emerges on sight, then throws a bone', () => {
+  const { game, step } = createGame(); openDepthArena(game);
+  const grave = game.level.graves[1], skeleton = game.makeInfectedSkeleton(grave.x, grave.y, 1);
+  skeleton.speed = 0; game.infectedSkeletons.push(skeleton);
+  game.player.x = grave.x - 4 * 32 - 1; game.player.y = grave.y;
+  step(10); assert.equal(skeleton.hidden, true); assert.equal(game.boneProjectiles.length, 0);
+  game.player.x = grave.x - 4 * 32;
+  step(1); assert.equal(skeleton.hidden, false); assert.ok(skeleton.emergeTimer > 0);
+  step(10); assert.equal(game.boneProjectiles.length, 0, 'the emerging animation is a warning');
+  let frames = 0;
+  while (!game.boneProjectiles.length && frames++ < 25) step(1);
+  assert.equal(game.boneProjectiles.length, 1);
+  assert.ok(Math.abs(Math.hypot(game.boneProjectiles[0].vx, game.boneProjectiles[0].vy) - game.BALANCE.boneSpeed) < 1e-6);
+  assert.ok(skeleton.throwCooldown > 2);
+});
+
+test('an emerged Infected Skeleton backs away from a nearby player and respects its sight range', () => {
+  const { game, step } = createGame(); openDepthArena(game);
+  const grave = game.level.graves[1], skeleton = game.makeInfectedSkeleton(grave.x, grave.y, 1);
+  skeleton.hidden = false; skeleton.throwCooldown = 2.4; game.infectedSkeletons.push(skeleton);
+  game.player.x = grave.x - 48; game.player.y = grave.y;
+  const before = Math.hypot(skeleton.x - game.player.x, skeleton.y - game.player.y);
+  step(10);
+  assert.ok(Math.hypot(skeleton.x - game.player.x, skeleton.y - game.player.y) > before + 20, 'keeps its distance');
+  game.boneProjectiles.length = 0; skeleton.throwCooldown = 0;
+  game.player.x = skeleton.x - 4 * 32 - 20;
+  step(20);
+  assert.equal(game.boneProjectiles.length, 0, 'no attack beyond the four-tile sight range');
+});
+
+test('six unenhanced T4 sword swings defeat an Infected Skeleton, with its own death count', () => {
+  const { game, step, elements } = createGame(); openDepthArena(game);
+  const grave = game.level.graves[1], skeleton = game.makeInfectedSkeleton(grave.x, grave.y, 1);
+  game.infectedSkeletons.push(skeleton);
+  game.player.x = skeleton.x - 48; game.player.y = skeleton.y;
+  aimSwordAt(game, skeleton); game.state.tools.sword = 4; game.state.mercurySword = false;
+  for (let i = 1; i <= 6; i++) {
+    game.state.cooldown = 0; game.swing();
+    assert.equal(skeleton.hp, 210 - 35 * i);
+    assert.equal(skeleton.dead, i === 6);
+  }
+  assert.equal(skeleton.hidden, false, 'attacking the disguise makes it emerge');
+  assert.equal(game.state.infectedSkeletonsSlain, 1);
+  game.state.hp = 10; game.state.invuln = 0;
+  game.boneProjectiles.push({ x: game.player.x - 20, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(1);
+  assert.equal(game.state.mode, 'dead');
+  assert.equal(elements['over-infected-skeletons'].textContent, '1');
+  assert.match(elements['over-line'].textContent, /1 cave creature/);
+  game.respawnAtBase();
+  assert.equal(game.level.id, 'home'); assert.equal(game.state.hp, 100);
+});
+
+test('bone projectiles hurt the player, stop at walls and do not cross floor transitions', () => {
+  const { game, step } = createGame(); openDepthArena(game);
+  game.player.x = 15.5 * 32; game.player.y = 10.5 * 32;
+  game.setTile(14, 10, game.WALL);
+  game.boneProjectiles.push({ x: 13.5 * 32, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(20); assert.equal(game.state.hp, 100); assert.equal(game.boneProjectiles.length, 0, 'a wall absorbs the bone');
+  game.setTile(14, 10, game.FLOOR);
+  game.boneProjectiles.push({ x: game.player.x - 20, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(1); assert.equal(game.state.hp, 85); assert.equal(game.boneProjectiles.length, 0);
+  assert.equal(game.state.healDelay, 4);
+  game.boneProjectiles.push({ x: game.player.x + 60, y: game.player.y, vx: -190, vy: 0, age: 0 });
+  const depth = game.level; game.enterLevel('stage8');
+  assert.equal(depth.boneProjectiles.length, 0);
+});
+
+test('Ghost contact deals 10 damage on both haunted floors', () => {
+  for (const id of ['stage8', 'stage9']) {
+    const { game, step } = createGame(); game.enterLevel(id); suppressNewEnemySpawns(game.level);
+    const ghost = game.makeGhost(game.player.x, game.player.y);
+    ghost.speed = 0; ghost.dashCooldown = 7; game.ghosts.push(ghost);
+    step(1);
+    assert.equal(ghost.dmg, 10); assert.equal(game.state.hp, 90, `${id} Ghost damage`);
+  }
+});
+
+test('natural healing starts after four safe seconds, ticks every 0.2 seconds and caps at max HP', () => {
+  const { game, step } = createGame(); game.enterLevel('stage8'); suppressNewEnemySpawns(game.level);
+  const ghost = game.makeGhost(game.player.x, game.player.y);
+  ghost.speed = 0; ghost.dashCooldown = 7; game.ghosts.push(ghost);
+  step(1); assert.equal(game.state.hp, 90); assert.equal(game.state.healDelay, 4);
+  ghost.dead = true;
+  step(79); assert.equal(game.state.hp, 90); assert.ok(game.state.healDelay > 0);
+  step(1); assert.equal(game.state.hp, 90); assert.equal(game.state.healDelay, 0);
+  step(3); assert.equal(game.state.hp, 90);
+  step(1); assert.equal(game.state.hp, 91);
+  step(16); assert.equal(game.state.hp, 95, 'five HP per safe second');
+  step(20); assert.equal(game.state.hp, 100);
+  step(20); assert.equal(game.state.hp, 100); assert.equal(game.state.healProgress, 0, 'no healing is banked at full HP');
+});
+
+test('only actual damage restarts healing; invulnerable hits do not, and pauses freeze recovery', () => {
+  const { game, step, elements } = createGame(); openDepthArena(game);
+  game.player.x = 15.5 * 32; game.player.y = 10.5 * 32;
+  game.boneProjectiles.push({ x: game.player.x - 20, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(1); assert.equal(game.state.hp, 85); assert.equal(game.state.healDelay, 4);
+  game.boneProjectiles.push({ x: game.player.x - 20, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(1); assert.equal(game.state.hp, 85); assert.ok(Math.abs(game.state.healDelay - 3.95) < 1e-8);
+  step(20);
+  const beforePause = game.state.healDelay;
+  elements['pause-btn'].click(); step(60);
+  assert.equal(game.state.healDelay, beforePause); assert.equal(game.state.hp, 85);
+  elements.resume.click();
+  game.state.invuln = 0;
+  game.boneProjectiles.push({ x: game.player.x - 20, y: game.player.y, vx: 190, vy: 0, age: 0 });
+  step(1); assert.equal(game.state.hp, 70); assert.equal(game.state.healDelay, 4);
+  step(80); assert.equal(game.state.hp, 70);
+  step(4); assert.equal(game.state.hp, 71);
+});
+
+test('current saves round-trip active skeletons, bones, healing, loot and timers', () => {
+  const { game } = createGame(); game.enterLevel('stage7');
+  let lift = game.level.elevators[0]; game.player.x = lift.x; game.player.y = lift.y;
+  assert.equal(game.useElevator(lift), true); assert.equal(game.activateElevator(), true); game.closeStation();
+  game.enterLevel('stage9'); suppressNewEnemySpawns(game.level);
+  const g0 = game.level.graves[0], g1 = game.level.graves[1];
+  const hidden = game.makeInfectedSkeleton(g0.x, g0.y, 0);
+  const active = game.makeInfectedSkeleton(g1.x, g1.y, 1);
+  active.hidden = false; active.emergeTimer = 0.35; active.throwCooldown = 1.5;
+  active.strafeTimer = 1.75; active.strafeSign = -1; active.hp = 140;
+  game.infectedSkeletons.push(hidden, active);
+  game.boneProjectiles.push({ x: g1.x, y: g1.y, vx: 190, vy: 0, age: 0.3 });
+  game.addItem('sapphire', 4); game.addItem('darkstone', 8); game.addItem('polishedSapphire', 2);
+  game.storage.polishedSapphire = 7; game.state.hp = 63; game.state.healDelay = 2.35;
+  game.state.infectedSkeletonsSlain = 5; game.level.infectedSkeletonTimer = 4.2;
+  const expected = comparableSave(game);
+  assert.equal(expected.version, 9);
+  const restored = createGame({ autoStart: false });
+  restored.game.loadSaveText(JSON.stringify({ ...expected, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(restored.game), expected);
+  assert.equal(restored.game.infectedSkeletons[0].hidden, true);
+  assert.equal(restored.game.infectedSkeletons[1].emergeTimer, 0.35);
+  assert.equal(restored.game.boneProjectiles[0].age, 0.3);
+  assert.equal(restored.game.state.healDelay, 2.35);
+  assert.equal(restored.game.state.infectedSkeletonsSlain, 5);
+  restored.elements.resume.click();
+  lift = restored.game.level.elevators[0]; restored.game.player.x = lift.x; restored.game.player.y = lift.y;
+  assert.equal(restored.game.useElevator(lift), true);
+  assert.equal(restored.game.travelByElevator('stage7'), true);
+  lift = restored.game.level.elevators[0]; restored.game.player.x = lift.x; restored.game.player.y = lift.y;
+  assert.equal(restored.game.useElevator(lift), true);
+  assert.equal(restored.game.travelByElevator('stage9'), true);
+});
+
+test('saved partial healing ticks resume rather than restarting or granting an early HP', () => {
+  const { game } = createGame(); game.state.hp = 60; game.state.healDelay = 0; game.state.healProgress = 0.15;
+  const text = game.createSaveText(), restored = createGame({ autoStart: false });
+  restored.game.loadSaveText(text); assert.equal(restored.game.state.healProgress, 0.15);
+  restored.elements.resume.click(); restored.step(1); // first frame after loading establishes time
+  assert.equal(restored.game.state.hp, 60);
+  restored.step(1); assert.equal(restored.game.state.hp, 61);
+});
+
+test('a genuine v4 Haunted Descent save gains both Stage 9 stairs without losing progress', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-depths-v4.json'), 'utf8');
+  const old = JSON.parse(text), slot = createMemoryStorage(); slot.setItem('cuddly-train.mining-simulator.save.v1', text);
+  const loaded = createGame({ storage: slot, autoStart: false });
+  assert.equal(loaded.elements['continue-save'].disabled, false);
+  loaded.elements['continue-save'].click();
+  const { game, elements, step } = loaded;
+  assert.equal(game.state.mode, 'paused'); assert.equal(game.level.id, 'stage8');
+  assert.equal(game.state.hp, 67); assert.equal(game.state.healDelay, 4); assert.equal(game.state.healProgress, 0);
+  assert.equal(game.state.elevatorUnlocked, true); assert.equal(game.state.mercurySword, true);
+  assert.equal(game.ghosts[0].dashRemaining, 48); assert.equal(game.ghosts[0].dmg, 10);
+  assert.equal(game.graveDiggers[0].spinWindup, 0.35);
+  assert.equal(game.countItem('ruby'), 4); assert.equal(game.countItem('polishedRuby'), 2);
+  assert.equal(game.storage.polishedQuartz, 8);
+  for (const item of ['sapphire', 'darkstone', 'polishedSapphire']) assert.equal(game.storage[item], 0);
+  const now = JSON.parse(game.createSaveText()); assert.equal(now.version, 9);
+  for (const field of ['tiles', 'originalTiles']) {
+    const expected = old.areas.stage8[field].slice(); expected[42 * 70 + 61] = game.STAIRS_DOWN;
+    assert.deepEqual(now.areas.stage8[field], expected, `only the new stair changes ${field}`);
+  }
+  assert.deepEqual(now.areas.stage8.damage, old.areas.stage8.damage);
+  assert.deepEqual(now.areas.stage7.tiles, old.areas.stage7.tiles, 'revealed secret seam is untouched');
+  assert.deepEqual(now.inventory, old.inventory);
+  assert.equal(slot.getItem(game.saveKey), text, 'loading never overwrites the old browser save');
+  elements.resume.click(); suppressNewEnemySpawns(game.level);
+  moveToStairs(game, step, game.level.stairsDown);
+  assert.equal(game.level.id, 'stage9');
+  moveToStairs(game, step, game.level.stairsUp);
+  assert.equal(game.level.id, 'stage8'); assert.equal(game.getTile(61, 42), game.STAIRS_DOWN);
+});
+
+test('malformed skeleton, bone and healing fields fail atomically', () => {
+  const { game } = createGame(); game.enterLevel('stage9'); suppressNewEnemySpawns(game.level);
+  const grave = game.level.graves[1]; game.infectedSkeletons.push(game.makeInfectedSkeleton(grave.x, grave.y, 1));
+  game.boneProjectiles.push({ x: grave.x, y: grave.y, vx: 190, vy: 0, age: 0.2 });
+  game.state.hp = 80; game.state.healDelay = 2;
+  const before = comparableSave(game), cases = [];
+  function invalid(change) { const save = structuredClone(before); change(save); cases.push(save); }
+  invalid((s) => { s.enemies.infectedSkeletons[0].graveIndex = 999; });
+  invalid((s) => { s.enemies.infectedSkeletons[0].hidden = 'yes'; });
+  invalid((s) => { s.enemies.infectedSkeletons[0].x += 100; });
+  invalid((s) => { s.enemies.infectedSkeletons[0].hp = 211; });
+  invalid((s) => { s.enemies.infectedSkeletons[0].throwCooldown = -1; });
+  invalid((s) => { s.enemies.infectedSkeletons[0].strafeSign = 0; });
+  invalid((s) => { s.areas.stage9.boneProjectiles[0].vx = 500; });
+  invalid((s) => { s.areas.stage9.boneProjectiles[0].vy = 2; });
+  invalid((s) => { s.areas.stage9.boneProjectiles[0].age = 2.5; });
+  invalid((s) => { delete s.areas.stage9.boneProjectiles; });
+  invalid((s) => { s.state.healDelay = 5; });
+  invalid((s) => { s.state.healProgress = 0.1; });
+  invalid((s) => { s.state.healDelay = 0; s.state.healProgress = 0.2; });
+  for (const save of cases) {
+    save.savedAt = new Date().toISOString();
+    assert.throws(() => game.loadSaveText(JSON.stringify(save)));
+    assert.deepEqual(comparableSave(game), before, 'a rejected import leaves the run unchanged');
+  }
+});
+
+test('a naturally thrown bone and emerging Skeleton resume and damage normally after a v5 reload', () => {
+  const source = createGame(), { game, step } = source; openDepthArena(game);
+  const grave = game.level.graves[1], skeleton = game.makeInfectedSkeleton(grave.x, grave.y, 1);
+  skeleton.speed = 0; game.infectedSkeletons.push(skeleton);
+  game.player.x = grave.x - 100; game.player.y = grave.y;
+  let frames = 0;
+  while (!game.boneProjectiles.length && frames++ < 40) step(1);
+  assert.equal(skeleton.hidden, false); assert.equal(game.boneProjectiles.length, 1);
+  const saved = game.createSaveText(), restored = createGame({ autoStart: false });
+  restored.game.loadSaveText(saved);
+  assert.equal(restored.game.boneProjectiles.length, 1);
+  restored.elements.resume.click(); restored.step(1); // loading resets the frame clock
+  restored.step(20);
+  assert.equal(restored.game.state.hp, 85, 'the saved bone remains dangerous after loading');
+  assert.ok(restored.game.state.healDelay > 3);
+});
+
+test('the saved four-second healing delay resumes precisely and the recovery indicator updates', () => {
+  const { game } = createGame();
+  game.state.hp = 94; game.state.healDelay = 1.25; game.state.healProgress = 0;
+  const restored = createGame({ autoStart: false }); restored.game.loadSaveText(game.createSaveText());
+  assert.equal(restored.elements['hp-fill'].classList.contains('is-healing'), false);
+  restored.elements.resume.click(); restored.step(1);
+  restored.step(24); assert.equal(restored.game.state.hp, 94);
+  assert.ok(restored.game.state.healDelay > 0);
+  restored.step(1); assert.equal(restored.game.state.healDelay, 0);
+  assert.equal(restored.elements['hp-fill'].classList.contains('is-healing'), true);
+  restored.step(4); assert.equal(restored.game.state.hp, 95);
+  restored.step(20); assert.equal(restored.game.state.hp, 100);
+  assert.equal(restored.elements['hp-fill'].classList.contains('is-healing'), false);
+});
+
+test('all genuine v1–v4 injured saves begin a conservative fresh healing wait', () => {
+  for (const fixture of ['pre-stage6-v1.json', 'pre-elevator-v2.json', 'pre-haunted-v3.json', 'pre-depths-v4.json']) {
+    const original = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', fixture), 'utf8'));
+    const restored = createGame({ autoStart: false }); restored.game.loadSaveText(JSON.stringify(original));
+    assert.equal(restored.game.state.hp, original.state.hp, fixture);
+    assert.equal(restored.game.state.healDelay, 4, fixture);
+    assert.equal(restored.game.state.healProgress, 0, fixture);
+    assert.equal(restored.game.storage.sapphire, 0); assert.equal(restored.game.storage.darkstone, 0);
+    assert.equal(restored.game.storage.polishedSapphire, 0);
+  }
+});
+
+// Warden's Core, rebalanced enemies and the Core of Darkness.
+function wardenArena() {
+  const run = createGame(), g = run.game;
+  g.enterLevel('stage10'); suppressNewEnemySpawns(g.level);
+  const p = g.level.pedestal;
+  g.player.x = p.x - 60; g.player.y = p.y;
+  g.camera.x = g.player.x; g.camera.y = g.player.y;
+  g.state.transitionLock = 999;
+  assert.equal(g.useWardenPedestal(), true);
+  return run;
+}
+function hitWarden(g) {
+  const boss = g.warden;
+  assert.ok(boss);
+  g.player.x = boss.x - 60; g.player.y = boss.y;
+  aimSwordAt(g, boss); g.state.tools.sword = 4; g.state.mercurySword = false;
+  g.state.cooldown = 0; g.swing();
+}
+
+test('all ordinary enemies have double their old health while haunted enemies are unchanged', () => {
+  const { game: g } = createGame();
+  assert.equal(g.makeSlime(100, 100, false).hp, 60);
+  assert.equal(g.makeSlime(100, 100, true).hp, 30);
+  assert.equal(g.makeSlime(100, 100, false, true).hp, 120);
+  assert.equal(g.makeSlime(100, 100, false, false, true).hp, 60);
+  assert.equal(g.makeMole(100, 100).hp, 60);
+  assert.equal(g.makeSpider(100, 100).hp, 30);
+  assert.equal(g.makeProspector(100, 100).hp, 90);
+  assert.equal(g.makeGolem(100, 100, false, 35).hp, 270);
+  assert.equal(g.makeGolem(100, 100, true, 35).hp, 230);
+  assert.equal(g.makeGhost(100, 100).hp, 175);
+  assert.equal(g.makeGraveDigger(100, 100).hp, 210);
+  assert.equal(g.makeInfectedSkeleton(100, 100).hp, 210);
+});
+
+test('Stage 9 leads to the single circular Stage 10 arena, then back and by visited elevator', () => {
+  const { game: g, step, elements } = createGame();
+  g.enterLevel('stage7'); let lift = g.level.elevators[0]; g.player.x = lift.x; g.player.y = lift.y;
+  assert.equal(g.useElevator(lift), true); assert.equal(g.activateElevator(), true);
+  assert.equal(elements['elevator-floors'].children[10].disabled, true);
+  g.closeStation(); g.enterLevel('stage9'); suppressNewEnemySpawns(g.level);
+  const depths = g.level, exit = depths.stairsDown;
+  assert.deepEqual({ tx: exit.tx, ty: exit.ty }, { tx: 61, ty: 41 });
+  assert.ok(reachableWalkableTiles(g, depths).has('61,41'));
+  moveToStairs(g, step, exit);
+  assert.equal(g.level.id, 'stage10'); assert.equal(g.level.name, "Warden's Core");
+  assert.equal(elements['area-kicker'].textContent, 'Stage 10');
+  const arena = g.level, center = arena.pedestal;
+  assert.equal(arena.upTarget, 'stage9'); assert.equal(arena.downTarget, 'stage11');
+  assert.ok(reachableWalkableTiles(g, arena).has(`${Math.floor(center.x / 32)},${Math.floor(center.y / 32)}`));
+  assert.ok(arena.tiles.includes(g.DARKSTONE)); assert.ok(arena.tiles.includes(g.BLACK_AMETHYST));
+  assert.equal(arena.tiles.includes(g.STONE), false);
+  for (let y = 1; y < arena.h - 1; y++) for (let x = 1; x < arena.w - 1; x++) {
+    if (!g.TILES[arena.tiles[y * arena.w + x]].solid) {
+      assert.ok(Math.hypot(x - 29, y - 29) <= 24.3 + 1e-7, 'all floor belongs to the single circle');
+    }
+  }
+  step(100); assert.equal(g.slimes.length + g.moles.length + g.spiders.length + g.golems.length +
+    g.ghosts.length + g.graveDiggers.length + g.infectedSkeletons.length + g.prospectors.length, 0);
+  moveToStairs(g, step, arena.stairsUp); assert.equal(g.level, depths);
+  lift = g.level.elevators[0]; g.player.x = lift.x; g.player.y = lift.y;
+  assert.equal(g.useElevator(lift), true); assert.equal(elements['elevator-floors'].children[10].disabled, false);
+  elements['elevator-floors'].children[10].click(); assert.equal(g.level, arena);
+});
+
+test('the nearby pedestal starts the Warden with F, and a distant pedestal does not steal mouse swings', () => {
+  const { game: g, elements, listeners } = createGame(); g.enterLevel('stage10');
+  const p = g.level.pedestal;
+  g.player.x = p.x - 4 * 32; g.player.y = p.y; g.camera.x = g.player.x; g.camera.y = g.player.y;
+  g.selectTool('sword'); g.state.cooldown = 0;
+  elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: p.x - g.camera.x + 640, clientY: 400 });
+  assert.equal(g.warden, null); assert.ok(g.state.cooldown > 0, 'far click remains a sword swing');
+  g.player.x = p.x - 60; g.state.cooldown = 0;
+  listeners.keydown[0]({ code: 'KeyF', target: { tagName: 'BODY' }, preventDefault: noop });
+  assert.ok(g.warden); assert.equal(g.warden.hp, 3500); assert.equal(g.warden.phase, 1);
+  assert.equal(elements['warden-hud'].classList.contains('is-hidden'), false);
+  assert.equal(g.useWardenPedestal(), false, 'the active fight cannot be restarted');
+  assert.equal(elements['area-banner'].classList.contains('has-warden'), true);
+  assert.equal(elements['area-banner'].classList.contains('is-arriving'), false);
+});
+
+test('Warden takes exactly 100 unenhanced T4 hits, enters all phases and permanently unlocks the Core', () => {
+  const { game: g, elements } = wardenArena();
+  g.addItem('stone', 990); // the permanent Core must work even with a full bag
+  const before = JSON.stringify(g.inventory);
+  for (let i = 1; i <= 99; i++) {
+    hitWarden(g); assert.ok(g.warden, `still alive after ${i} hits`);
+    assert.equal(g.warden.hp, 3500 - i * 35);
+    assert.equal(g.warden.phase, i < 34 ? 1 : i < 67 ? 2 : 3);
+    if (g.warden.phase > 1) {
+      assert.equal(g.warden.x, g.level.pedestal.x); assert.equal(g.warden.y, g.level.pedestal.y);
+    }
+  }
+  hitWarden(g);
+  assert.equal(g.warden, null); assert.equal(g.state.wardenDefeated, true);
+  assert.equal(elements['warden-hud'].classList.contains('is-hidden'), true);
+  assert.equal(elements['void-power'].classList.contains('is-hidden'), false);
+  assert.equal(JSON.stringify(g.inventory), before, 'the Core does not use a bag slot');
+  assert.equal(g.useWardenPedestal(), true); assert.equal(g.warden, null, 'victory cannot be replayed');
+  g.enterLevel('stage9'); g.enterLevel('stage10'); g.player.x = g.level.pedestal.x; g.player.y = g.level.pedestal.y;
+  g.useWardenPedestal(); assert.equal(g.warden, null);
+  g.respawnAtBase(); assert.equal(g.state.wardenDefeated, true);
+});
+
+test('Phase 1 flashes a fixed charge path and only damages the player during the charge', () => {
+  const { game: g, step } = wardenArena(), boss = g.warden;
+  g.player.x = boss.x + 170; g.player.y = boss.y; boss.timer = 0; boss.attackIndex = 0;
+  step(1); assert.equal(boss.action, 'chargeWarning');
+  const beforeX = boss.x, beforeY = boss.y;
+  step(20); assert.equal(boss.action, 'chargeWarning');
+  assert.equal(boss.x, beforeX); assert.equal(boss.y, beforeY); assert.equal(g.state.hp, 100);
+  while (boss.action === 'chargeWarning') step(1);
+  assert.equal(boss.action, 'charge');
+  step(15); assert.ok(boss.x > beforeX + 100); assert.equal(g.state.hp, 60);
+});
+
+test('Phase 1 sword slam warns with a box and lets the player dodge out of its range', () => {
+  for (const dodge of [false, true]) {
+    const { game: g, step } = wardenArena(), boss = g.warden;
+    g.player.x = boss.x + 70; g.player.y = boss.y; boss.timer = 0; boss.attackIndex = 1;
+    step(1); assert.equal(boss.action, 'slamWarning'); assert.equal(g.state.hp, 100);
+    if (dodge) g.player.y += 110;
+    while (boss.action === 'slamWarning') step(1);
+    assert.equal(boss.action, 'slamImpact'); assert.equal(g.state.hp, dodge ? 100 : 55);
+  }
+});
+
+test('Phase 2 remains centered and creates a warned spike lane that lingers and sinks', () => {
+  const { game: g, step } = wardenArena();
+  for (let i = 0; i < 34; i++) hitWarden(g);
+  const boss = g.warden, center = g.level.pedestal;
+  assert.equal(boss.phase, 2); boss.timer = 0; boss.attackIndex = 0;
+  g.player.x = center.x + 180; g.player.y = center.y;
+  step(1); assert.equal(boss.action, 'spikeWarning'); assert.equal(g.state.hp, 100);
+  assert.equal(boss.x, center.x); assert.equal(boss.y, center.y);
+  step(15); assert.equal(boss.action, 'spikeWarning'); assert.equal(g.state.hp, 100);
+  while (boss.action === 'spikeWarning') step(1);
+  assert.equal(boss.action, 'spikes'); step(1); assert.equal(g.state.hp, 88);
+  g.player.y += 130;
+  step(40); assert.equal(boss.action, 'spikes', 'the spikes linger for multiple seconds');
+  step(25); assert.equal(boss.action, 'spikes', 'they sink gradually, not instantly');
+  while (boss.action === 'spikes') step(1);
+  assert.equal(boss.x, center.x); assert.equal(boss.y, center.y);
+});
+
+test('Phase 3 spikes rise faster and the boomerang travels faster than in Phase 2', () => {
+  function sample(phase, index) {
+    const run = wardenArena(), { game: g, step } = run, b = g.warden, p = g.level.pedestal;
+    b.phase = phase; b.hp = phase === 2 ? 2000 : 1000; b.action = 'idle'; b.timer = 0; b.attackIndex = index;
+    b.x = p.x; b.y = p.y; g.player.x = p.x + 280; g.player.y = p.y; g.state.invuln = 999;
+    step(1);
+    const warning = b.timer;
+    while (b.action.endsWith('Warning')) step(1);
+    const action = b.action, activeTimer = b.timer;
+    if (index === 1) step(10);
+    return { warning, activeTimer, action, distance: b.swordX - p.x, g, step, b };
+  }
+  const p2spikes = sample(2, 0), p3spikes = sample(3, 0);
+  assert.equal(p2spikes.action, 'spikes'); assert.equal(p3spikes.action, 'spikes');
+  assert.ok(p3spikes.warning < p2spikes.warning);
+  assert.ok(p3spikes.activeTimer < p2spikes.activeTimer, 'same hold/sink with a faster rise');
+  const p2sword = sample(2, 1), p3sword = sample(3, 1);
+  assert.equal(p2sword.action, 'sword'); assert.equal(p3sword.action, 'sword');
+  assert.ok(p3sword.distance > p2sword.distance + 40);
+  const thrown = p3sword.b; let frames = 0, returned = false;
+  while (thrown.action === 'sword' && frames++ < 100) {
+    p3sword.step(1); returned ||= thrown.swordReturning;
+  }
+  assert.equal(returned, true); assert.equal(thrown.action, 'idle', 'the sword returns to the Warden');
+});
+
+test('Phase 3 warns before its damaging Void beam and supports moving out of the lane', () => {
+  for (const dodge of [false, true]) {
+    const { game: g, step } = wardenArena(), b = g.warden, p = g.level.pedestal;
+    b.phase = 3; b.hp = 1000; b.action = 'idle'; b.timer = 0; b.attackIndex = 2;
+    g.player.x = p.x + 180; g.player.y = p.y; step(1);
+    assert.equal(b.action, 'beamWarning'); assert.equal(g.state.hp, 100);
+    step(15); assert.equal(b.action, 'beamWarning'); assert.equal(g.state.hp, 100);
+    if (dodge) g.player.y += 120;
+    while (b.action === 'beamWarning') step(1);
+    assert.equal(b.action, 'beam'); step(1);
+    assert.equal(g.state.hp, dodge ? 100 : 50);
+  }
+});
+
+test('Void Power works via X or touch button, boosts sword damage by 50%, and recharges after 20 seconds', () => {
+  const { game: g, step, listeners, elements } = wardenArena();
+  for (let i = 0; i < 100; i++) hitWarden(g);
+  assert.equal(g.state.wardenDefeated, true);
+  listeners.keydown[0]({ code: 'KeyX', target: { tagName: 'BODY' }, preventDefault: noop });
+  assert.equal(g.state.voidPowerTime, 8); assert.equal(g.state.voidPowerCooldown, 20);
+  assert.equal(elements['void-power'].disabled, true); assert.equal(g.activateVoidPower(), false);
+  g.enterLevel('stage8'); suppressNewEnemySpawns(g.level);
+  const ghost = g.makeGhost(g.player.x + 50, g.player.y); g.ghosts.push(ghost);
+  aimSwordAt(g, ghost); g.state.tools.sword = 4; g.state.mercurySword = true;
+  g.state.cooldown = 0; g.swing();
+  assert.equal(ghost.hp, 175 - 52.5, 'Void boosts Ghost damage, while Mercury poison does not apply');
+  ghost.dead = true;
+  g.enterLevel('stage5'); suppressNewEnemySpawns(g.level);
+  const golem = g.makeGolem(g.player.x + 50, g.player.y); g.golems.push(golem);
+  assert.equal(golem.maxHp, 200 + 2 * 35, 'temporary Void Power does not change spawned armour');
+  aimSwordAt(g, golem); g.state.tools.sword = 4; g.state.cooldown = 0; g.swing();
+  assert.equal(golem.hp, golem.maxHp - 35 * 1.5, 'Void boosts the unenhanced base damage while Mercury poisons');
+  golem.dead = true;
+  step(160); assert.equal(g.state.voidPowerTime, 0); assert.ok(Math.abs(g.state.voidPowerCooldown - 12) < 1e-7);
+  step(240); assert.equal(g.state.voidPowerCooldown, 0); assert.equal(elements['void-power'].disabled, false);
+  elements['void-power'].click(); assert.equal(g.state.voidPowerTime, 8);
+});
+
+test('Black Amethyst is mineable, polishable and sells atomically for two Gold Coins', () => {
+  const { game: g, step, elements } = createGame(); g.enterLevel('stage10');
+  const ore = findReachableOre(g, g.BLACK_AMETHYST); aimPickaxeAt(g, ore); g.state.tools.pickaxe = 4;
+  for (let i = 0; i < g.pickaxeHits(g.TILES[g.BLACK_AMETHYST]); i++) {
+    g.state.cooldown = 0; elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: g.pointer.x, clientY: g.pointer.y });
+  }
+  assert.equal(g.getTile(ore.tx, ore.ty), g.FLOOR);
+  assert.ok(g.pickups.some((p) => p.item === 'blackAmethyst')); step(30);
+  assert.equal(g.countItem('blackAmethyst'), 1);
+  g.enterLevel('home'); assert.equal(g.polishGem('blackAmethyst'), true);
+  assert.equal(g.countItem('polishedBlackAmethyst'), 1);
+  assert.equal(g.sellPolishedGem('blackAmethyst'), true);
+  assert.equal(g.countItem('goldCoin'), 2);
+  g.removeItem('goldCoin', 2); g.addItem('polishedBlackAmethyst', 2); g.addItem('stone', 891);
+  assert.equal(g.sellPolishedGem('blackAmethyst'), false, 'two coins must both fit');
+  assert.equal(g.countItem('polishedBlackAmethyst'), 2);
+  g.enterLevel('stage9'); g.enterLevel('stage10'); assert.equal(g.getTile(ore.tx, ore.ty), g.BLACK_AMETHYST);
+});
+
+test('the thrown Warden sword damages on its outward trip and returns', () => {
+  const { game: g, step } = wardenArena(), boss = g.warden, p = g.level.pedestal;
+  boss.phase = 2; boss.hp = 2000; boss.action = 'idle'; boss.timer = 0; boss.attackIndex = 1;
+  g.player.x = p.x + 180; g.player.y = p.y;
+  step(1); assert.equal(boss.action, 'swordWarning');
+  while (boss.action === 'swordWarning') step(1);
+  assert.equal(boss.action, 'sword');
+  let frames = 0; while (g.state.hp === 100 && frames++ < 50) step(1);
+  assert.equal(g.state.hp, 70);
+  let returning = false;
+  while (boss.action === 'sword' && frames++ < 120) { step(1); returning ||= boss.swordReturning; }
+  assert.equal(returning, true); assert.equal(boss.action, 'idle');
+});
+
+test('an unfinished Warden fight resets on leaving or death, but can be retried', () => {
+  const { game: g } = wardenArena();
+  hitWarden(g); assert.equal(g.warden.hp, 3465);
+  g.enterLevel('stage9'); assert.equal(g.warden, null);
+  g.enterLevel('stage10'); g.player.x = g.level.pedestal.x; g.player.y = g.level.pedestal.y;
+  assert.equal(g.useWardenPedestal(), true); assert.equal(g.warden.hp, 3500);
+  g.respawnAtBase(); assert.equal(g.state.wardenDefeated, false); assert.equal(g.warden, null);
+  g.enterLevel('stage10'); g.player.x = g.level.pedestal.x; g.player.y = g.level.pedestal.y;
+  assert.equal(g.useWardenPedestal(), true); assert.equal(g.warden.hp, 3500);
+});
+
+test('v7 saves resume an in-progress Warden warning, attack and arena state', () => {
+  const { game: g, step } = wardenArena(), boss = g.warden;
+  g.player.x = boss.x + 150; g.player.y = boss.y; boss.timer = 0; boss.attackIndex = 0;
+  step(1); assert.equal(boss.action, 'chargeWarning'); step(7);
+  g.addItem('blackAmethyst', 3); g.storage.polishedBlackAmethyst = 2;
+  const before = comparableSave(g), text = JSON.stringify({ ...before, savedAt: new Date().toISOString() });
+  assert.equal(before.version, 9);
+  const restored = createGame({ autoStart: false }); restored.game.loadSaveText(text);
+  assert.deepEqual(comparableSave(restored.game), before);
+  assert.equal(restored.game.warden.action, 'chargeWarning');
+  assert.equal(restored.elements['warden-hud'].classList.contains('is-hidden'), false);
+  assert.equal(restored.elements['area-banner'].classList.contains('has-warden'), true);
+  assert.equal(restored.elements['area-banner'].classList.contains('is-arriving'), false);
+  restored.elements.resume.click(); restored.step(1);
+  let frames = 0; while (restored.game.warden.action === 'chargeWarning' && frames++ < 30) restored.step(1);
+  assert.equal(restored.game.warden.action, 'charge');
+  restored.step(15); assert.equal(restored.game.state.hp, 60);
+});
+
+test('v7 persists victory and an active Void Power across reloads and prevents another fight', () => {
+  const { game: g } = wardenArena(); for (let i = 0; i < 100; i++) hitWarden(g);
+  assert.equal(g.activateVoidPower(), true);
+  g.enterLevel('stage9');
+  const before = comparableSave(g), restored = createGame({ autoStart: false });
+  restored.game.loadSaveText(JSON.stringify({ ...before, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(restored.game), before);
+  assert.equal(restored.game.state.wardenDefeated, true); assert.equal(restored.game.state.voidPowerTime, 8);
+  restored.elements.resume.click(); restored.game.enterLevel('stage10');
+  restored.game.player.x = restored.game.level.pedestal.x; restored.game.player.y = restored.game.level.pedestal.y;
+  assert.equal(restored.game.useWardenPedestal(), true); assert.equal(restored.game.warden, null);
+  restored.game.respawnAtBase(); assert.equal(restored.game.state.wardenDefeated, true);
+  assert.equal(restored.game.state.voidPowerTime, 0); assert.equal(restored.game.state.voidPowerCooldown, 20);
+});
+
+test('genuine v5 Depths saves gain the Stage 10 stair while preserving haunted enemies and healing', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-warden-depths-v5.json'), 'utf8');
+  const old = JSON.parse(text), restored = createGame({ autoStart: false }); restored.game.loadSaveText(text);
+  const g = restored.game, now = JSON.parse(g.createSaveText());
+  assert.equal(now.version, 9); assert.equal(g.level.id, 'stage9');
+  for (const field of ['tiles', 'originalTiles']) {
+    const expected = old.areas.stage9[field].slice(); expected[41 * 72 + 61] = g.STAIRS_DOWN;
+    assert.deepEqual(now.areas.stage9[field], expected, `only the new stair changes ${field}`);
+  }
+  assert.deepEqual(now.areas.stage9.damage, old.areas.stage9.damage);
+  assert.deepEqual(now.inventory, old.inventory); assert.equal(g.state.hp, 67);
+  assert.equal(g.state.healDelay, 2.35); assert.equal(g.storage.polishedSapphire, 7);
+  assert.equal(g.ghosts[0].hp, 105); assert.equal(g.graveDiggers[0].hp, 140);
+  assert.equal(g.infectedSkeletons[0].hidden, true); assert.equal(g.infectedSkeletons[1].hp, 140);
+  assert.equal(g.boneProjectiles[0].age, 0.3); assert.equal(g.state.wardenDefeated, false);
+  assert.equal(g.storage.blackAmethyst, 0); assert.equal(g.storage.polishedBlackAmethyst, 0);
+  restored.elements.resume.click(); moveToStairs(g, restored.step, g.level.stairsDown);
+  assert.equal(g.level.id, 'stage10');
+});
+
+test('genuine v5 active enemies retain their health percentage when migrated to doubled HP', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-warden-enemies-v5.json'), 'utf8');
+  const old = JSON.parse(text), restored = createGame({ autoStart: false }); restored.game.loadSaveText(text);
+  const g = restored.game;
+  assert.deepEqual(Array.from(g.slimes, (s) => s.hp), old.enemies.slimes.map((s) => s.hp * 2));
+  assert.equal(g.moles[0].hp, old.enemies.moles[0].hp * 2);
+  assert.equal(g.spiders[0].hp, old.enemies.spiders[0].hp * 2);
+  assert.equal(g.prospectors[0].hp, old.areas.stage7.prospectors[0].hp * 2);
+  assert.equal(g.prospectors[0].haul.gold, 3);
+  for (let i = 0; i < 2; i++) {
+    assert.equal(g.golems[i].hp, old.enemies.golems[i].hp * 2);
+    assert.equal(g.golems[i].maxHp, old.enemies.golems[i].maxHp * 2);
+  }
+});
+
+test('malformed v7 boss and Void Power saves fail atomically', () => {
+  const { game: g } = wardenArena(), before = comparableSave(g), cases = [];
+  function invalid(change) { const save = structuredClone(before); change(save); cases.push(save); }
+  invalid((s) => { s.warden.hp = 3501; });
+  invalid((s) => { s.warden.phase = 2; });
+  invalid((s) => { s.warden.action = 'invalid'; });
+  invalid((s) => { s.warden.angle = 8; });
+  invalid((s) => { s.warden.timer = 9; });
+  invalid((s) => { s.warden.hit = 'yes'; });
+  invalid((s) => { s.currentLevel = 'home'; });
+  invalid((s) => { s.state.wardenDefeated = true; });
+  invalid((s) => { s.state.voidPowerTime = 4; });
+  invalid((s) => { s.state.wardenDefeated = true; s.warden = null; s.state.voidPowerTime = 8; s.state.voidPowerCooldown = 2; });
+  invalid((s) => { delete s.warden; });
+  for (const save of cases) {
+    save.savedAt = new Date().toISOString();
+    assert.throws(() => g.loadSaveText(JSON.stringify(save)));
+    assert.deepEqual(comparableSave(g), before);
+  }
+});
+
+test('actual charge, slam, spikes, outbound/returning sword and beam survive v7 saves mid-attack', () => {
+  for (const scenario of [
+    { phase: 1, index: 0, action: 'charge' },
+    { phase: 1, index: 1, action: 'slamImpact' },
+    { phase: 2, index: 0, action: 'spikes' },
+    { phase: 2, index: 1, action: 'sword' },
+    { phase: 3, index: 1, action: 'sword', returning: true },
+    { phase: 3, index: 2, action: 'beam' },
+  ]) {
+    const { game: g, step } = wardenArena(), b = g.warden;
+    b.phase = scenario.phase; b.hp = [0, 3500, 2000, 1000][scenario.phase];
+    b.action = scenario.phase === 1 ? 'approach' : 'idle'; b.timer = 0; b.attackIndex = scenario.index;
+    g.player.x = b.x + 200; g.player.y = b.y; g.state.invuln = 999;
+    let frames = 0;
+    while ((b.action !== scenario.action || (scenario.returning && !b.swordReturning)) && frames++ < 160) step(1);
+    assert.equal(b.action, scenario.action, JSON.stringify(scenario));
+    if (scenario.returning) assert.equal(b.swordReturning, true);
+    else if (scenario.action === 'charge' || scenario.action === 'sword') step(3);
+    const before = comparableSave(g), restored = createGame({ autoStart: false });
+    restored.game.loadSaveText(JSON.stringify({ ...before, savedAt: new Date().toISOString() }));
+    assert.deepEqual(comparableSave(restored.game), before, JSON.stringify(scenario));
+    restored.elements.resume.click(); restored.step(2);
+    assert.equal(restored.game.state.mode, 'playing');
+    assert.equal(restored.game.warden.phase, scenario.phase);
+  }
+});
+
+test('a T4 fighter can dodge telegraphs and defeat all three Warden phases without invulnerability', () => {
+  const { game: g, elements, listeners, step } = wardenArena();
+  g.state.tools.sword = 4; g.state.mercurySword = false; g.selectTool('sword');
+  const held = new Set(), seen = new Set(); let minimumHp = 100, swings = 0;
+  const event = (code) => ({ code, target: { tagName: 'BODY' }, preventDefault: noop });
+  function move(vx, vy) {
+    const next = new Set();
+    if (vx > 0.25) next.add('KeyD'); else if (vx < -0.25) next.add('KeyA');
+    if (vy > 0.25) next.add('KeyS'); else if (vy < -0.25) next.add('KeyW');
+    for (const code of held) if (!next.has(code)) { listeners.keyup[0](event(code)); held.delete(code); }
+    for (const code of next) if (!held.has(code)) { listeners.keydown[0](event(code)); held.add(code); }
+  }
+  for (let frame = 0; frame < 5000 && g.state.mode === 'playing' && g.warden; frame++) {
+    const b = g.warden; seen.add(b.phase);
+    const dx = b.x - g.player.x, dy = b.y - g.player.y, distance = Math.hypot(dx, dy) || 1;
+    const dangerous = b.action.endsWith('Warning') || ['charge', 'slamImpact', 'spikes', 'sword', 'beam'].includes(b.action);
+    if (dangerous) {
+      const side = -(g.player.x - b.originX) * Math.sin(b.angle) + (g.player.y - b.originY) * Math.cos(b.angle);
+      const width = b.action.startsWith('slam') ? g.BALANCE.wardenSlamWidth
+        : b.action.startsWith('beam') ? g.BALANCE.wardenBeamWidth
+        : b.action.startsWith('sword') ? 38 : g.BALANCE.wardenSpikeWidth;
+      if (Math.abs(side) < width / 2 + g.BALANCE.playerRadius + 20) {
+        const sign = side >= 0 ? 1 : -1;
+        move(-Math.sin(b.angle) * sign, Math.cos(b.angle) * sign);
+      } else move(0, 0);
+    } else if (distance > 68) move(dx / distance, dy / distance);
+    else if (distance < 45) move(-dx / distance, -dy / distance);
+    else move(0, 0);
+    if (distance < g.BALANCE.swordRange + b.r - 5 && g.state.cooldown <= 0) {
+      const oldHp = b.hp;
+      g.pointer.inside = true; g.pointer.x = b.x - g.camera.x + 640; g.pointer.y = b.y - g.camera.y + 400;
+      elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: g.pointer.x, clientY: g.pointer.y });
+      if (b.hp < oldHp) swings++;
+    }
+    step(1); minimumHp = Math.min(minimumHp, g.state.hp);
+  }
+  move(0, 0);
+  assert.equal(g.state.wardenDefeated, true, `fighter survived with ${g.state.hp} HP; boss HP ${g.warden?.hp}`);
+  assert.equal(swings, 100, 'only unenhanced T4 sword hits dealt damage');
+  assert.deepEqual([...seen], [1, 2, 3]);
+  assert.ok(minimumHp > 0, 'the fight remains survivable by moving out of marked lanes');
+});
+
+test('v5 Prospectors in previously visited areas migrate even when that area is inactive', () => {
+  const old = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-warden-enemies-v5.json'), 'utf8'));
+  const home = createGame().game.level;
+  old.currentLevel = 'home'; old.player.x = home.spawn.x; old.player.y = home.spawn.y;
+  for (const key of Object.keys(old.enemies)) old.enemies[key] = [];
+  const restored = createGame({ autoStart: false }); restored.game.loadSaveText(JSON.stringify(old));
+  const prospector = restored.game.levels.stage7.prospectors[0];
+  assert.equal(restored.game.level.id, 'home');
+  assert.equal(prospector.hp, old.areas.stage7.prospectors[0].hp * 2);
+  assert.equal(prospector.maxHp, 90); assert.equal(prospector.haul.gold, 3);
+  restored.game.enterLevel('stage7');
+  assert.equal(restored.game.prospectors[0], prospector);
+  assert.equal(restored.game.prospectors[0].hp, old.areas.stage7.prospectors[0].hp * 2);
+});
+
+test('Phase 1 follows slowly and Space swings the equipped sword toward the Warden', () => {
+  const { game: g, step, listeners } = wardenArena(), boss = g.warden;
+  g.player.x = boss.x + 200; g.player.y = boss.y;
+  const start = boss.x; step(20);
+  assert.equal(boss.action, 'approach');
+  assert.ok(Math.abs(boss.x - start - g.BALANCE.wardenWalkSpeed) < 1e-7);
+  assert.equal(g.state.hp, 100, 'following is not unavoidable contact damage');
+  g.player.x = boss.x - 60; g.player.y = boss.y; g.player.faceX = 1; g.player.faceY = 0;
+  g.pointer.inside = false; g.state.tools.sword = 4; g.selectTool('sword');
+  listeners.keydown[0]({ code: 'Space', target: { tagName: 'BODY' }, preventDefault: noop });
+  assert.equal(boss.hp, 3465);
+});
+
+// Stage 11/12, denser encounters and the stronger Warden.
+test('the Warden arena, three Amethyst chambers and Ancient Temple connect in both directions', () => {
+  const { game: g, elements, step } = createGame();
+  g.enterLevel('stage10');
+  const arena = g.level;
+  assert.equal(arena.tiles[7 * arena.w + 29], g.STAIRS_DOWN);
+  moveToStairs(g, step, arena.stairsDown);
+  const cavern = g.level;
+  assert.equal(cavern.id, 'stage11'); assert.equal(cavern.name, 'Amethyst Cavern');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 11');
+  assert.equal(elements['area-subtitle'].textContent, 'The shimmering purple crystals line the walls');
+  assert.equal(cavern.upTarget, 'stage10'); assert.equal(cavern.downTarget, 'stage12');
+  const seen = reachableForRadius(g, cavern, g.BALANCE.playerRadius);
+  for (const point of ['13,13', '39,33', '66,13', '68,13']) assert.ok(seen.has(point), point);
+  assert.ok(cavern.decor.filter((d) => d.kind === 'crystal').length >= 9);
+  for (const tile of [g.STONE, g.QUARTZ, g.AMETHYST]) assert.ok(cavern.tiles.includes(tile));
+  assert.equal(cavern.elevators.length, 2);
+  moveToStairs(g, step, cavern.stairsDown);
+  const temple = g.level;
+  assert.equal(temple.id, 'stage12'); assert.equal(temple.name, 'Ancient Temple');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 12');
+  assert.equal(elements['area-subtitle'].textContent, 'This ancient place is strangely deep beneath the surface');
+  assert.equal(temple.upTarget, 'stage11'); assert.equal(temple.downTarget, 'stage13');
+  const wide = reachableForRadius(g, temple, g.BALANCE.shrineGolemRadius);
+  for (const point of ['22,18', '31,34', '49,33', '67,13', '67,37']) assert.ok(wide.has(point), point);
+  for (const tile of [g.GOLD, g.TITANIUM, g.MOSSY_STONE, g.DIAMOND]) assert.ok(temple.tiles.includes(tile));
+  assert.ok(temple.decor.some((d) => d.kind === 'ruinPillar'));
+  assert.ok(temple.decor.some((d) => d.kind === 'ruinDebris'));
+  assert.equal(temple.elevators.length, 2);
+  moveToStairs(g, step, temple.stairsUp); assert.equal(g.level, cavern);
+  moveToStairs(g, step, cavern.stairsUp); assert.equal(g.level, arena);
+});
+
+test('the new ore tiles mine and restore, including Mossy Stone dropping ordinary Stone', () => {
+  const { game: g, elements, step } = createGame();
+  for (const [area, tileName, item] of [['stage11', 'AMETHYST', 'amethyst'],
+    ['stage12', 'MOSSY_STONE', 'stone'], ['stage12', 'DIAMOND', 'diamond']]) {
+    g.enterLevel(area); suppressNewEnemySpawns(g.level);
+    const level = g.level, ore = findReachableOre(g, g[tileName]);
+    const before = g.countItem(item);
+    aimPickaxeAt(g, ore); g.state.tools.pickaxe = 4;
+    for (let n = 0; n < g.pickaxeHits(g.TILES[g[tileName]]); n++) {
+      g.state.cooldown = 0;
+      elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: g.pointer.x, clientY: g.pointer.y });
+    }
+    assert.equal(g.getTile(ore.tx, ore.ty), g.FLOOR);
+    const drop = g.pickups.find((p) => p.item === item);
+    assert.ok(drop); assert.ok(drop.count >= 1 && drop.count <= (item === 'stone' ? 2 : 1));
+    step(30); assert.equal(g.countItem(item), before + drop.count);
+    g.enterLevel('home'); g.enterLevel(area);
+    assert.equal(g.level, level); assert.equal(g.getTile(ore.tx, ore.ty), g[tileName]);
+  }
+});
+
+test('Amethyst and Diamond exchanges give their exact coins and remain atomic with a full bag', () => {
+  const { game: g, elements } = createGame();
+  g.addItem('amethyst', 1); g.addItem('diamond', 1);
+  g.openStation('polisher');
+  for (const index of [7, 8]) elements['polisher-gems'].children[index].children[2].click();
+  assert.equal(g.countItem('polishedAmethyst'), 1); assert.equal(g.countItem('polishedDiamond'), 1);
+  g.closeStation(); g.openStation('trader');
+  assert.match(elements['trader-gems'].children[7].children[1].children[0].textContent, /2 Gold Coins/);
+  assert.match(elements['trader-gems'].children[8].children[1].children[0].textContent, /1 Aluminum Coin/);
+  elements['trader-gems'].children[7].children[2].click();
+  elements['trader-gems'].children[8].children[2].click();
+  assert.equal(g.countItem('goldCoin'), 2); assert.equal(g.countItem('aluminumCoin'), 1);
+  assert.equal(g.traderUnlocked.gold, false); assert.equal(g.traderUnlocked.aluminum, false);
+
+  for (const [raw, polished, coin] of [['amethyst', 'polishedAmethyst', 'goldCoin'],
+    ['diamond', 'polishedDiamond', 'aluminumCoin']]) {
+    const full = createGame().game;
+    full.addItem('stone', 891); full.addItem(raw, 2);
+    assert.equal(full.polishGem(raw), false); assert.equal(full.countItem(raw), 2);
+    full.removeItem(raw, 2); full.addItem(polished, 2);
+    assert.equal(full.sellPolishedGem(raw), false);
+    assert.equal(full.countItem(polished), 2); assert.equal(full.countItem(coin), 0);
+    full.removeItem(polished, 1);
+    assert.equal(full.sellPolishedGem(raw), true, 'consuming the last gem frees the coin slot');
+    assert.equal(full.countItem(coin), raw === 'amethyst' ? 2 : 1);
+  }
+});
+
+test('Purple Slimes split into 1.5x-health minis, each dropping zero or one Amethyst', () => {
+  for (const random of [0, 0.99]) {
+    const { game: g, math } = createGame(); g.enterLevel('stage11'); suppressNewEnemySpawns(g.level);
+    math.random = () => random;
+    const slime = g.makeSlime(g.player.x + 50, g.player.y, false, false, false, true);
+    assert.equal(slime.hp, 90); assert.equal(slime.purple, true); g.slimes.push(slime);
+    aimSwordAt(g, slime); g.state.tools.sword = 4;
+    for (let n = 0; n < 3; n++) { g.state.cooldown = 0; g.swing(); }
+    assert.equal(slime.dead, true);
+    const minis = g.slimes.filter((s) => !s.dead);
+    assert.equal(minis.length, 2);
+    for (const mini of minis) { assert.equal(mini.tiny, true); assert.equal(mini.purple, true); assert.equal(mini.hp, 45); }
+    for (let n = 0; n < 2; n++) { g.state.cooldown = 0; g.swing(); }
+    assert.ok(minis.every((s) => s.dead));
+    const drops = g.pickups.filter((p) => p.item === 'amethyst');
+    assert.equal(drops.length, random === 0 ? 2 : 0);
+    assert.ok(drops.every((p) => p.count === 1));
+  }
+});
+
+test('Crabocks have slower spider movement, higher health and their own defeat statistic', () => {
+  const { game: g, elements, step } = createGame(); g.enterLevel('stage11'); suppressNewEnemySpawns(g.level);
+  const crab = g.makeSpider(g.player.x + 65, g.player.y, true), spider = g.makeSpider(100, 100);
+  assert.equal(crab.kind, 'crabock'); assert.equal(crab.hp, 90);
+  assert.ok(crab.hp > spider.hp && crab.speed < spider.speed && crab.r > spider.r);
+  g.spiders.push(crab); const distance = crab.x - g.player.x; step(4);
+  assert.equal(crab.chasing, true); assert.ok(crab.x - g.player.x < distance);
+  g.player.x = crab.x - 20; g.player.y = crab.y; g.state.invuln = 0; step(1);
+  assert.equal(g.state.hp, 100 - g.BALANCE.spiderDamage);
+  g.player.x = crab.x - 45; g.player.y = crab.y; aimSwordAt(g, crab); g.state.tools.sword = 4;
+  for (let i = 0; i < 3; i++) { g.state.cooldown = 0; g.swing(); }
+  assert.equal(crab.dead, true); assert.equal(g.state.crabocksSlain, 1); assert.equal(g.state.spidersSlain, 0);
+  g.state.hp = g.BALANCE.spiderDamage; g.state.invuln = 0;
+  g.spiders.push(g.makeSpider(g.player.x + 20, g.player.y, true)); step(1);
+  assert.equal(g.state.mode, 'dead');
+  assert.equal(elements['over-crabocks'].textContent, '1');
+  assert.match(elements['over-line'].textContent, /1 cave creature/);
+  g.start(); assert.equal(g.state.crabocksSlain, 0);
+});
+
+test('new floors spawn the requested enemy types at the increased population caps', () => {
+  const { game: g, step } = createGame();
+  assert.ok(g.BALANCE.maxSlimes > 7 && g.BALANCE.slimeSpawnEvery < 3);
+  assert.ok(g.BALANCE.maxSpiders > 5 && g.BALANCE.maxGolems > 3 && g.BALANCE.maxMoles > 3);
+  assert.ok(g.BALANCE.maxProspectors > 4 && g.BALANCE.maxGhosts > 12);
+  g.enterLevel('stage11'); g.state.invuln = 999; g.state.transitionLock = 999;
+  step(600);
+  assert.equal(g.state.mode, 'playing');
+  assert.equal(g.slimes.length, g.BALANCE.maxSlimes); assert.equal(g.spiders.length, g.BALANCE.maxSpiders);
+  assert.ok(g.slimes.every((s) => s.purple && !s.large)); assert.ok(g.spiders.every((s) => s.crabock));
+  assert.equal(g.golems.length + g.prospectors.length + g.moles.length + g.ghosts.length + g.graveDiggers.length, 0);
+  g.enterLevel('stage12'); g.state.invuln = 999; g.state.transitionLock = 999;
+  step(600);
+  assert.equal(g.state.mode, 'playing');
+  assert.equal(g.spiders.length, g.BALANCE.maxSpiders); assert.ok(g.spiders.every((s) => !s.crabock));
+  assert.equal(g.golems.length, g.BALANCE.maxGolems); assert.ok(g.golems.every((s) => !s.shrine && !s.mercury));
+  assert.equal(g.prospectors.length, g.BALANCE.maxProspectors);
+  assert.equal(g.slimes.length + g.moles.length + g.ghosts.length + g.graveDiggers.length, 0);
+});
+
+function shrineArena() {
+  const run = createGame(), g = run.game; g.enterLevel('stage12'); suppressNewEnemySpawns(g.level);
+  g.state.transitionLock = 999; g.player.x = g.level.golemShrine.x - 60; g.player.y = g.level.golemShrine.y;
+  g.camera.x = g.player.x; g.camera.y = g.player.y; g.state.tools.sword = 4;
+  return run;
+}
+
+function hitGuardian(g, guardian) {
+  g.player.x = guardian.x - 60; g.player.y = guardian.y;
+  aimSwordAt(g, guardian); g.state.tools.sword = 4; g.state.cooldown = 0; g.swing();
+}
+
+test('the shrine responds to F and touch, but a distant click and attacking its guardian still swing', () => {
+  const { game: g, elements, listeners } = shrineArena(), shrine = g.level.golemShrine;
+  g.player.x = shrine.x - 4 * 32; g.camera.x = g.player.x;
+  g.selectTool('sword'); g.state.cooldown = 0;
+  elements.game.dispatch('pointerdown', { pointerType: 'mouse', clientX: shrine.x - g.camera.x + 640, clientY: 400 });
+  assert.equal(g.golems.length, 0); assert.ok(g.state.cooldown > 0, 'far clicks are still sword swings');
+  g.player.x = shrine.x - 60; g.camera.x = g.player.x;
+  listeners.keydown[0]({ code: 'KeyF', target: { tagName: 'BODY' }, preventDefault: noop });
+  const guardian = g.golems[0]; assert.ok(guardian && guardian.shrine);
+  assert.equal(guardian.hp, 3 * g.makeGolem(0, 0, false, 35).hp);
+  assert.equal(guardian.r, g.BALANCE.shrineGolemRadius);
+  g.state.cooldown = 0;
+  elements.game.dispatch('pointerdown', { pointerType: 'touch', clientX: shrine.x - g.camera.x + 640, clientY: 400 });
+  assert.equal(guardian.hp, guardian.maxHp - 35, 'tap through the active shrine attacks the guardian');
+  assert.equal(g.golems.length, 1);
+  const touch = shrineArena(), tg = touch.game, ts = tg.level.golemShrine;
+  touch.elements.game.dispatch('pointerdown', { pointerType: 'touch', clientX: ts.x - tg.camera.x + 640, clientY: 400 });
+  assert.ok(tg.golems[0].shrine, 'a touch on the nearby shrine summons');
+});
+
+test('shrine guardian drops exactly two Diamonds and five Stone and returns after its cooldown', () => {
+  const { game: g, step } = shrineArena(); g.addItem('coal', 990); // full bag
+  assert.equal(g.useGolemShrine(), true); let guardian = g.golems[0];
+  while (!guardian.dead) hitGuardian(g, guardian);
+  assert.equal(g.state.golemsSlain, 1); assert.equal(g.level.shrineCooldown, 20);
+  const loot = g.pickups.filter((p) => p.source === 'golem');
+  assert.deepEqual(Array.from(loot, (p) => [p.item, p.count]), [['diamond', 2], ['stone', 5]]);
+  hitGuardian(g, guardian); assert.equal(g.pickups.length, 2, 'a second hit cannot duplicate drops');
+  g.state.invuln = 999; step(100);
+  assert.ok(g.level.shrineCooldown > 14.9 && g.level.shrineCooldown < 15.1);
+  assert.equal(g.golems.filter((x) => x.shrine && !x.dead).length, 0);
+  const remaining = g.level.shrineCooldown;
+  g.enterLevel('stage11'); step(25); g.enterLevel('stage12'); suppressNewEnemySpawns(g.level);
+  assert.equal(g.level.shrineCooldown, remaining, 'cooldown pauses while the temple is not active');
+  assert.deepEqual(Array.from(g.pickups, (p) => [p.item, p.count]), [['diamond', 2], ['stone', 5]]);
+  g.state.invuln = 999; step(301);
+  guardian = g.golems.find((x) => x.shrine && !x.dead);
+  assert.ok(guardian); assert.equal(guardian.hp, guardian.maxHp); assert.equal(g.level.shrineCooldown, 0);
+  assert.equal(g.pickups.length, 2, 'the uncollected first reward is not duplicated');
+});
+
+test('v7 saves round-trip Purple Slimes, Crabocks and their stats', () => {
+  const { game: g } = createGame(); g.enterLevel('stage11'); suppressNewEnemySpawns(g.level);
+  const s = g.makeSlime(g.player.x + 35, g.player.y, false, false, false, true); s.hp = 55;
+  const mini = g.makeSlime(g.player.x + 20, g.player.y + 35, true, false, false, true); mini.hp = 20;
+  const crab = g.makeSpider(g.player.x + 65, g.player.y, true); crab.hp = 45;
+  g.slimes.push(s, mini); g.spiders.push(crab); g.state.crabocksSlain = 3;
+  g.addItem('amethyst', 4); g.storage.polishedDiamond = 2;
+  const before = comparableSave(g), loaded = createGame({ autoStart: false });
+  loaded.game.loadSaveText(JSON.stringify({ ...before, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(loaded.game), before);
+  assert.ok(loaded.game.slimes.every((x) => x.purple)); assert.equal(loaded.game.slimes[1].maxHp, 45);
+  assert.equal(loaded.game.spiders[0].kind, 'crabock'); assert.equal(loaded.game.spiders[0].hp, 45);
+  assert.equal(loaded.game.state.crabocksSlain, 3);
+});
+
+test('v7 saves preserve a living shrine guardian, its armour and the shrine cooldown/reward', () => {
+  const { game: g } = shrineArena(); g.useGolemShrine();
+  const guardian = g.golems[0]; hitGuardian(g, guardian); g.state.tools.sword = 1;
+  const before = comparableSave(g), loaded = createGame({ autoStart: false });
+  loaded.game.loadSaveText(JSON.stringify({ ...before, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(loaded.game), before);
+  const savedGuardian = loaded.game.golems[0]; assert.equal(savedGuardian.shrine, true);
+  assert.equal(savedGuardian.maxHp, guardian.maxHp); assert.equal(savedGuardian.hp, guardian.hp);
+  loaded.elements.resume.click();
+  while (!savedGuardian.dead) hitGuardian(loaded.game, savedGuardian);
+  const afterKill = comparableSave(loaded.game), roundTrip = createGame({ autoStart: false });
+  roundTrip.game.loadSaveText(JSON.stringify({ ...afterKill, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(roundTrip.game), afterKill);
+  assert.equal(roundTrip.game.level.shrineActivated, true); assert.equal(roundTrip.game.level.shrineCooldown, 20);
+  assert.deepEqual(Array.from(roundTrip.game.pickups, (p) => [p.item, p.count]), [['diamond', 2], ['stone', 5]]);
+  roundTrip.elements.resume.click(); suppressNewEnemySpawns(roundTrip.game.level);
+  roundTrip.game.state.invuln = 999; roundTrip.step(401);
+  assert.equal(roundTrip.game.golems.filter((x) => x.shrine && !x.dead).length, 1);
+});
+
+test('a Prospector mines Mossy Stone blocking Gold and can be saved while targeting it', () => {
+  const { game: g, step } = createGame(); g.enterLevel('stage12'); suppressNewEnemySpawns(g.level);
+  for (let y = 4; y <= 17; y++) for (let x = 4; x <= 23; x++) {
+    if (g.getTile(x, y) !== g.STAIRS_UP) g.setTile(x, y, g.FLOOR);
+  }
+  g.player.x = 20.5 * 32; g.player.y = 16.5 * 32;
+  const p = g.makeProspector(10.5 * 32, 10.5 * 32); g.prospectors.push(p);
+  g.setTile(12, 10, g.GOLD);
+  for (const [x, y] of [[11, 10], [12, 9], [13, 10], [12, 11]]) g.setTile(x, y, g.MOSSY_STONE);
+  step(1); assert.equal(p.oreTarget.tile, g.MOSSY_STONE);
+  const saved = g.createSaveText(), loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(saved);
+  assert.equal(loaded.game.prospectors[0].oreTarget.tile, g.MOSSY_STONE);
+  step(180); assert.equal(g.getTile(12, 10), g.FLOOR); assert.equal(p.haul.gold, 1);
+});
+
+test('genuine v6 fights migrate proportionally with the new stair, spike cooldown and intact progress', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-caverns-warden-v6.json'), 'utf8');
+  const old = JSON.parse(text), loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(text);
+  const g = loaded.game, now = JSON.parse(g.createSaveText());
+  assert.equal(now.version, 9); assert.equal(g.level.id, 'stage10');
+  assert.equal(g.warden.hp, old.warden.hp * 2); assert.equal(g.warden.phase, old.warden.phase);
+  assert.equal(g.warden.action, 'spikes'); assert.equal(g.warden.hit, true);
+  assert.equal(g.warden.spikeCooldown, g.BALANCE.wardenSpikeTick);
+  for (const field of ['tiles', 'originalTiles']) {
+    const expected = old.areas.stage10[field].slice(); expected[7 * 59 + 29] = g.STAIRS_DOWN;
+    assert.deepEqual(now.areas.stage10[field], expected, `only the exit changes ${field}`);
+  }
+  assert.deepEqual(now.areas.stage10.damage, old.areas.stage10.damage);
+  assert.deepEqual(now.areas.stage10.pickups, old.areas.stage10.pickups);
+  assert.deepEqual(now.inventory, old.inventory); assert.equal(g.state.hp, old.state.hp);
+  assert.equal(g.state.crabocksSlain, 0);
+  for (const item of ['amethyst', 'polishedAmethyst', 'diamond', 'polishedDiamond']) assert.equal(g.storage[item], 0);
+  loaded.elements.resume.click(); moveToStairs(g, loaded.step, g.level.stairsDown);
+  assert.equal(g.level.id, 'stage11'); assert.equal(g.warden, null);
+});
+
+test('genuine v6 victory and active Void Power remain unlocked and can enter the new floors', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-caverns-victory-v6.json'), 'utf8');
+  const old = JSON.parse(text), loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(text);
+  const g = loaded.game;
+  assert.equal(g.state.wardenDefeated, true); assert.equal(g.warden, null);
+  assert.equal(g.state.voidPowerTime, old.state.voidPowerTime); assert.equal(g.state.voidPowerCooldown, old.state.voidPowerCooldown);
+  assert.equal(g.countItem('blackAmethyst'), old.inventory[0].count);
+  loaded.elements.resume.click(); moveToStairs(g, loaded.step, g.level.stairsDown);
+  assert.equal(g.level.id, 'stage11'); moveToStairs(g, loaded.step, g.level.stairsDown);
+  assert.equal(g.level.id, 'stage12'); assert.equal(g.state.wardenDefeated, true);
+});
+
+test('lingering Warden spikes repeatedly tick on the lane, with recovery, escape and saved cooldown', () => {
+  const { game: g, step } = wardenArena(), boss = g.warden, p = g.level.pedestal;
+  boss.phase = 2; boss.hp = 2000; boss.x = p.x; boss.y = p.y;
+  boss.action = 'idle'; boss.timer = 0; boss.attackIndex = 0;
+  g.player.x = p.x + 180; g.player.y = p.y; step(1);
+  while (boss.action === 'spikeWarning') step(1);
+  step(1); assert.equal(g.state.hp, 88); assert.equal(boss.spikeCooldown, 0.65);
+  const before = comparableSave(g), loaded = createGame({ autoStart: false });
+  loaded.game.loadSaveText(JSON.stringify({ ...before, savedAt: new Date().toISOString() }));
+  assert.deepEqual(comparableSave(loaded.game), before);
+  loaded.elements.resume.click(); loaded.step(2);
+  assert.equal(loaded.game.state.hp, 88, 'reloading must not apply a duplicate immediate tick');
+  step(12); assert.equal(g.state.hp, 88, 'tick recovery prevents rapid damage');
+  step(2); assert.equal(g.state.hp, 76);
+  step(14); assert.equal(g.state.hp, 64, 'the same attack can tick repeatedly');
+  g.player.y += 120; step(20); assert.equal(g.state.hp, 64, 'leaving the lane avoids further ticks');
+});
+
+test('malformed v7 variant, shrine and spike saves fail atomically', () => {
+  const { game: g } = shrineArena(); g.useGolemShrine();
+  const before = comparableSave(g), cases = [];
+  function invalid(change) { const data = structuredClone(before); change(data); cases.push(data); }
+  invalid((s) => { s.enemies.golems[0].shrine = 'yes'; });
+  invalid((s) => { s.enemies.golems[0].mercury = true; });
+  invalid((s) => { s.enemies.golems[0].maxHp += 3; });
+  invalid((s) => { s.areas.stage12.shrine.cooldown = 21; });
+  invalid((s) => { s.areas.stage12.shrine.activated = false; });
+  invalid((s) => { s.enemies.golems.push(structuredClone(s.enemies.golems[0])); });
+  invalid((s) => { delete s.areas.stage12.shrine; });
+  invalid((s) => { s.currentLevel = 'home'; s.player.x = s.areas.home.w; });
+  for (const save of cases) {
+    save.savedAt = new Date().toISOString(); assert.throws(() => g.loadSaveText(JSON.stringify(save)));
+    assert.deepEqual(comparableSave(g), before);
+  }
+  const boss = wardenArena().game, bossBefore = comparableSave(boss), bad = structuredClone(bossBefore);
+  bad.savedAt = new Date().toISOString(); bad.warden.spikeCooldown = 5;
+  assert.throws(() => boss.loadSaveText(JSON.stringify(bad))); assert.deepEqual(comparableSave(boss), bossBefore);
+});
+
+test('v6 migration preserves inactive Warden arena loot and cracks before the next normal reset', () => {
+  const old = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-caverns-warden-v6.json'), 'utf8'));
+  const fresh = createGame(), spawn = fresh.game.level.spawn;
+  old.currentLevel = 'home'; old.player.x = spawn.x; old.player.y = spawn.y; old.warden = null;
+  for (const key of Object.keys(old.enemies)) old.enemies[key] = [];
+  const area = old.areas.stage10, width = 59;
+  const ore = area.tiles.findIndex((tile) => tile === fresh.game.BLACK_AMETHYST);
+  assert.ok(ore >= 0);
+  area.damage.push([`${ore % width},${Math.floor(ore / width)}`, 2]);
+  area.pickups.push(savedPickup('blackAmethyst', 29.5 * 32, 45.5 * 32, { count: 4 }));
+  const loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(JSON.stringify(old));
+  const now = JSON.parse(loaded.game.createSaveText()), changed = now.areas.stage10;
+  assert.deepEqual(changed.damage, area.damage); assert.deepEqual(changed.pickups, area.pickups);
+  for (const field of ['tiles', 'originalTiles']) {
+    const expected = area[field].slice(); expected[7 * width + 29] = fresh.game.STAIRS_DOWN;
+    assert.deepEqual(changed[field], expected);
+  }
+  loaded.elements.resume.click(); loaded.game.enterLevel('stage10');
+  assert.equal(loaded.game.level.damage.size, 0, 'normal re-entry still restores cracks');
+  assert.equal(loaded.game.pickups[0].count, 4, 'the saved drop remains safe');
+});
+
+test('v6 phase-one and phase-three fights retain their warning and health percentage', () => {
+  const original = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-caverns-warden-v6.json'), 'utf8'));
+  for (const [phase, hp, action] of [[1, 1600, 'chargeWarning'], [3, 500, 'beamWarning']]) {
+    const old = structuredClone(original);
+    Object.assign(old.warden, { phase, hp, action, timer: 0.6, hit: false });
+    const loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(JSON.stringify(old));
+    const boss = loaded.game.warden;
+    assert.equal(boss.hp, hp * 2); assert.equal(boss.phase, phase); assert.equal(boss.action, action);
+    assert.equal(boss.timer, 0.6); assert.equal(boss.spikeCooldown, 0);
+    loaded.elements.resume.click(); loaded.step(1);
+    assert.equal(loaded.game.warden.action, action);
+  }
+});
+
+test('malformed Purple Slime and Crabock variants are rejected without replacing a run', () => {
+  const { game: g } = createGame(); g.enterLevel('stage11'); suppressNewEnemySpawns(g.level);
+  g.slimes.push(g.makeSlime(g.player.x + 50, g.player.y, false, false, false, true));
+  g.spiders.push(g.makeSpider(g.player.x + 75, g.player.y, true));
+  const before = comparableSave(g), cases = [];
+  function invalid(change) { const data = structuredClone(before); change(data); cases.push(data); }
+  invalid((s) => { s.enemies.slimes[0].purple = 'true'; });
+  invalid((s) => { s.enemies.slimes[0].large = true; });
+  invalid((s) => { s.enemies.slimes[0].hp = 91; });
+  invalid((s) => { s.enemies.spiders[0].crabock = 'true'; });
+  invalid((s) => { s.enemies.spiders[0].hp = 91; });
+  invalid((s) => { delete s.state.stats.crabocksSlain; });
+  for (const bad of cases) {
+    bad.savedAt = new Date().toISOString(); assert.throws(() => g.loadSaveText(JSON.stringify(bad)));
+    assert.deepEqual(comparableSave(g), before);
+  }
+});
+
+// Stage 13: Ancient Mine, Mercury's poison edge, and current saves.
+function ancientMineArena() {
+  const run = createGame(), g = run.game;
+  g.enterLevel('stage13'); suppressNewEnemySpawns(g.level);
+  // A clear, predictable test arena away from either staircase.
+  for (let y = 18; y <= 28; y++) for (let x = 5; x <= 32; x++) g.setTile(x, y, g.FLOOR);
+  g.player.x = 12.5 * 32; g.player.y = 22.5 * 32;
+  g.camera.x = g.player.x; g.camera.y = g.player.y;
+  g.state.transitionLock = 999;
+  return run;
+}
+
+function venomBite(run) {
+  const g = run.game;
+  const spider = g.makeSpider(g.player.x + 18, g.player.y, false, true);
+  spider.speed = 0; g.spiders.push(spider); g.state.invuln = 0;
+  run.step(1);
+  assert.equal(g.state.poisonTime, 10);
+  g.spiders.length = 0;
+  return spider;
+}
+
+function setMove(run, code, down = true) {
+  run.listeners[down ? 'keydown' : 'keyup'][0]({ code, target: { tagName: 'BODY' }, preventDefault: noop });
+}
+
+function hitWithSword(g, enemy, tier = 4, mercury = false) {
+  aimSwordAt(g, enemy); g.state.tools.sword = tier; g.state.mercurySword = mercury;
+  g.state.cooldown = 0; g.swing();
+}
+
+function approx(actual, expected, tolerance = 1e-6) {
+  assert.ok(Math.abs(actual - expected) <= tolerance, `expected ${actual} to be near ${expected}`);
+}
+
+test('Ancient Mine connects to the temple, has traversable mine galleries and a visited-floor lift', () => {
+  const { game: g, elements, step } = createGame();
+  g.enterLevel('stage12');
+  const temple = g.level;
+  assert.equal(temple.downTarget, 'stage13');
+  assert.equal(temple.tiles[temple.stairsDown.ty * temple.w + temple.stairsDown.tx], g.STAIRS_DOWN);
+  moveToStairs(g, step, temple.stairsDown);
+  const mine = g.level;
+  assert.equal(mine.id, 'stage13'); assert.equal(mine.name, 'Ancient Mine');
+  assert.equal(elements['area-kicker'].textContent, 'Stage 13');
+  assert.equal(elements['area-subtitle'].textContent, 'The ancient people appeared to be miners, but something stopped them');
+  assert.equal(mine.upTarget, 'stage12'); assert.equal(mine.downTarget, null);
+  assert.equal(mine.elevators.length, 1);
+  const accessible = reachableForRadius(g, mine, g.BALANCE.golemRadius);
+  for (const point of ['8,10', '40,10', '44,31', '70,35', '15,42', '30,42']) {
+    assert.ok(accessible.has(point), `Ancient Golems can navigate to ${point}`);
+  }
+  assert.ok(accessible.has(`${mine.elevators[0].tx},${mine.elevators[0].ty}`));
+  for (const t of [g.GOLD, g.DIAMOND, g.MOSSY_STONE, g.IRON, g.BASALT]) assert.ok(mine.tiles.includes(t));
+  assert.ok(mine.decor.some((d) => d.kind === 'mineRail'));
+  assert.ok(mine.decor.some((d) => d.kind === 'mineSupport'));
+  moveToStairs(g, step, mine.stairsUp);
+  assert.equal(g.level, temple);
+  assert.equal(g.level.tiles[temple.stairsDown.ty * temple.w + temple.stairsDown.tx], g.STAIRS_DOWN);
+});
+
+test('Stage 13 naturally spawns all four requested variants and no disguised skeleton graves', () => {
+  const { game: g, step } = createGame(); g.enterLevel('stage13');
+  g.state.invuln = 999; g.state.transitionLock = 999;
+  step(1100); // skeletons spawn every seven seconds, so allow time to reach their cap
+  assert.equal(g.state.mode, 'playing');
+  assert.equal(g.golems.length, g.BALANCE.maxGolems);
+  assert.equal(g.prospectors.length, g.BALANCE.maxProspectors);
+  assert.equal(g.spiders.length, g.BALANCE.maxSpiders);
+  assert.equal(g.infectedSkeletons.length, g.BALANCE.maxInfectedSkeletons);
+  assert.ok(g.golems.every((e) => e.ancient && e.maxHp === 490));
+  assert.ok(g.prospectors.every((e) => e.skeleton && e.maxHp === 420));
+  assert.ok(g.spiders.every((e) => e.venom && !e.crabock && e.maxHp === 315));
+  assert.ok(g.infectedSkeletons.every((e) => e.kind === 'skeleton' && !e.hidden && e.graveIndex === -1 && e.maxHp === 315));
+  assert.equal(g.slimes.length + g.moles.length + g.ghosts.length + g.graveDiggers.length, 0);
+  assert.equal(g.level.graves.length, 0);
+});
+
+test('new enemies take exactly 14, 12, 9 and 9 unenhanced T4 sword hits', () => {
+  const { game: g } = ancientMineArena();
+  const cases = [
+    ['Ancient Golem', g.golems, () => g.makeGolem(g.player.x + 40, g.player.y, false, 35, false, true), 14, 490],
+    ['Skeleton Prospector', g.prospectors, () => g.makeProspector(g.player.x + 40, g.player.y, true), 12, 420],
+    ['Venom Spider', g.spiders, () => g.makeSpider(g.player.x + 40, g.player.y, false, true), 9, 315],
+    ['Skeleton', g.infectedSkeletons, () => g.makeInfectedSkeleton(g.player.x + 40, g.player.y, -1, true), 9, 315],
+  ];
+  for (const [name, list, create, hits, hp] of cases) {
+    const enemy = create(); list.push(enemy); assert.equal(enemy.maxHp, hp, name);
+    for (let i = 0; i < hits - 1; i++) hitWithSword(g, enemy, 4, false);
+    assert.equal(enemy.hp, 35, `${name} survives until the last hit`);
+    assert.equal(enemy.dead, false);
+    hitWithSword(g, enemy, 4, false);
+    assert.equal(enemy.dead, true, `${name} dies on hit ${hits}`);
+    list.length = 0;
+  }
+  assert.equal(g.state.skeletonsSlain, 1);
+});
+
+test('Ancient Golems keep normal Golem damage and disable at twenty actual tiles, not ten', () => {
+  const run = ancientMineArena(), g = run.game;
+  const a = g.makeGolem(10.5 * 32, 22.5 * 32, false, 35, false, true);
+  assert.equal(a.dmg, g.BALANCE.golemDamage); assert.equal(a.moveLimit, 20 * 32);
+  assert.equal(g.makeGolem(a.x, a.y).moveLimit, 10 * 32);
+  g.golems.push(a); g.player.x = a.x + 90; g.player.y = a.y; g.state.invuln = 999;
+  a.moved = 10 * 32 - 0.1; run.step(1);
+  assert.equal(a.disabled, 0); assert.ok(a.moved > 10 * 32);
+  a.moved = 20 * 32 - 1; run.step(1);
+  assert.equal(a.disabled, 3); assert.equal(a.moved, 0);
+  const x = a.x, y = a.y; run.step(20);
+  assert.equal(a.x, x); assert.equal(a.y, y); assert.equal(g.state.hp, 100);
+});
+
+test('Skeleton Prospectors mine Gold and move faster than ordinary Prospectors', () => {
+  const run = ancientMineArena(), g = run.game;
+  const ordinary = g.makeProspector(0, 0), miner = g.makeProspector(10.5 * 32, 22.5 * 32, true);
+  assert.ok(miner.speed > ordinary.speed); assert.equal(miner.maxHp, 420);
+  g.player.x = 30.5 * 32; g.player.y = 26.5 * 32;
+  g.setTile(12, 22, g.GOLD); g.prospectors.push(miner);
+  run.step(100);
+  assert.equal(g.getTile(12, 22), g.FLOOR);
+  assert.equal(miner.haul.gold, 1);
+});
+
+test('Skeleton Prospector bombs have a two-tile radius, heavier damage and the eight-second cooldown', () => {
+  for (const [ring, hp] of [[0, 0], [1, 10], [2, 25], [3, 100], [4, 100]]) {
+    const run = ancientMineArena(), g = run.game;
+    const miner = g.makeProspector(g.player.x - 3 * 32, g.player.y, true);
+    miner.speed = 0; g.prospectors.push(miner); g.addItem('gold', 1);
+    g.state.invuln = 999; run.step(1);
+    assert.equal(g.dynamites.length, 1); assert.equal(g.dynamites[0].skeleton, true);
+    assert.equal(miner.throwCd, 8);
+    const bomb = g.dynamites[0]; miner.dead = true;
+    g.player.x = bomb.targetX + ring * 32; g.player.y = bomb.targetY;
+    run.step(48);
+    assert.equal(g.state.hp, hp, `blast ring ${ring}`);
+    if (ring === 0) assert.equal(g.state.mode, 'dead');
+  }
+});
+
+test('normal Skeletons keep their distance, weave in both directions and throw bones without hiding', () => {
+  const run = ancientMineArena(), g = run.game;
+  const skeleton = g.makeInfectedSkeleton(g.player.x + 70, g.player.y, -1, true);
+  g.infectedSkeletons.push(skeleton); g.state.invuln = 999;
+  assert.equal(skeleton.kind, 'skeleton'); assert.equal(skeleton.hidden, false);
+  assert.equal(skeleton.graveIndex, -1); assert.equal(skeleton.maxHp, 315);
+  const start = { x: skeleton.x, y: skeleton.y };
+  run.math.random = () => 0; // force leftward strafe
+  run.step(1); assert.equal(g.boneProjectiles.length, 1); assert.equal(skeleton.strafeSign, -1);
+  assert.notEqual(skeleton.y, start.y, 'it sidesteps instead of only retreating');
+  assert.ok(Math.hypot(skeleton.x - g.player.x, skeleton.y - g.player.y) > 70, 'it creates distance');
+  skeleton.strafeTimer = 0; run.math.random = () => 0.99;
+  run.step(1); assert.equal(skeleton.strafeSign, 1);
+  assert.equal(skeleton.hidden, false);
+});
+
+test('Venom Spider poison requires a successful bite and displays its ten-second status', () => {
+  const run = ancientMineArena(), g = run.game;
+  const spider = g.makeSpider(g.player.x + 18, g.player.y, false, true);
+  spider.speed = 0; g.spiders.push(spider);
+  g.state.invuln = 1; run.step(1);
+  assert.equal(g.state.hp, 100); assert.equal(g.state.poisonTime, 0);
+  assert.ok(run.elements['poison-status'].classList.contains('is-hidden'));
+  g.state.invuln = 0; spider.attackCd = 0; run.step(1);
+  assert.equal(g.state.hp, 95); assert.equal(g.state.poisonTime, 10);
+  assert.equal(run.elements['poison-status'].classList.contains('is-hidden'), false);
+  assert.match(run.elements['poison-status'].textContent, /POISONED.*10s/);
+  g.spiders.length = 0; run.step(201);
+  assert.equal(g.state.poisonTime, 0); assert.equal(g.state.poisonDistance, 0);
+  assert.ok(run.elements['poison-status'].classList.contains('is-hidden'));
+});
+
+test('player poison uses actual voluntary distance, ignores invulnerability and excludes walls and knockback', () => {
+  const run = ancientMineArena(), g = run.game;
+  venomBite(run); g.state.invuln = 999;
+  const x0 = g.player.x;
+  setMove(run, 'KeyD'); run.step(4); setMove(run, 'KeyD', false);
+  approx(g.player.x - x0, 34); assert.equal(g.state.hp, 90); approx(g.state.poisonDistance, 2);
+  // Walking against a solid tile does not accrue distance or extra damage.
+  const wallX = Math.floor((g.player.x + 20) / 32), wallY = Math.floor(g.player.y / 32);
+  g.setTile(wallX, wallY, g.WALL);
+  const before = { x: g.player.x, hp: g.state.hp, partial: g.state.poisonDistance };
+  setMove(run, 'KeyD'); run.step(12); setMove(run, 'KeyD', false);
+  assert.equal(g.player.x, before.x); assert.equal(g.state.hp, before.hp); approx(g.state.poisonDistance, before.partial);
+  g.setTile(wallX, wallY, g.FLOOR);
+  // An ordinary bite pushes the player, but that involuntary step is not charged.
+  const spider = g.makeSpider(g.player.x + 18, g.player.y); spider.speed = 0;
+  g.spiders.push(spider); g.state.invuln = 0; const oldX = g.player.x;
+  run.step(1); assert.ok(g.player.x < oldX); assert.equal(g.state.hp, before.hp - 5);
+  approx(g.state.poisonDistance, before.partial);
+  g.spiders.length = 0; g.state.invuln = 999;
+  setMove(run, 'KeyA'); run.step(4); setMove(run, 'KeyA', false);
+  assert.equal(g.state.hp, before.hp - 10); approx(g.state.poisonDistance, 4);
+});
+
+test('diagonal movement counts Euclidean distance; standing still, pausing and knockback do not', () => {
+  const run = ancientMineArena(), g = run.game;
+  venomBite(run); g.state.invuln = 999;
+  const start = { x: g.player.x, y: g.player.y };
+  setMove(run, 'KeyD'); setMove(run, 'KeyS'); run.step(4);
+  setMove(run, 'KeyD', false); setMove(run, 'KeyS', false);
+  approx(Math.hypot(g.player.x - start.x, g.player.y - start.y), 34);
+  assert.equal(g.state.hp, 90); approx(g.state.poisonDistance, 2);
+  const remaining = g.state.poisonTime;
+  run.elements['pause-btn'].click(); run.step(60);
+  assert.equal(g.state.poisonTime, remaining); approx(g.state.poisonDistance, 2);
+  run.elements.resume.click(); run.step(10);
+  assert.equal(g.state.hp, 90); approx(g.state.poisonDistance, 2);
+});
+
+test('Mercury sword poison ticks 5% max HP each second for four to eight seconds and re-hits preserve progress', () => {
+  const run = ancientMineArena(), g = run.game;
+  const skeleton = g.makeInfectedSkeleton(g.player.x + 50, g.player.y, -1, true);
+  skeleton.speed = 0; skeleton.throwCooldown = 99; g.infectedSkeletons.push(skeleton);
+  g.state.invuln = 999; run.math.random = () => 0;
+  hitWithSword(g, skeleton, 4, true);
+  assert.equal(g.tierDamage(), 35); assert.equal(skeleton.hp, 280); assert.equal(skeleton.poisonTime, 4);
+  run.step(10); approx(skeleton.poisonProgress, 0.5); assert.equal(skeleton.hp, 280);
+  hitWithSword(g, skeleton, 4, true);
+  assert.equal(skeleton.hp, 245); approx(skeleton.poisonProgress, 0.5); assert.equal(skeleton.poisonTime, 4);
+  run.step(10); approx(skeleton.hp, 245 - 315 * 0.05); approx(skeleton.poisonProgress, 0);
+  run.step(70); approx(skeleton.hp, 245 - 4 * 315 * 0.05);
+  assert.equal(skeleton.poisonTime, 0); assert.equal(skeleton.poisonProgress, 0);
+  const hp = skeleton.hp; run.step(25); assert.equal(skeleton.hp, hp);
+  run.math.random = () => 0.999999; hitWithSword(g, skeleton, 4, true);
+  assert.equal(skeleton.poisonTime, 8);
+});
+
+test('Ghosts and Venom Spiders take ordinary sword damage but are immune to Mercury poison', () => {
+  const run = ancientMineArena(), g = run.game;
+  const venom = g.makeSpider(g.player.x + 40, g.player.y, false, true); venom.speed = 0;
+  g.spiders.push(venom); hitWithSword(g, venom, 4, true);
+  assert.equal(venom.hp, 280); assert.equal(venom.poisonTime, 0);
+  g.spiders.length = 0; g.enterLevel('stage8'); suppressNewEnemySpawns(g.level);
+  const ghost = g.makeGhost(g.player.x + 40, g.player.y); g.ghosts.push(ghost);
+  hitWithSword(g, ghost, 4, true); assert.equal(ghost.hp, 140); assert.equal(ghost.poisonTime, 0);
+  g.state.invuln = 999; run.step(25); assert.equal(ghost.hp, 140);
+});
+
+test('Mercury poison applies to each ordinary enemy family, including both Skeleton variants', () => {
+  const run = ancientMineArena(), g = run.game;
+  const x = g.player.x + 40, y = g.player.y;
+  const enemies = [
+    [g.slimes, g.makeSlime(x, y, false)], [g.moles, g.makeMole(x, y)],
+    [g.spiders, g.makeSpider(x, y)], [g.spiders, g.makeSpider(x, y, true)],
+    [g.golems, g.makeGolem(x, y, false, 10, false, true)],
+    [g.prospectors, g.makeProspector(x, y, true)], [g.graveDiggers, g.makeGraveDigger(x, y, 0)],
+    [g.infectedSkeletons, g.makeInfectedSkeleton(x, y, 0)],
+    [g.infectedSkeletons, g.makeInfectedSkeleton(x, y, -1, true)],
+  ];
+  for (const [list, enemy] of enemies) {
+    enemy.speed = 0; if (enemy.kind === 'infectedSkeleton') enemy.hidden = false;
+    if (enemy.kind === 'infectedSkeleton' || enemy.kind === 'skeleton') enemy.throwCooldown = 99;
+    list.push(enemy);
+  }
+  g.state.invuln = 999; run.math.random = () => 0;
+  hitWithSword(g, enemies[0][1], 1, true); // one sweep reaches every enemy
+  for (const [, e] of enemies) {
+    assert.equal(e.hp, e.maxHp - 10, `${e.kind || 'slime'} direct damage`);
+    assert.equal(e.poisonTime, 4, `${e.kind || 'slime'} gets poisoned`);
+  }
+  run.step(20);
+  for (const [, e] of enemies) approx(e.hp, e.maxHp - 10 - e.maxHp * 0.05);
+});
+
+test('poison slows ordinary enemies to 75% of their normal actual movement speed', () => {
+  const types = [
+    ['stage1', 'slimes', (g, x, y) => g.makeSlime(x, y, false)],
+    ['stage2', 'moles', (g, x, y) => g.makeMole(x, y)],
+    ['stage12', 'spiders', (g, x, y) => g.makeSpider(x, y)],
+    ['stage11', 'spiders', (g, x, y) => g.makeSpider(x, y, true)],
+    ['stage5', 'golems', (g, x, y) => g.makeGolem(x, y)],
+    ['stage13', 'golems', (g, x, y) => g.makeGolem(x, y, false, 10, false, true)],
+    ['stage3', 'prospectors', (g, x, y) => g.makeProspector(x, y)],
+    ['stage13', 'prospectors', (g, x, y) => g.makeProspector(x, y, true)],
+    ['stage8', 'graveDiggers', (g, x, y) => g.makeGraveDigger(x, y, 0)],
+    ['stage13', 'infectedSkeletons', (g, x, y) => g.makeInfectedSkeleton(x, y, -1, true)],
+    ['stage9', 'infectedSkeletons', (g, x, y) => { const s = g.makeInfectedSkeleton(x, y, 0); s.hidden = false; return s; }],
+  ];
+  for (const [area, list, make] of types) {
+    const run = createGame(), g = run.game; g.enterLevel(area); suppressNewEnemySpawns(g.level);
+    for (let ty = 18; ty <= 27; ty++) for (let tx = 6; tx <= 28; tx++) g.setTile(tx, ty, g.FLOOR);
+    const x = 10.5 * 32, y = 22.5 * 32;
+    g.player.x = 24.5 * 32; g.player.y = y; g.state.transitionLock = 999;
+    const a = make(g, x, y), b = make(g, x, y + 3 * 32);
+    for (const e of [a, b]) {
+      e.wanderAngle = 0; e.wanderTimer = 20; e.scanTimer = 20;
+      e.knockX = e.knockY = 0; e.throwCooldown = 20;
+      if (e.kind === 'graveDigger') { e.graveIndex = 0; g.level.graves[0].x = x; g.level.graves[0].y = y; }
+    }
+    // Infected skeletons only move while the player is in sight. Keep both at
+    // the same distance and standoff angle in separate otherwise-identical frames.
+    if (area === 'stage9') {
+      g.player.x = x + 70; g.player.y = y; a.strafeTimer = b.strafeTimer = 2;
+      b.x = x; b.y = y;
+    }
+    if (area === 'stage8') { b.x = x; b.y = y; }
+    b.poisonTime = 4; b.poisonProgress = 0;
+    g[list].push(a, b); run.step(1);
+    const regular = Math.hypot(a.x - x, a.y - y);
+    const slow = Math.hypot(b.x - x, b.y - (area === 'stage8' || area === 'stage9' ? y : y + 3 * 32));
+    assert.ok(regular > 0, `${area} ${list} must actually move`);
+    approx(slow / regular, 0.75, 1e-5);
+  }
+});
+
+test('Mercury poison affects shrine guardian and Warden, including their ordinary defeat rewards', () => {
+  {
+    const run = shrineArena(), g = run.game;
+    assert.equal(g.useGolemShrine(), true);
+    const guardian = g.golems.find((e) => e.shrine); guardian.hp = 36;
+    g.player.x = guardian.x - 55; g.player.y = guardian.y; g.state.invuln = 999;
+    run.math.random = () => 0; hitWithSword(g, guardian, 4, true);
+    assert.equal(guardian.hp, 1); assert.equal(guardian.poisonTime, 4);
+    run.step(20); assert.equal(guardian.dead, true);
+    assert.ok(g.level.shrineCooldown > 19);
+    assert.equal(g.pickups.filter((p) => p.item === 'diamond').reduce((n, p) => n + p.count, 0), 2);
+    assert.equal(g.pickups.filter((p) => p.item === 'stone').reduce((n, p) => n + p.count, 0), 5);
+  }
+  {
+    const run = wardenArena(), g = run.game, boss = g.warden;
+    boss.hp = 150; g.state.invuln = 999; run.math.random = () => 0;
+    hitWithSword(g, boss, 4, true);
+    assert.equal(boss.hp, 115); assert.equal(boss.poisonTime, 4); assert.equal(boss.phase, 3);
+    run.step(20); assert.equal(g.warden, null); assert.equal(g.state.wardenDefeated, true);
+    assert.equal(run.elements['void-power'].classList.contains('is-hidden'), false);
+  }
+});
+
+test('a poisoned Warden walks and charges at 75% speed', () => {
+  const run = wardenArena(), g = run.game, boss = g.warden;
+  g.state.invuln = 999; g.player.x = boss.x + 150; g.player.y = boss.y;
+  const x = boss.x, y = boss.y;
+  boss.action = 'approach'; boss.timer = 2; boss.poisonTime = 0; run.step(1);
+  const walk = boss.x - x;
+  boss.x = x; boss.y = y; boss.action = 'approach'; boss.timer = 2; boss.poisonTime = 4; boss.poisonProgress = 0;
+  run.step(1); approx((boss.x - x) / walk, 0.75);
+  boss.x = x; boss.y = y; boss.action = 'charge'; boss.angle = 0; boss.travel = 0;
+  boss.originX = x; boss.originY = y; boss.poisonTime = 0; boss.poisonProgress = 0; run.step(1);
+  const charge = boss.x - x;
+  boss.x = x; boss.y = y; boss.action = 'charge'; boss.angle = 0; boss.travel = 0;
+  boss.originX = x; boss.originY = y; boss.poisonTime = 4; boss.poisonProgress = 0; run.step(1);
+  approx((boss.x - x) / charge, 0.75);
+});
+
+test('player poison refreshes on another successful venom bite, expires mid-step and can cause death', () => {
+  const run = ancientMineArena(), g = run.game;
+  const spider = venomBite(run);
+  g.state.poisonDistance = 20; g.state.poisonTime = 2;
+  spider.x = g.player.x + 18; spider.y = g.player.y; spider.attackCd = 0;
+  g.spiders.push(spider); g.state.invuln = 0; run.step(1);
+  assert.equal(g.state.poisonTime, 10); approx(g.state.poisonDistance, 20);
+  g.spiders.length = 0; g.state.invuln = 999;
+  g.state.poisonTime = 0.1;
+  const x = g.player.x, before = g.state.hp;
+  setMove(run, 'KeyD'); run.step(4); setMove(run, 'KeyD', false);
+  approx(g.player.x - x, 34); assert.equal(g.state.hp, before - 5);
+  assert.equal(g.state.poisonTime, 0); assert.equal(g.state.poisonDistance, 0);
+  g.state.hp = 5; g.state.poisonTime = 5; g.state.poisonDistance = 31;
+  setMove(run, 'KeyD'); run.step(1); setMove(run, 'KeyD', false);
+  assert.equal(g.state.mode, 'dead');
+  g.respawnAtBase(); assert.equal(g.state.hp, 100);
+  assert.equal(g.state.poisonTime, 0); assert.equal(g.state.poisonDistance, 0);
+  assert.ok(run.elements['poison-status'].classList.contains('is-hidden'));
+});
+
+test('current saves resume active poison, new enemy variants, partial counters and both projectile types', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.addItem('gold', 1); g.state.tools.sword = 4; g.state.mercurySword = true;
+  const miner = g.makeProspector(g.player.x - 3 * 32, g.player.y, true);
+  miner.speed = 0; miner.haul.gold = 4; g.prospectors.push(miner);
+  const skeleton = g.makeInfectedSkeleton(g.player.x + 70, g.player.y, -1, true);
+  skeleton.speed = 0; g.infectedSkeletons.push(skeleton);
+  const venom = g.makeSpider(g.player.x + 220, g.player.y, false, true); venom.speed = 0; g.spiders.push(venom);
+  const golem = g.makeGolem(g.player.x + 250, g.player.y, false, 35, false, true);
+  golem.disabled = 2; golem.moved = 15 * 32; g.golems.push(golem);
+  g.state.invuln = 999; run.step(1);
+  assert.equal(g.dynamites[0].skeleton, true); assert.equal(g.boneProjectiles.length, 1);
+  miner.poisonTime = 6.25; miner.poisonProgress = 0.4;
+  skeleton.poisonTime = 4.3; skeleton.poisonProgress = 0.65;
+  golem.poisonTime = 5; golem.poisonProgress = 0.5;
+  g.state.poisonTime = 7.2; g.state.poisonDistance = 19.5;
+  const text = g.createSaveText(), before = comparableSave(g);
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(text);
+  assert.equal(next.game.state.mode, 'paused');
+  assert.deepEqual(comparableSave(next.game), before);
+  assert.equal(next.game.level.id, 'stage13');
+  assert.equal(next.game.prospectors[0].skeleton, true); assert.equal(next.game.prospectors[0].haul.gold, 4);
+  assert.equal(next.game.golems[0].ancient, true); assert.equal(next.game.golems[0].moved, 15 * 32);
+  assert.equal(next.game.infectedSkeletons[0].kind, 'skeleton');
+  assert.equal(next.game.spiders[0].venom, true);
+  assert.equal(next.game.dynamites[0].skeleton, true); assert.equal(next.game.boneProjectiles.length, 1);
+  assert.match(next.elements['poison-status'].textContent, /POISONED.*8s/);
+  next.elements.resume.click(); next.step(8); // the first post-load frame establishes the clock
+  approx(next.game.infectedSkeletons[0].hp, 315 - 315 * 0.05);
+  assert.ok(next.game.state.poisonTime < 7.2);
+});
+
+test('inactive poisoned Skeleton Prospectors retain their haul and timers across travel and saves', () => {
+  const run = ancientMineArena(), g = run.game;
+  const p = g.makeProspector(g.player.x + 50, g.player.y, true);
+  p.haul.gold = 7; p.hp = 320; p.poisonTime = 6; p.poisonProgress = 0.6;
+  g.prospectors.push(p); g.enterLevel('home');
+  run.step(40);
+  assert.equal(p.poisonTime, 6); assert.equal(p.poisonProgress, 0.6); assert.equal(p.hp, 320);
+  const text = g.createSaveText(), next = createGame({ autoStart: false }); next.game.loadSaveText(text);
+  const saved = next.game.levels.stage13.prospectors[0];
+  assert.equal(saved.skeleton, true); assert.equal(saved.haul.gold, 7);
+  assert.equal(saved.hp, 320); assert.equal(saved.poisonTime, 6); assert.equal(saved.poisonProgress, 0.6);
+  next.elements.resume.click(); next.game.enterLevel('stage13'); suppressNewEnemySpawns(next.game.level);
+  next.game.state.invuln = 999; next.step(9);
+  approx(saved.hp, 320 - 420 * 0.05);
+});
+
+test('Warden poison and its fractional tick survive a mid-attack save', () => {
+  const run = wardenArena(), g = run.game, b = g.warden;
+  g.state.invuln = 999; run.math.random = () => 0; hitWithSword(g, b, 4, true);
+  b.action = 'chargeWarning'; b.timer = 0.8; b.originX = b.x; b.originY = b.y; b.angle = 0;
+  run.step(10); const text = g.createSaveText(), expected = comparableSave(g);
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(text);
+  assert.deepEqual(comparableSave(next.game), expected);
+  assert.equal(next.game.warden.action, 'chargeWarning'); approx(next.game.warden.poisonProgress, 0.5);
+  next.elements.resume.click(); next.step(11);
+  assert.equal(next.game.warden.hp, 3500 - 35 - 175);
+});
+
+test('genuine version-7 Temple saves keep every tile and legacy Mercury guardian armour when migrated and resaved', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-ancient-temple-v7.json'), 'utf8');
+  const old = JSON.parse(text), run = createGame({ autoStart: false }), g = run.game;
+  g.loadSaveText(text);
+  assert.equal(g.level.id, 'stage12'); assert.equal(g.level.downTarget, 'stage13');
+  assert.equal(g.state.hp, 72); assert.equal(g.state.healDelay, 2);
+  assert.equal(g.state.mercurySword, true); assert.equal(g.state.elevatorUnlocked, true);
+  assert.equal(g.state.poisonTime, 0); assert.equal(g.state.poisonDistance, 0);
+  assert.equal(g.state.skeletonsSlain, 0); assert.equal(g.level.damage.get('9,1'), 2);
+  assert.equal(g.level.shrineActivated, true); assert.equal(g.level.shrineCooldown, 0);
+  assert.equal(g.prospectors[0].hp, 65); assert.equal(g.prospectors[0].haul.gold, 3);
+  assert.equal(g.prospectors[0].skeleton, false); assert.equal(g.prospectors[0].poisonTime, 0);
+  assert.ok(g.pickups.some((p) => p.item === 'diamond' && p.count === 2));
+  const exit = g.level.stairsDown.ty * g.level.w + g.level.stairsDown.tx;
+  for (const key of ['tiles', 'originalTiles']) {
+    const expected = old.areas.stage12[key].slice(); expected[exit] = g.STAIRS_DOWN;
+    assert.deepEqual(Array.from(g.level[key]), expected, `${key} preserved except the new staircase`);
+  }
+  const guardian = g.golems[0];
+  assert.equal(guardian.shrine, true); assert.equal(guardian.maxHp, 841.5);
+  assert.equal(guardian.hp, 736.5); assert.equal(guardian.poisonTime, 0);
+  const v9 = g.createSaveText(); assert.equal(JSON.parse(v9).version, 9);
+  const restored = createGame({ autoStart: false }); restored.game.loadSaveText(v9);
+  assert.equal(restored.game.golems[0].maxHp, 841.5);
+  assert.equal(restored.game.golems[0].hp, 736.5);
+  restored.elements.resume.click();
+  const liveGuardian = restored.game.golems[0];
+  restored.game.player.x = liveGuardian.x - 50; restored.game.player.y = liveGuardian.y;
+  hitWithSword(restored.game, liveGuardian, 4, true);
+  assert.equal(liveGuardian.hp, 736.5 - 35, 'old Mercury purchase uses base sword damage now');
+  assert.ok(liveGuardian.poisonTime >= 4 && liveGuardian.poisonTime <= 8);
+});
+
+test('genuine version-7 Amethyst saves preserve old enemy state and Mercury grants poison automatically', () => {
+  const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'pre-ancient-cavern-v7.json'), 'utf8');
+  const old = JSON.parse(text), run = createGame({ autoStart: false }), g = run.game;
+  g.loadSaveText(text); assert.equal(g.level.id, 'stage11');
+  assert.equal(g.state.mercurySword, true); assert.equal(g.tierDamage(), 30);
+  assert.equal(g.slimes[0].purple, true); assert.equal(g.slimes[0].hp, 47);
+  assert.equal(g.spiders[0].crabock, true); assert.equal(g.spiders[0].hp, 62);
+  assert.deepEqual(Array.from(g.level.tiles), old.areas.stage11.tiles);
+  assert.deepEqual(Array.from(g.level.originalTiles), old.areas.stage11.originalTiles);
+  const v9 = g.createSaveText(), loaded = createGame({ autoStart: false }); loaded.game.loadSaveText(v9);
+  loaded.elements.resume.click();
+  const crabock = loaded.game.spiders[0]; loaded.game.player.x = crabock.x - 40; loaded.game.player.y = crabock.y;
+  hitWithSword(loaded.game, crabock, 3, true);
+  assert.equal(crabock.hp, 32); assert.ok(crabock.poisonTime >= 4 && crabock.poisonTime <= 8);
+});
+
+test('Skeleton bomb flight and explosion appearance remain the small-radius variant across reload', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.addItem('gold', 1); const miner = g.makeProspector(g.player.x - 3 * 32, g.player.y, true);
+  miner.speed = 0; g.prospectors.push(miner); g.state.invuln = 999; run.step(1);
+  const bomb = g.dynamites[0]; miner.dead = true;
+  g.player.x = bomb.targetX + 3 * 32;
+  const inFlight = g.createSaveText();
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(inFlight);
+  assert.equal(next.game.dynamites[0].skeleton, true);
+  next.elements.resume.click(); next.step(49);
+  assert.equal(next.game.state.hp, 100, 'three tiles away is outside the smaller blast');
+  assert.equal(next.game.level.explosions[0].skeleton, true);
+  const burst = next.game.createSaveText();
+  const last = createGame({ autoStart: false }); last.game.loadSaveText(burst);
+  assert.equal(last.game.level.explosions[0].skeleton, true);
+});
+
+test('malformed current poison, variants and projectiles are rejected transactionally', () => {
+  const run = ancientMineArena(), g = run.game;
+  const venom = g.makeSpider(g.player.x + 40, g.player.y, false, true); g.spiders.push(venom);
+  const golem = g.makeGolem(g.player.x + 80, g.player.y, false, 35, false, true); g.golems.push(golem);
+  const skeleton = g.makeInfectedSkeleton(g.player.x + 100, g.player.y, -1, true); g.infectedSkeletons.push(skeleton);
+  const miner = g.makeProspector(g.player.x - 70, g.player.y, true); g.prospectors.push(miner);
+  g.dynamites.push({ fromX: miner.x, fromY: miner.y, x: miner.x, y: miner.y,
+    targetX: g.player.x, targetY: g.player.y, age: 0, skeleton: true });
+  const original = JSON.parse(g.createSaveText()), baseline = comparableSave(g);
+  const cases = [
+    (s) => { s.state.poisonTime = -1; },
+    (s) => { s.state.poisonTime = 11; },
+    (s) => { s.state.poisonTime = 0; s.state.poisonDistance = 5; },
+    (s) => { s.state.poisonTime = 4; s.state.poisonDistance = 32; },
+    (s) => { delete s.state.poisonDistance; },
+    (s) => { s.enemies.spiders[0].poisonTime = 2; },
+    (s) => { s.enemies.golems[0].poisonProgress = 1; },
+    (s) => { s.enemies.golems[0].poisonTime = 0; s.enemies.golems[0].poisonProgress = 0.5; },
+    (s) => { s.enemies.golems[0].moved = 20 * 32 + 1; },
+    (s) => { s.enemies.golems[0].maxHp = 491; },
+    (s) => { s.enemies.golems[0].mercury = true; },
+    (s) => { s.enemies.infectedSkeletons[0].hidden = true; },
+    (s) => { s.enemies.infectedSkeletons[0].graveIndex = 0; },
+    (s) => { s.areas.stage13.prospectors[0].skeleton = 'yes'; },
+    (s) => { delete s.areas.stage13.dynamites[0].skeleton; },
+    (s) => { s.version = 7; },
+  ];
+  for (const mutate of cases) {
+    const invalid = structuredClone(original); mutate(invalid);
+    assert.throws(() => g.loadSaveText(JSON.stringify(invalid)));
+    assert.deepEqual(comparableSave(g), baseline, 'a rejected import does not modify the running game');
+  }
+});
+
+test('left click and Space remain usable when an enemy overlaps the player', () => {
+  const run = ancientMineArena(), g = run.game;
+  const enemy = g.makeInfectedSkeleton(g.player.x - 3, g.player.y, -1, true);
+  g.infectedSkeletons.push(enemy); g.state.tools.sword = 4; g.selectTool('sword');
+  g.camera.x = g.player.x; g.camera.y = g.player.y; g.player.faceX = 1; g.player.faceY = 0;
+  run.elements.game.dispatch('pointerdown', { clientX: 637, clientY: 400, pointerType: 'mouse' });
+  assert.equal(enemy.hp, 280, 'a close mouse click aims at the overlap');
+  g.state.cooldown = 0; g.pointer.inside = false;
+  run.listeners.keydown[0]({ code: 'Space', target: { tagName: 'BODY' }, preventDefault: noop });
+  assert.equal(enemy.hp, 245, 'Space still strikes an overlapping enemy');
+});
+
+// Floor 13's corrected resources, Basalt, and genuine version-8 migrations.
+test('Ancient Mine seeds exactly the five requested resources even with extreme random seeds', () => {
+  const { game: g, math } = createGame();
+  const expected = [g.GOLD, g.DIAMOND, g.MOSSY_STONE, g.IRON, g.BASALT].sort((a, b) => a - b);
+  for (const [random, dominant] of [[0.01, g.GOLD], [0.32, g.DIAMOND], [0.50, g.IRON],
+    [0.65, g.MOSSY_STONE], [0.95, g.BASALT]]) {
+    math.random = () => random;
+    const mine = g.buildStage13();
+    const resources = [...new Set([...mine.tiles].filter((t) => g.TILES[t].hits > 0))].sort((a, b) => a - b);
+    assert.deepEqual(resources, expected, `resources at random value ${random}`);
+    assert.ok([...mine.tiles].filter((t) => t === dominant).length > 100, 'the intended random band dominates');
+    assert.deepEqual(Array.from(mine.originalTiles), Array.from(mine.tiles));
+    const accessible = reachableWalkableTiles(g, mine);
+    for (const ore of expected) {
+      let reachable = false;
+      for (let i = 0; i < mine.tiles.length && !reachable; i++) {
+        if (mine.tiles[i] !== ore) continue;
+        const x = i % mine.w, y = Math.floor(i / mine.w);
+        reachable = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+          .some(([dx, dy]) => accessible.has(`${x + dx},${y + dy}`));
+      }
+      assert.ok(reachable, `resource ${g.TILES[ore].drop} has a reachable vein at random value ${random}`);
+    }
+  }
+});
+
+test('Basalt is distinct from Stone, breaks in one hit at every tier, and drops one or two collectible pieces', () => {
+  const run = ancientMineArena(), g = run.game;
+  assert.equal(g.ITEMS.basalt.name, 'Basalt');
+  assert.notEqual(g.TILES[g.BASALT].base, g.TILES[g.STONE].base);
+  assert.equal(g.TILES[g.BASALT].solid, true);
+  assert.equal(g.TILES[g.BASALT].drop, 'basalt');
+  for (const tier of [1, 2, 3, 4]) {
+    g.state.tools.pickaxe = tier;
+    assert.equal(g.pickaxeHits(g.TILES[g.BASALT]), 1);
+    for (const [random, amount] of [[0, 1], [0.999, 2]]) {
+      run.math.random = () => random;
+      mine(g, g.BASALT);
+      assert.equal(g.getTile(6, 5), g.FLOOR);
+      const drop = g.pickups[g.pickups.length - 1];
+      assert.equal(drop.item, 'basalt'); assert.equal(drop.count, amount);
+      assert.equal(drop.source, 'mining');
+    }
+  }
+  run.math.random = () => 0.5;
+  run.step(30);
+  assert.equal(g.pickups.length, 0);
+  assert.equal(g.countItem('basalt'), 12);
+  assert.equal(g.state.oreHauled, 12);
+  assert.equal(g.countItem('stone'), 0, 'Basalt and ordinary Stone stay separate in the bag');
+  mine(g, g.MOSSY_STONE); run.step(30);
+  assert.equal(g.countItem('stone'), 2, 'Mossy Stone still produces ordinary Stone');
+  assert.equal(g.countItem('basalt'), 12);
+});
+
+test('Basalt is stored and survives death like Stone, but has no crafting, melter or trade recipe', () => {
+  const { game: g, elements } = createGame();
+  assert.equal(Object.keys(g.ITEMS).at(-1), 'basalt', 'existing Storage row ordering stays unchanged');
+  g.addItem('basalt', 9); g.openStation('storage');
+  const row = storageRow(elements, Object.keys(g.ITEMS).indexOf('basalt'));
+  assert.equal(row.bag.textContent, '9'); assert.equal(row.stored.textContent, '0');
+  for (let i = 0; i < 4; i++) row.store.click();
+  assert.equal(g.storage.basalt, 4); assert.equal(g.countItem('basalt'), 5);
+  assert.equal(row.bag.textContent, '5'); assert.equal(row.stored.textContent, '4');
+  assert.equal(g.selectMelterOre('basalt'), false);
+  g.loadSlot('basalt');
+  assert.equal(g.polishGem('basalt'), false); assert.equal(g.sellPolishedGem('basalt'), false);
+  assert.equal(g.pressCoin('basalt'), false); assert.equal(g.tradeCoin('basalt'), false);
+  assert.equal(g.countItem('basalt'), 5);
+  g.closeStation(); g.respawnAtBase();
+  assert.equal(g.countItem('basalt'), 3, 'death rounds half the bag contents up');
+  assert.equal(g.storage.basalt, 4, 'stored Basalt is safe from death');
+  g.openStation('storage'); row.take.click();
+  assert.equal(g.storage.basalt, 3); assert.equal(g.countItem('basalt'), 4);
+});
+
+test('a full bag leaves Basalt on the ground, and it survives saves, travel and later collection once', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.addItem('coal', 990); run.math.random = () => 0.999;
+  mine(g, g.BASALT); run.step(25);
+  assert.equal(g.countItem('basalt'), 0); assert.equal(g.pickups.length, 1);
+  assert.equal(g.pickups[0].phase, 'ground'); assert.equal(g.pickups[0].count, 2);
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(g.createSaveText());
+  const ng = next.game; next.elements.resume.click();
+  assert.equal(ng.pickups[0].item, 'basalt'); assert.equal(ng.pickups[0].count, 2);
+  ng.enterLevel('home'); ng.enterLevel('stage13'); suppressNewEnemySpawns(ng.level);
+  assert.equal(ng.pickups.length, 1); assert.equal(ng.pickups[0].item, 'basalt');
+  ng.removeItem('coal', 99);
+  ng.player.x = ng.pickups[0].x; ng.player.y = ng.pickups[0].y;
+  ng.state.invuln = 999; ng.state.transitionLock = 999; next.step(30);
+  assert.equal(ng.countItem('basalt'), 2); assert.equal(ng.pickups.length, 0);
+  assert.equal(ng.state.oreHauled, 2);
+  next.step(30); assert.equal(ng.countItem('basalt'), 2, 'no duplicate pickup');
+});
+
+test('a Skeleton Prospector can clear Basalt blocking Gold and resume its route after a save', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.player.x = 28.5 * 32; g.player.y = 27.5 * 32;
+  const miner = g.makeProspector(10.5 * 32, 22.5 * 32, true); g.prospectors.push(miner);
+  g.setTile(12, 22, g.GOLD);
+  for (const [x, y] of [[11, 22], [12, 21], [13, 22], [12, 23]]) g.setTile(x, y, g.BASALT);
+  run.step(1);
+  assert.equal(miner.oreTarget.tile, g.BASALT);
+  assert.equal(miner.oreTarget.tx, 11); assert.equal(miner.oreTarget.ty, 22);
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(g.createSaveText());
+  assert.equal(next.game.prospectors[0].oreTarget.tile, g.BASALT);
+  next.elements.resume.click(); next.game.state.invuln = 999; next.step(180);
+  assert.equal(next.game.getTile(12, 22), next.game.FLOOR);
+  assert.ok(next.game.prospectors[0].haul.gold >= 1, 'the miner collects the buried Gold');
+  assert.equal(next.game.countItem('basalt'), 0, 'NPC-cleared rock is not credited to the player');
+});
+
+test('mined Basalt and cracked Diamond return on re-entry without losing the Basalt pickup', () => {
+  const run = ancientMineArena(), g = run.game;
+  const area = g.level, original = Array.from(area.originalTiles);
+  const basalt = findReachableOre(g, g.BASALT), diamond = findReachableOre(g, g.DIAMOND);
+  const hit = (ore) => {
+    g.player.x = (ore.adjacentX + 0.5) * 32; g.player.y = (ore.adjacentY + 0.5) * 32;
+    g.camera.x = g.player.x; g.camera.y = g.player.y; g.state.cooldown = 0;
+    g.selectTool('pickaxe');
+    run.elements.game.dispatch('pointerdown', { pointerType: 'mouse',
+      clientX: (ore.tx + 0.5) * 32 - g.camera.x + 640,
+      clientY: (ore.ty + 0.5) * 32 - g.camera.y + 400 });
+  };
+  g.state.tools.pickaxe = 1; hit(basalt);
+  assert.equal(g.getTile(basalt.tx, basalt.ty), g.FLOOR);
+  assert.equal(g.pickups[0].item, 'basalt');
+  hit(diamond); assert.equal(area.damage.get(`${diamond.tx},${diamond.ty}`), 1);
+  g.enterLevel('home');
+  assert.ok(g.countItem('basalt') >= 1 && g.countItem('basalt') <= 2);
+  const carried = g.countItem('basalt');
+  g.enterLevel('stage13');
+  assert.deepEqual(Array.from(area.tiles), original);
+  assert.equal(area.damage.size, 0);
+  assert.equal(g.getTile(basalt.tx, basalt.ty), g.BASALT);
+  assert.equal(g.getTile(diamond.tx, diamond.ty), g.DIAMOND);
+  assert.equal(g.countItem('basalt'), carried);
+});
+
+test('version-9 saves round-trip Basalt in the bag, chest, ground, flying loot and a Prospector target', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.addItem('basalt', 7); g.storage.basalt = 12;
+  g.pickups.push(savedPickup('basalt', g.player.x + 32, g.player.y, { count: 2 }));
+  g.pickups.push(savedPickup('basalt', g.player.x + 64, g.player.y, { phase: 'flying', age: 0.2 }));
+  g.setTile(11, 22, g.BASALT);
+  const miner = g.makeProspector(10.5 * 32, 22.5 * 32, true);
+  miner.oreTarget = { tx: 11, ty: 22, tile: g.BASALT, goalTx: 10, goalTy: 22, route: [], routeIndex: 0 };
+  miner.mineProgress = 0.35; miner.haul.gold = 3; g.prospectors.push(miner);
+  const text = g.createSaveText(), saved = JSON.parse(text);
+  assert.equal(saved.version, 9); assert.equal(saved.storage.basalt, 12);
+  const next = createGame({ autoStart: false }); next.game.loadSaveText(text);
+  assert.deepEqual(comparableSave(next.game), comparableSave(g));
+  assert.equal(next.game.countItem('basalt'), 7); assert.equal(next.game.storage.basalt, 12);
+  assert.equal(next.game.prospectors[0].oreTarget.tile, next.game.BASALT);
+  assert.equal(next.game.prospectors[0].mineProgress, 0.35);
+  next.elements.resume.click(); next.game.state.invuln = 999; next.step(35);
+  assert.equal(next.game.countItem('basalt'), 10);
+  assert.equal(next.game.pickups.length, 0);
+  assert.equal(next.game.storage.basalt, 12);
+});
+
+for (const variant of ['active', 'inactive']) {
+  test(`genuine version-8 ${variant} Ancient Mine migrates both terrain snapshots without losing progress`, () => {
+    const text = fs.readFileSync(path.join(__dirname, 'fixtures', `pre-basalt-mine-${variant}-v8.json`), 'utf8');
+    const old = JSON.parse(text), slot = createMemoryStorage();
+    assert.equal(old.version, 8); assert.ok(!Object.hasOwn(old.storage, 'basalt'));
+    slot.setItem('cuddly-train.mining-simulator.save.v1', text);
+    const next = createGame({ storage: slot, autoStart: false });
+    assert.equal(next.elements['continue-save'].disabled, false, 'the existing browser slot is recognized');
+    next.elements['continue-save'].click();
+    const g = next.game, now = JSON.parse(g.createSaveText());
+    assert.equal(g.state.mode, 'paused'); assert.equal(now.version, 9);
+    assert.equal(now.currentLevel, old.currentLevel); assert.equal(g.storage.basalt, 0);
+    assert.deepEqual(now.inventory, old.inventory);
+    assert.deepEqual(now.storage, { ...old.storage, basalt: 0 });
+    assert.deepEqual(now.player, old.player); assert.deepEqual(now.state, old.state);
+    assert.deepEqual(now.enemies, old.enemies); assert.deepEqual(now.warden, old.warden);
+    assert.deepEqual(now.areas.stage7, old.areas.stage7, 'Titanium and Stone in earlier floors are untouched');
+    assert.deepEqual(now.areas.home, old.areas.home);
+    const replacement = new Map([[g.STONE, g.BASALT], [g.TITANIUM, g.DIAMOND], [g.QUARTZ, g.IRON]]);
+    const expected = structuredClone(old.areas.stage13);
+    for (const field of ['tiles', 'originalTiles']) {
+      for (const oldType of replacement.keys()) assert.ok(expected[field].includes(oldType));
+      expected[field] = expected[field].map((tile) => replacement.get(tile) ?? tile);
+    }
+    assert.equal(expected.prospectors[0].oreTarget.tile, g.STONE);
+    expected.prospectors[0].oreTarget.tile = g.BASALT;
+    assert.deepEqual(now.areas.stage13, expected, 'only the intended terrain and target values change');
+    assert.deepEqual(now.areas.stage13.damage, old.areas.stage13.damage, 'partial mining cracks persist');
+    assert.equal(now.areas.stage13.pickups[0].item, 'quartz', 'uncollected Quartz remains Quartz');
+    const mined = old.areas.stage13.tiles.findIndex((tile, i) => tile === g.FLOOR && old.areas.stage13.originalTiles[i] === g.STONE);
+    assert.notEqual(mined, -1); assert.equal(now.areas.stage13.tiles[mined], g.FLOOR);
+    assert.equal(now.areas.stage13.originalTiles[mined], g.BASALT, 'a mined block remains mined until reset');
+    assert.equal(slot.getItem(g.saveKey), text, 'Continue never overwrites the old browser save');
+    const resaved = g.createSaveText(), again = createGame({ autoStart: false });
+    again.game.loadSaveText(resaved);
+    assert.deepEqual(comparableSave(again.game), comparableSave(g), 'v9 reload does not apply migration twice');
+    if (variant === 'active') {
+      const target = g.prospectors[0].oreTarget;
+      assert.equal(g.getTile(target.tx, target.ty), g.BASALT);
+      next.elements.resume.click(); suppressNewEnemySpawns(g.level); g.state.invuln = 999;
+      next.step(16);
+      assert.equal(g.getTile(target.tx, target.ty), g.FLOOR, 'in-progress mining continues against the new Basalt');
+      g.enterLevel('home');
+    } else next.elements.resume.click();
+    g.enterLevel('stage13');
+    assert.deepEqual(Array.from(g.level.tiles), expected.originalTiles, 're-entry restores the corrected snapshot');
+    assert.equal(g.level.damage.size, 0);
+    assert.equal(g.prospectors[0].haul.gold, 5); assert.ok(g.prospectors[0].hp > 0 && g.prospectors[0].hp <= 321);
+    const quartzOnGround = g.pickups.filter((pickup) => pickup.item === 'quartz').reduce((sum, pickup) => sum + pickup.count, 0);
+    assert.equal(g.countItem('quartz') + quartzOnGround, 5, 'both carried and uncollected old Quartz remain safe');
+  });
+}
+
+test('invalid Basalt save data is rejected without changing the current run', () => {
+  const run = ancientMineArena(), g = run.game;
+  g.addItem('basalt', 3); g.storage.basalt = 4;
+  const saved = JSON.parse(g.createSaveText()), before = comparableSave(g);
+  const cases = [
+    (s) => { delete s.storage.basalt; },
+    (s) => { s.storage.basalt = -1; },
+    (s) => { s.storage.basalt = 1.5; },
+    (s) => { s.inventory[0].item = 'notBasalt'; },
+    (s) => { s.areas.stage13.tiles[1] = 999; },
+    (s) => { s.version = 8; delete s.storage.basalt; }, // a v8 file cannot contain v9 Basalt tiles
+  ];
+  for (const mutate of cases) {
+    const invalid = structuredClone(saved); mutate(invalid);
+    assert.throws(() => g.loadSaveText(JSON.stringify(invalid)));
+    assert.deepEqual(comparableSave(g), before, 'a rejected save leaves the live game untouched');
+  }
 });

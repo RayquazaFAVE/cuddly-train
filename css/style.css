@@ -145,6 +145,11 @@ html, body {
   box-shadow: 0 0 12px rgba(255, 107, 107, 0.6);
 }
 
+/* A cool highlight shows that the four-second recovery wait has ended. */
+.hp-fill.is-healing {
+  background: linear-gradient(180deg, #dcfff3, #82e5bb 55%, #46bd91);
+}
+
 .hp-text {
   font-size: 11px;
   font-weight: 800;
@@ -153,6 +158,22 @@ html, body {
   min-width: 26px;
   text-align: right;
 }
+
+.poison-status {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 7px;
+  border: 1px solid rgba(171, 225, 105, 0.46);
+  border-radius: 7px;
+  background: rgba(25, 42, 24, 0.92);
+  color: #ccf5a0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.poison-status.is-hidden { display: none; }
 
 /* The area title starts as an arrival card, then settles into a small bubble. */
 .area-banner {
@@ -363,6 +384,10 @@ html, body {
 }
 
 .slot.has-item .gem { display: block; }
+.slot.is-polished .gem, .gem.is-polished {
+  filter: brightness(1.2) drop-shadow(0 0 4px var(--gem));
+  outline: 1px solid rgba(255, 255, 255, 0.65);
+}
 .slot.is-ingot .gem, .gem.is-ingot {
   clip-path: polygon(20% 18%, 80% 18%, 100% 84%, 0 84%);
 }
@@ -864,6 +889,15 @@ kbd {
 .elevator-floor-name small { font-size: 9px; color: #a0b2bb; }
 .elevator-hint { margin-bottom: 4px; }
 
+/* ------------------------------------------------ Gem polishing & trading */
+.gem-section-title {
+  margin: 17px 0 7px; color: #ede2f3; font-size: 12px; text-align: left;
+  letter-spacing: 0.02em;
+}
+.gem-section-title span { color: #a9b6c1; font-size: 10px; font-weight: 600; }
+.coin-icon.gem-mark { color: var(--gem); border-color: currentColor; font-size: 16px; }
+.gem-action { min-height: 44px; }
+
 /* ------------------------------------------------------- Coins & trading */
 
 .coin-table {
@@ -1029,4 +1063,78 @@ kbd {
 @media (max-width: 410px) {
   .bag { gap: 2px; padding: 5px; }
   .slot { width: calc((100vw - 42px) / 10); height: calc((100vw - 42px) / 10); }
+}
+
+/* Make room for the boss bar even if the encounter starts during an arrival. */
+.area-banner.has-warden, .area-banner.has-warden * { transition: none; }
+.area-banner.has-warden .area-kicker, .area-banner.has-warden .area-subtitle { display: none; }
+
+/* The Warden's health and the permanent Core ability do not cover the bag. */
+.warden-hud {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  width: min(360px, calc(100vw - 40px));
+  transform: translateX(-50%);
+  padding: 9px 12px 10px;
+  border: 1px solid rgba(201, 137, 255, 0.38);
+  border-radius: 12px;
+  background: rgba(13, 8, 22, 0.88);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 20px rgba(136, 63, 212, 0.15);
+  pointer-events: none;
+}
+.warden-hud.is-hidden { display: none; }
+.warden-hud-label { display: flex; justify-content: space-between; gap: 12px; color: #e8d6fc;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.09em; }
+.warden-hud-label span:last-child { color: #c7a0ef; white-space: nowrap; }
+.warden-hp-track { height: 8px; margin-top: 6px; overflow: hidden; border-radius: 9px; background: #281c32; }
+.warden-hp-fill { height: 100%; width: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, #7430a6, #c574ee); transition: width 0.15s ease; }
+
+.void-power {
+  position: absolute; z-index: 5; right: max(16px, env(safe-area-inset-right));
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 112px);
+  min-width: 88px; padding: 9px 10px; border: 1px solid #9d70d1; border-radius: 12px;
+  background: linear-gradient(145deg, rgba(50, 27, 73, 0.96), rgba(16, 13, 26, 0.96));
+  box-shadow: 0 0 18px rgba(143, 78, 216, 0.25); color: #e8d6ff;
+  font: 800 10px var(--font); letter-spacing: 0.06em; cursor: pointer; touch-action: manipulation;
+}
+.void-power.is-hidden { display: none; }
+.void-power:disabled { cursor: default; opacity: 0.72; }
+.void-power.is-active { border-color: #e4b6ff; box-shadow: 0 0 24px rgba(195, 121, 255, 0.7); }
+.void-power span { display: block; }
+.void-key { position: absolute; left: 7px; top: 5px; font-size: 9px; color: #bb99dc; }
+.void-name { padding: 0 5px; }
+#void-status { margin-top: 4px; font-size: 9px; color: #c8a4ef; }
+@media (max-width: 620px) { .warden-hud { top: 118px; } }
+@media (max-width: 340px) {
+  .void-power { right: 5px; min-width: 70px; padding: 7px 5px; bottom: 100px; font-size: 9px; }
+  .warden-hud { top: 103px; width: min(265px, calc(100vw - 20px)); }
+}
+
+/* Short landscape screens need a clear view of the player and telegraphs. */
+@media (max-height: 360px) {
+  .hud { padding-top: max(5px, env(safe-area-inset-top)); }
+  .vitals { padding: 5px 8px; }
+  .icon-btn { width: 30px; height: 30px; }
+  .area-banner { top: 38px; width: 160px; padding: 4px 8px; }
+  .area-banner.is-arriving { width: min(240px, calc(100vw - 24px)); padding: 6px 9px; }
+  .area-banner.is-arriving .stage-name { font-size: 17px; }
+  .area-banner.has-warden { display: none; }
+  .warden-hud { top: 38px; width: min(230px, calc(100vw - 24px)); padding: 4px 8px 5px; }
+  .warden-hud-label { font-size: 9px; }
+  .warden-hp-track { height: 5px; margin-top: 3px; }
+  .toast { top: 70px; padding: 4px 9px; font-size: 10px; }
+  .dock { bottom: max(4px, env(safe-area-inset-bottom)); gap: 3px; }
+  .toolbelt { gap: 4px; padding: 3px; border-radius: 10px; }
+  .tool { width: 38px; height: 34px; border-radius: 8px; }
+  .tool.is-active { transform: translateY(-2px); }
+  .bag { gap: 3px; padding: 3px; border-radius: 10px; }
+  .slot { width: min(24px, calc((100vw - 42px) / 10)); height: min(24px, calc((100vw - 42px) / 10)); border-radius: 7px; }
+  .void-power { right: max(5px, env(safe-area-inset-right)); bottom: 42px; padding: 6px 5px; }
+}
+@media (any-pointer: coarse) and (max-height: 360px) {
+  #stage.is-playing .touch-move { width: 64px; height: 64px; left: 6px; bottom: 42px; }
+  .touch-knob { width: 30px; height: 30px; }
+  .touch-move-label { top: 5px; font-size: 8px; }
 }

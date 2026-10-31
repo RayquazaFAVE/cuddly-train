@@ -6,7 +6,7 @@
 <title>Mining Simulator</title>
 <meta name="description" content="A dungeon mining game. Explore caves, fight monsters, smelt ore, and trade coins." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%8F%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="css/style.css?v=14" />
+<link rel="stylesheet" href="css/style.css?v=18" />
 </head>
 <body>
   <main id="stage">
@@ -20,17 +20,26 @@
           <div class="hp-track"><div id="hp-fill" class="hp-fill"></div></div>
           <span id="hp-text" class="hp-text">100</span>
         </div>
+        <div id="poison-status" class="poison-status is-hidden" role="status" aria-live="polite">POISONED · 10s</div>
       </div>
       <div id="area-banner" class="area-banner" aria-live="polite" aria-atomic="true">
         <span id="area-kicker" class="area-kicker"></span>
         <span id="stage-name" class="stage-name">Home Base</span>
         <span id="area-subtitle" class="area-subtitle"></span>
       </div>
+      <div id="warden-hud" class="warden-hud is-hidden" aria-label="Warden of Darkness health">
+        <div class="warden-hud-label"><span>WARDEN OF DARKNESS</span><span id="warden-phase">PHASE 1</span></div>
+        <div class="warden-hp-track"><div id="warden-hp-fill" class="warden-hp-fill"></div></div>
+      </div>
       <div class="hud-actions">
         <button id="pause-btn" class="icon-btn" type="button" title="Pause and save" aria-label="Pause and save">Ⅱ</button>
         <button id="mute" class="icon-btn" type="button" title="Toggle sound" aria-label="Toggle sound">♪</button>
       </div>
     </div>
+
+    <button id="void-power" class="void-power is-hidden" type="button" aria-label="Activate Void Power" title="Void Power · X">
+      <span class="void-key">X</span><span class="void-name">VOID POWER</span><span id="void-status">READY</span>
+    </button>
 
     <!-- Touch movement is separate from the field, so a second finger can aim and swing. -->
     <div id="touch-move" class="touch-move" aria-label="Touch joystick for movement">
@@ -123,7 +132,7 @@
           </div>
 
           <div class="mercury-upgrade">
-            <div><strong>Mercury edge</strong><small>+15% sword damage · permanent</small><small id="forge-mercury-count">0 Mercury in bag</small></div>
+            <div><strong>Mercury edge</strong><small>Sword hits poison and slow enemies · Ghosts and Venom Spiders are immune</small><small id="forge-mercury-count">0 Mercury in bag</small></div>
             <button id="upgrade-mercury" class="coin-action" type="button">3 Mercury</button>
           </div>
           <p class="hint" id="forge-hint">Each tool upgrade costs 3 of its matching material.</p>
@@ -165,7 +174,7 @@
         <div id="view-trader" class="station-view is-hidden">
           <span class="storage-eyebrow">HOME BASE MARKET</span>
           <h2>Coin Trader</h2>
-          <p class="tagline">Trade coins for Coal or sell an Axolotl for a Gold Coin.</p>
+          <p class="tagline">Trade coins for Coal, or sell Axolotls and polished gems for coins.</p>
           <div class="coin-table" aria-label="Coin and Axolotl exchange rates">
             <div class="coin-row">
               <span class="coin-icon is-copper" aria-hidden="true">C</span>
@@ -193,7 +202,19 @@
               <button id="trade-axolotl" class="coin-action" type="button" aria-label="Sell an Axolotl for one Gold Coin">Sell</button>
             </div>
           </div>
+          <h3 class="gem-section-title">Polished gems <span>· trade for coins</span></h3>
+          <div id="trader-gems" class="coin-table" aria-label="Sell polished gems"></div>
           <p class="hint" id="trader-hint">Press each new coin to unlock its coal exchange.</p>
+          <button class="btn btn-quiet" type="button" data-close-station>Close</button>
+        </div>
+
+        <!-- GEM POLISHER -->
+        <div id="view-polisher" class="station-view is-hidden">
+          <span class="storage-eyebrow">HOME BASE · GEM WORKSHOP</span>
+          <h2>Gem Polisher</h2>
+          <p class="tagline">Polish one raw gem into a brilliant collectible. The trader buys polished gems for coins.</p>
+          <div id="polisher-gems" class="coin-table" aria-label="Polish raw gems"></div>
+          <p class="hint" id="polisher-hint" role="status" aria-live="polite">One raw gem makes one polished gem.</p>
           <button class="btn btn-quiet" type="button" data-close-station>Close</button>
         </div>
 
@@ -243,14 +264,16 @@
           <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></li>
           <li><kbd>Q</kbd><span>Pickaxe — mine rock and ore</span></li>
           <li><kbd>E</kbd><span>Sword — fight whatever is down there</span></li>
-          <li><kbd>F</kbd><span>Use an elevator when you're nearby</span></li>
-          <li><span class="mouse-ico"></span><span>Left click to swing the equipped tool</span></li>
+          <li><kbd>F</kbd><span>Use a nearby elevator or pedestal</span></li>
+          <li><kbd>X</kbd><span>Activate Void Power once unlocked</span></li>
+          <li><span class="mouse-ico"></span><span>Left click or Space to swing the equipped tool</span></li>
           <li class="touch-howto"><span>Touch: drag MOVE, tap the field to swing</span></li>
         </ul>
         <button id="continue-save" class="btn save-continue is-hidden" type="button">Continue saved game</button>
         <button id="play" class="btn" type="button">Enter the base</button>
         <button id="import-save-menu" class="btn btn-quiet save-secondary" type="button">Load save file</button>
         <p id="menu-save-status" class="save-status" role="status" aria-live="polite">Pause your game to save your progress.</p>
+        <p class="hint">Health recovers after 4 seconds without damage.</p>
         <p class="hint">Find the stairs to reach Cave Entrance · <kbd>Esc</kbd> to pause</p>
       </div>
     </section>
@@ -310,8 +333,28 @@
             <span class="stat-value" id="over-spiders">0</span>
           </div>
           <div class="stat">
+            <span class="stat-label">Crabocks slain</span>
+            <span class="stat-value" id="over-crabocks">0</span>
+          </div>
+          <div class="stat">
             <span class="stat-label">Golems slain</span>
             <span class="stat-value" id="over-golems">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Ghosts slain</span>
+            <span class="stat-value" id="over-ghosts">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Grave Diggers slain</span>
+            <span class="stat-value" id="over-grave-diggers">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Infected Skeletons slain</span>
+            <span class="stat-value" id="over-infected-skeletons">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Skeletons slain</span>
+            <span class="stat-value" id="over-skeletons">0</span>
           </div>
         </div>
         <button id="again" class="btn" type="button">Wake up at base</button>
@@ -363,6 +406,6 @@
     });
   })();
   </script>
-  <script src="js/game.js?v=17"></script>
+  <script src="js/game.js?v=23"></script>
 </body>
 </html>

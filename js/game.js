@@ -8,9 +8,9 @@
      E                  equip the sword
      Left click / Space swing the equipped tool
 
-   Begin in Home Base, then descend through the caves to Alumina Cave.
-   Smelt ore, forge tools, press coins and trade with the Coin Trader;
-   beware slimes, moles, spiders, Prospectors and bulky Golems.
+   Begin in Home Base, then descend through dungeon-themed caves and ruins.
+   Smelt ore, forge tools, polish gems and trade with the Coin Trader;
+   beware cave creatures, haunted graves, the Warden and ancient guardians.
 
    No dependencies, no build step.
    ========================================================================== */
@@ -26,6 +26,8 @@
   const rand = (lo, hi) => lo + Math.random() * (hi - lo);
   const randInt = (lo, hi) => Math.floor(rand(lo, hi + 1));
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const freshEnemyPoison = () => ({ poisonTime: 0, poisonProgress: 0 });
+  const poisonSpeed = (enemy) => enemy.poisonTime > 0 ? BALANCE.enemyPoisonSpeedMultiplier : 1;
 
   function hash2(x, y, seed) {
     let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed | 0, 1274126177);
@@ -57,6 +59,14 @@
   const IRIDIUM = 15;
   const TITANIUM = 16;
   const MERCURY = 17;
+  const RUBY = 18;
+  const SAPPHIRE = 19;
+  const DARKSTONE = 20;
+  const BLACK_AMETHYST = 21;
+  const AMETHYST = 22;
+  const MOSSY_STONE = 23;
+  const DIAMOND = 24;
+  const BASALT = 25;
 
   // hits = pickaxe hits needed with the T1 pickaxe; null means indestructible
   const TILES = {
@@ -76,6 +86,14 @@
     [IRIDIUM]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'iridium', base: '#504563' },
     [TITANIUM]: { solid: true, hits: 9, hitsByTier: [9, 7, 5], drop: 'titanium', base: '#485a60' },
     [MERCURY]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'mercury', base: '#46585b' },
+    [RUBY]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'ruby', base: '#573c49' },
+    [SAPPHIRE]: { solid: true, hits: 8, hitsByTier: [8, 6, 4], drop: 'sapphire', base: '#303e56' },
+    [DARKSTONE]: { solid: true, hits: 1, drop: 'darkstone', base: '#303a3c' },
+    [BLACK_AMETHYST]: { solid: true, hits: 9, hitsByTier: [9, 7, 5], drop: 'blackAmethyst', base: '#332a3d' },
+    [AMETHYST]: { solid: true, hits: 9, hitsByTier: [9, 7, 5], drop: 'amethyst', base: '#4b385b' },
+    [MOSSY_STONE]: { solid: true, hits: 1, drop: 'stone', base: '#59655c' },
+    [DIAMOND]: { solid: true, hits: 10, hitsByTier: [10, 8, 6], drop: 'diamond', base: '#435962' },
+    [BASALT]: { solid: true, hits: 1, drop: 'basalt', base: '#39404a' },
     [STAIRS_DOWN]: { solid: false },
     [STAIRS_UP]: { solid: false },
   };
@@ -102,6 +120,22 @@
     silverCoin: { name: 'Silver Coin', color: '#d8e2eb', isCoin: true },
     goldCoin: { name: 'Gold Coin', color: '#f5c650', isCoin: true },
     aluminumCoin: { name: 'Aluminum Coin', color: '#edf4f6', isCoin: true },
+    ruby: { name: 'Ruby', color: '#e85678' },
+    polishedCobalt: { name: 'Polished Cobalt', color: '#80b7ff', isPolished: true },
+    polishedQuartz: { name: 'Polished Quartz', color: '#f6eaff', isPolished: true },
+    polishedIridium: { name: 'Polished Iridium', color: '#d0b5ff', isPolished: true },
+    polishedRuby: { name: 'Polished Ruby', color: '#ff7895', isPolished: true },
+    polishedCalcite: { name: 'Polished Calcite', color: '#edffe1', isPolished: true },
+    sapphire: { name: 'Sapphire', color: '#568ff0' },
+    darkstone: { name: 'Darkstone', color: '#667879' },
+    polishedSapphire: { name: 'Polished Sapphire', color: '#89bbff', isPolished: true },
+    blackAmethyst: { name: 'Black Amethyst', color: '#9670bd' },
+    polishedBlackAmethyst: { name: 'Polished Black Amethyst', color: '#c29bed', isPolished: true },
+    amethyst: { name: 'Amethyst', color: '#b57bee' },
+    polishedAmethyst: { name: 'Polished Amethyst', color: '#e0b6ff', isPolished: true },
+    diamond: { name: 'Diamond', color: '#a5e8f4' },
+    polishedDiamond: { name: 'Polished Diamond', color: '#e7ffff', isPolished: true },
+    basalt: { name: 'Basalt', color: '#7d8791' },
   };
 
   const MELT_COAL = 1; // coal burned per melt
@@ -113,6 +147,17 @@
     gold: { input: 'gold', coin: 'goldCoin', cost: 1, coal: 2 },
     aluminum: { input: 'aluminum', coin: 'aluminumCoin', cost: 1, coal: 4 },
   };
+  const GEM_RECIPES = {
+    cobalt: 'polishedCobalt', quartz: 'polishedQuartz', iridium: 'polishedIridium',
+    ruby: 'polishedRuby', calcite: 'polishedCalcite', sapphire: 'polishedSapphire',
+    blackAmethyst: 'polishedBlackAmethyst', amethyst: 'polishedAmethyst', diamond: 'polishedDiamond',
+  };
+  const GEM_SALES = {
+    blackAmethyst: { item: 'goldCoin', count: 2 },
+    amethyst: { item: 'goldCoin', count: 2 },
+    diamond: { item: 'aluminumCoin', count: 1 },
+  };
+  const gemSale = (kind) => GEM_SALES[kind] || { item: 'goldCoin', count: 1 };
   const UPGRADE_COST = 3; // ingots for T2/T3, raw Titanium for T4
   const MAX_TIER = 4;
   // The hidden cave deliberately has no lift or destination button.
@@ -125,18 +170,31 @@
     { id: 'stage5', number: '05', name: 'Alumina Cave' },
     { id: 'stage6', number: '06', name: 'Luscious Cave' },
     { id: 'stage7', number: '07', name: 'Spiral Cavern' },
+    { id: 'stage8', number: '08', name: 'Haunted Descent' },
+    { id: 'stage9', number: '09', name: 'Pitch-Black Depths' },
+    { id: 'stage10', number: '10', name: "Warden's Core" },
+    { id: 'stage11', number: '11', name: 'Amethyst Cavern' },
+    { id: 'stage12', number: '12', name: 'Ancient Temple' },
+    { id: 'stage13', number: '13', name: 'Ancient Mine' },
   ];
 
   /* -------------------------------------------------------------- balance */
 
   const BALANCE = {
     playerMaxHp: 100,
+    healingDelay: 4,
+    healingInterval: 0.2, // one HP every fifth of a second after the delay
+    healingAmount: 1,
     // A normal slime hits for 20, so five of them finish the player off.
-    swordDamage: 10, // T1: 10 damage, so 3 hits to kill a 30 HP slime
-    swordDamageT2: 15, // T2: 2 hits
-    swordDamageT3: 30, // T3: 1 hit against a normal slime or mole
-    swordDamageT4: 35, // Golems now carry one extra hit's worth of armour
-    mercurySwordMultiplier: 1.15,
+    swordDamage: 10, // T1 sword damage
+    swordDamageT2: 15,
+    swordDamageT3: 30,
+    swordDamageT4: 35,
+    // Old saves can contain Golems armoured against the former 15% bonus.
+    legacyMercuryMultiplier: 1.15,
+    enemyPoisonMinDuration: 4, enemyPoisonMaxDuration: 8,
+    enemyPoisonDamageFraction: 0.05, enemyPoisonSpeedMultiplier: 0.75,
+    playerPoisonDuration: 10, playerPoisonTileDamage: 5,
     pickaxeReach: 2.2 * TS,
     pickaxeCooldown: 0.3,
     swordCooldown: 0.36,
@@ -145,64 +203,115 @@
     playerSpeed: 170,
     playerRadius: 10,
     invulnerableTime: 0.9,
-    slimeHp: 30,
+    slimeHp: 60,
     slimeDamage: 20,
     slimeSpeed: 54,
     slimeDetect: 4 * TS, // slimes notice you from 4 tiles away
     tinyDetect: 2 * TS, // tiny slimes are much shorter sighted
     slimeRadius: 14,
-    tinyHp: 15,
+    tinyHp: 30,
     tinyDamage: 10,
     tinySpeed: 82,
     tinyRadius: 9,
-    largeSlimeHp: 60,
+    largeSlimeHp: 120,
     largeSlimeDamage: 40,
     largeSlimeSpeed: 27,
     largeSlimeDetect: 6 * TS,
     largeSlimeRadius: 20,
-    maxSlimes: 7,
-    slimeSpawnEvery: 3.4,
-    maxLargeSlimes: 3,
-    largeSlimeSpawnEvery: 6,
-    spiderHp: 15,
+    maxSlimes: 11,
+    slimeSpawnEvery: 2.2,
+    maxLargeSlimes: 5,
+    largeSlimeSpawnEvery: 3.8,
+    spiderHp: 30,
     spiderDamage: 5,
     spiderSpeed: 120,
     spiderDetect: 5 * TS,
     spiderRadius: 10,
     spiderAttackEvery: 0.4,
     spiderHitInvulnerability: 0.3,
-    maxSpiders: 5,
-    spiderSpawnEvery: 4,
-    golemHp: 100, // base HP; each Golem also gets one sword hit of armour
+    crabockHp: 90, crabockSpeed: 72, crabockRadius: 13,
+    venomSpiderHp: 315,
+    maxSpiders: 8,
+    spiderSpawnEvery: 2.8,
+    golemHp: 200, // doubled base; armour is doubled too
     golemDamage: 45,
     golemSpeed: 42,
-    mercuryGolemHp: 80,
+    mercuryGolemHp: 160,
     mercuryGolemDamage: 55,
     mercuryGolemSpeed: 60,
     golemDetect: 6 * TS,
     golemRadius: 21,
     golemMoveLimit: 10 * TS,
+    ancientGolemHp: 490, ancientGolemMoveLimit: 20 * TS,
     golemDisabledTime: 3,
-    maxGolems: 3,
-    golemSpawnEvery: 7,
-    moleHp: 30,
+    maxGolems: 5,
+    golemSpawnEvery: 4.8,
+    moleHp: 60,
     moleDamage: 20,
     moleSpeed: 63,
     moleDetect: 5 * TS,
     moleRadius: 13,
-    maxMoles: 3,
-    moleSpawnEvery: 6,
+    maxMoles: 5,
+    moleSpawnEvery: 4,
     moleBreakChance: 0.1,
-    prospectorHp: 45,
+    prospectorHp: 90,
+    skeletonProspectorHp: 420, skeletonProspectorSpeed: 90,
     prospectorRadius: 11,
     prospectorDetect: 4 * TS,
     prospectorMineTime: 1.1,
     prospectorMeleeRange: 32,
-    maxProspectors: 4,
-    prospectorSpawnEvery: 6,
+    maxProspectors: 6,
+    prospectorSpawnEvery: 4,
     dynamiteFuse: 2, // seconds on the ground before detonation
     dynamiteFlight: 0.38,
     dynamiteThrowCooldown: 8,
+    ghostHp: 175, // five T4 sword hits; immune to Mercury poison
+    ghostDamage: 10,
+    ghostWanderSpeed: 26,
+    ghostChaseSpeed: 112,
+    ghostDetect: 4 * TS,
+    ghostRadius: 13,
+    ghostDashDistance: 3 * TS,
+    ghostDashCooldown: 7,
+    ghostSpawnEvery: 6,
+    maxNaturalGhosts: 8,
+    maxGhosts: 18,
+    graveDiggerHp: 210, // six unenhanced T4 sword hits
+    graveDiggerDamage: 16,
+    graveDiggerSpinDamage: 60,
+    graveDiggerSpeed: 84,
+    graveDiggerDetect: 4 * TS,
+    graveDiggerRadius: 12,
+    graveDiggerSpinWindup: 0.7,
+    graveDiggerSpinCooldown: 8,
+    graveDiggerDigWindup: 1.2,
+    graveDiggerDigCooldown: 15,
+    maxGraveDiggers: 5,
+    graveDiggerSpawnEvery: 8,
+    infectedSkeletonHp: 210, // six unenhanced T4 sword hits
+    skeletonHp: 315, // nine unenhanced T4 hits
+    infectedSkeletonRadius: 11,
+    infectedSkeletonSpeed: 70,
+    infectedSkeletonDetect: 4 * TS,
+    infectedSkeletonPreferredDistance: 2.7 * TS,
+    infectedSkeletonEmergeTime: 0.7,
+    infectedSkeletonThrowCooldown: 2.4,
+    infectedSkeletonSpawnEvery: 7,
+    maxInfectedSkeletons: 8,
+    boneDamage: 15,
+    boneSpeed: 190,
+    boneRadius: 4,
+    boneLifetime: 2.5,
+    wardenHp: 3500, // 100 unenhanced T4 sword hits
+    wardenRadius: 28, wardenWalkSpeed: 50, wardenChargeSpeed: 290,
+    wardenChargeLength: 9 * TS, wardenChargeWidth: 64, wardenChargeDamage: 40,
+    wardenSlamLength: 126, wardenSlamWidth: 122, wardenSlamDamage: 45,
+    wardenSpikeLength: 11 * TS, wardenSpikeWidth: 64,
+    wardenSpikeDamage: 12, wardenSpikeTick: 0.65,
+    wardenSwordRange: 10 * TS, wardenSwordSpeed: 220, wardenSwordSpeedPhase3: 340, wardenSwordDamage: 30,
+    wardenBeamLength: 29 * TS, wardenBeamWidth: 50, wardenBeamDamage: 50,
+    shrineGolemMultiplier: 3, shrineGolemRadius: 32, shrineRespawnTime: 20,
+    voidPowerDuration: 8, voidPowerCooldown: 20, voidPowerMultiplier: 1.5,
   };
 
   /* ------------------------------------------------------------- elements */
@@ -215,6 +324,12 @@
     hud: document.getElementById('hud'),
     hpFill: document.getElementById('hp-fill'),
     hpText: document.getElementById('hp-text'),
+    poisonStatus: document.getElementById('poison-status'),
+    wardenHud: document.getElementById('warden-hud'),
+    wardenHpFill: document.getElementById('warden-hp-fill'),
+    wardenPhase: document.getElementById('warden-phase'),
+    voidPower: document.getElementById('void-power'),
+    voidStatus: document.getElementById('void-status'),
     stageName: document.getElementById('stage-name'),
     areaBanner: document.getElementById('area-banner'),
     areaKicker: document.getElementById('area-kicker'),
@@ -234,6 +349,10 @@
     viewStorage: document.getElementById('view-storage'),
     viewPress: document.getElementById('view-press'),
     viewTrader: document.getElementById('view-trader'),
+    viewPolisher: document.getElementById('view-polisher'),
+    polisherGems: document.getElementById('polisher-gems'),
+    polisherHint: document.getElementById('polisher-hint'),
+    traderGems: document.getElementById('trader-gems'),
     viewElevator: document.getElementById('view-elevator'),
     elevatorStatus: document.getElementById('elevator-status'),
     elevatorActivate: document.getElementById('elevator-activate'),
@@ -277,7 +396,12 @@
     overMoles: document.getElementById('over-moles'),
     overProspectors: document.getElementById('over-prospectors'),
     overSpiders: document.getElementById('over-spiders'),
+    overCrabocks: document.getElementById('over-crabocks'),
     overGolems: document.getElementById('over-golems'),
+    overGhosts: document.getElementById('over-ghosts'),
+    overGraveDiggers: document.getElementById('over-grave-diggers'),
+    overInfectedSkeletons: document.getElementById('over-infected-skeletons'),
+    overSkeletons: document.getElementById('over-skeletons'),
     play: document.getElementById('play'),
     continueSave: document.getElementById('continue-save'),
     importSaveMenu: document.getElementById('import-save-menu'),
@@ -396,9 +520,16 @@
     areaIntro: 0,
     tool: 'pickaxe', // pickaxe | sword
     tools: { pickaxe: 1, sword: 1 }, // tool tiers
-    mercurySword: false, // one permanent +15% sword upgrade for this run
+    mercurySword: false, // permanent Mercury poison edge for this run
     elevatorUnlocked: false, // reactivated at the Stage 7 entrance
+    wardenDefeated: false, // the Core is permanent for the current run
+    voidPowerTime: 0,
+    voidPowerCooldown: 0,
     hp: BALANCE.playerMaxHp,
+    healDelay: 0, // seconds remaining after the most recent damaging hit
+    healProgress: 0, // progress toward the next one-HP tick
+    poisonTime: 0, // Venom Spider poison remaining
+    poisonDistance: 0, // actual distance travelled toward the next tile tick
     invuln: 0,
     cooldown: 0,
     shack: 0,
@@ -407,7 +538,12 @@
     molesSlain: 0,
     prospectorsSlain: 0,
     spidersSlain: 0,
+    crabocksSlain: 0,
     golemsSlain: 0,
+    ghostsSlain: 0,
+    graveDiggersSlain: 0,
+    infectedSkeletonsSlain: 0,
+    skeletonsSlain: 0,
     transitionLock: 0,
     swingDir: 0,
   };
@@ -435,6 +571,10 @@
   const moles = [];
   const spiders = [];
   const golems = [];
+  const ghosts = [];
+  const graveDiggers = [];
+  const infectedSkeletons = [];
+  let warden = null; // active only while the Stage 10 encounter is in progress
   const particles = [];
   const floaters = [];
   const melterBursts = [];
@@ -463,11 +603,13 @@
       stalagmites: new Set(), // "x,y" -> a mineable formation on a FLOOR tile
       damage: new Map(), // "x,y" -> hits already taken
       decor: [],
+      graves: [], // non-blocking gravestones used by the haunted enemies
       elevators: [], // floor-level lift entrances beside the stairs
       pickups: [], // uncollected drops stay in their own level
       prospectors: [], // their collected ore remains with them between visits
       dynamites: [],
       explosions: [],
+      boneProjectiles: [],
       spawn: { x: 0, y: 0 },
       stairsDown: null,
       stairsUp: null,
@@ -478,6 +620,11 @@
       spiderTimer: 0,
       golemTimer: 0,
       prospectorTimer: 0,
+      ghostTimer: 0,
+      graveDiggerTimer: 0,
+      infectedSkeletonTimer: 0,
+      shrineActivated: false,
+      shrineCooldown: 0,
     };
   }
 
@@ -555,8 +702,10 @@
   // ---- Home Base -----------------------------------------------------------
 
   function buildHome() {
-    const lv = makeLevel('home', 'Home Base', 19, 13, true);
-    carveRect(lv, 2, 2, 15, 9, FLOOR);
+    // Expand east and south while keeping the old stairs and spawn in place,
+    // so a player loaded from an earlier Home Base is never displaced.
+    const lv = makeLevel('home', 'Home Base', 27, 17, true);
+    carveRect(lv, 2, 2, 23, 13, FLOOR);
 
     lv.stairsDown = { tx: 9, ty: 9 };
     lv.downTarget = 'stage1';
@@ -567,16 +716,20 @@
       { kind: 'melter', x: 4.2 * TS, y: 4.4 * TS },
       { kind: 'storage', x: 9.5 * TS, y: 4.4 * TS },
       { kind: 'forge', x: 14.8 * TS, y: 4.4 * TS },
-      { kind: 'press', x: 4.8 * TS, y: 7 * TS },
-      { kind: 'trader', x: 14.2 * TS, y: 7 * TS },
+      { kind: 'press', x: 4.8 * TS, y: 8 * TS },
+      { kind: 'trader', x: 20.5 * TS, y: 9.5 * TS },
+      { kind: 'polisher', x: 20.5 * TS, y: 4.4 * TS },
     ];
 
     lv.decor.push({ kind: 'lantern', x: 3.2 * TS, y: 3.1 * TS, phase: 0 });
     lv.decor.push({ kind: 'lantern', x: 15.8 * TS, y: 3.1 * TS, phase: 1.6 });
-    lv.decor.push({ kind: 'crate', x: 4.3 * TS, y: 8.6 * TS });
-    lv.decor.push({ kind: 'crate', x: 5.4 * TS, y: 9.1 * TS });
-    lv.decor.push({ kind: 'bedroll', x: 13.6 * TS, y: 8.6 * TS });
+    lv.decor.push({ kind: 'crate', x: 3.6 * TS, y: 11.7 * TS });
+    lv.decor.push({ kind: 'crate', x: 5.3 * TS, y: 12.1 * TS });
+    lv.decor.push({ kind: 'bedroll', x: 15.2 * TS, y: 12.3 * TS });
     lv.decor.push({ kind: 'lantern', x: 16 * TS, y: 8 * TS, phase: 3.1 });
+    lv.decor.push({ kind: 'lantern', x: 23 * TS, y: 7.2 * TS, phase: 2.1 });
+    lv.decor.push({ kind: 'lantern', x: 22 * TS, y: 13 * TS, phase: 0.7 });
+    lv.decor.push({ kind: 'crate', x: 7 * TS, y: 12.8 * TS });
     return captureOriginalTiles(lv);
   }
 
@@ -940,14 +1093,197 @@
     lv.upTarget = 'stage6';
     lv.tiles[idx(lv, 66, 36)] = STAIRS_UP;
     lv.spawn = { x: 65.5 * TS, y: 34.5 * TS };
-    lv.downTarget = 'special';
+    lv.stairsDown = { tx: 40, ty: 36 };
+    lv.downTarget = 'stage8';
+    lv.tiles[idx(lv, 40, 36)] = STAIRS_DOWN;
     seedOre(lv, 66, 36);
-    // A glimmering Titanium seam at the end of the spiral hides the entrance.
+    // The hidden seam is a separate destination from the ordinary Stage 8 exit.
     lv.secretTile = { tx: 37, ty: 36 };
     lv.tiles[idx(lv, lv.secretTile.tx, lv.secretTile.ty)] = TITANIUM;
     for (const [x, y, phase] of [[65, 34, 0.5], [56, 15, 1.2], [21, 11, 2],
       [12, 41, 2.6], [39, 57, 0.7], [55, 32, 2.1], [36, 18, 1.6], [28, 39, 3], [39, 37, 0.4]]) {
       lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage8() {
+    const lv = makeLevel('stage8', 'Haunted Descent', 70, 50, false);
+    // One readable, winding route, with enough width to dodge a ghost's dash.
+    // The small alcoves hold graves without blocking the main passage.
+    const path = [[6, 6], [23, 6], [23, 15], [8, 15], [8, 24],
+      [43, 24], [43, 33], [23, 33], [23, 42], [61, 42]];
+    for (let i = 0; i < path.length - 1; i++) {
+      const [x1, y1] = path[i], [x2, y2] = path[i + 1];
+      carveRect(lv, Math.min(x1, x2) - 2, Math.min(y1, y2) - 2,
+        Math.abs(x2 - x1) + 5, Math.abs(y2 - y1) + 5);
+    }
+    for (const [x, y, w, h] of [[14, 2, 5, 4], [18, 16, 5, 4], [11, 25, 5, 4],
+      [31, 20, 5, 4], [44, 28, 4, 5], [31, 34, 5, 4], [26, 38, 5, 4], [49, 43, 5, 4]]) {
+      carveRect(lv, x, y, w, h);
+    }
+    lv.stairsUp = { tx: 6, ty: 6 };
+    lv.upTarget = 'stage7';
+    lv.tiles[idx(lv, 6, 6)] = STAIRS_UP;
+    lv.spawn = { x: 6.5 * TS, y: 7.6 * TS };
+    lv.stairsDown = { tx: 61, ty: 42 };
+    lv.downTarget = 'stage9';
+    lv.tiles[idx(lv, 61, 42)] = STAIRS_DOWN;
+    seedOre(lv, 6, 6);
+
+    for (const [tx, ty] of [[16, 4], [22, 9], [19, 17], [10, 16], [8, 21],
+      [13, 26], [25, 24], [33, 22], [41, 23], [45, 30], [34, 35],
+      [25, 32], [24, 39], [29, 40], [40, 42], [51, 44], [59, 42]]) {
+      const grave = { kind: 'grave', tx, ty, x: (tx + 0.5) * TS, y: (ty + 0.5) * TS };
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) { lv.graves.push(grave); lv.decor.push(grave); }
+    }
+    for (const [x, y, phase] of [[5, 5, 0.3], [23, 7, 1.1], [8, 15, 2.2],
+      [8, 24, 0.8], [29, 24, 1.9], [43, 25, 2.7], [23, 33, 1.4], [23, 42, 0.4], [57, 42, 2.4]]) {
+      lv.decor.push({ kind: 'lantern', x: x * TS, y: y * TS, phase });
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage9() {
+    const lv = makeLevel('stage9', 'Pitch-Black Depths', 72, 52, false);
+    // Broad, connected pockets disappear into blackness between occasional
+    // sickly patches and graves. The entrance and every grave stay walkable.
+    const chambers = [
+      { x: 8, y: 8, rx: 6, ry: 5 }, { x: 24, y: 8, rx: 7, ry: 5 },
+      { x: 44, y: 9, rx: 7, ry: 6 }, { x: 61, y: 14, rx: 6, ry: 6 },
+      { x: 52, y: 28, rx: 8, ry: 6 }, { x: 30, y: 26, rx: 7, ry: 6 },
+      { x: 11, y: 30, rx: 7, ry: 6 }, { x: 20, y: 44, rx: 7, ry: 5 },
+      { x: 42, y: 43, rx: 7, ry: 5 }, { x: 61, y: 41, rx: 6, ry: 6 },
+    ];
+    carveCaverns(lv, chambers, [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5],
+      [5, 6], [6, 7], [7, 8], [8, 9], [5, 8]]);
+    lv.stairsUp = { tx: 6, ty: 8 };
+    lv.upTarget = 'stage8';
+    lv.tiles[idx(lv, 6, 8)] = STAIRS_UP;
+    lv.spawn = { x: 6.5 * TS, y: 9.6 * TS };
+    lv.stairsDown = { tx: 61, ty: 41 };
+    lv.downTarget = 'stage10';
+    lv.tiles[idx(lv, 61, 41)] = STAIRS_DOWN;
+    seedOre(lv, 6, 8);
+    for (const [tx, ty] of [[15, 8], [25, 6], [29, 9], [41, 7], [47, 10],
+      [60, 13], [62, 17], [53, 26], [49, 30], [30, 24], [33, 28],
+      [12, 27], [10, 32], [20, 42], [22, 46], [42, 42], [45, 45], [60, 39], [62, 44]]) {
+      const grave = { kind: 'grave', tx, ty, x: (tx + 0.5) * TS, y: (ty + 0.5) * TS };
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) { lv.graves.push(grave); lv.decor.push(grave); }
+    }
+    for (const [tx, ty] of [[20, 9], [42, 12], [59, 18], [51, 27], [32, 25],
+      [13, 31], [21, 43], [43, 41], [60, 42]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) {
+        lv.decor.push({ kind: 'taint', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS });
+      }
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage10() {
+    const lv = makeLevel('stage10', "Warden's Core", 59, 59, false);
+    const center = 29;
+    // One large circular arena. Ore lives in its outer wall, leaving the
+    // whole fighting floor and the central pedestal unobstructed.
+    for (let ty = 1; ty < lv.h - 1; ty++) for (let tx = 1; tx < lv.w - 1; tx++) {
+      if (Math.hypot(tx - center, ty - center) <= 24.3) lv.tiles[idx(lv, tx, ty)] = FLOOR;
+    }
+    lv.stairsUp = { tx: center, ty: 51 };
+    lv.upTarget = 'stage9';
+    lv.tiles[idx(lv, center, 51)] = STAIRS_UP;
+    lv.stairsDown = { tx: center, ty: 7 };
+    lv.downTarget = 'stage11';
+    lv.tiles[idx(lv, center, 7)] = STAIRS_DOWN;
+    lv.spawn = { x: (center + 0.5) * TS, y: 49.5 * TS };
+    lv.pedestal = { x: (center + 0.5) * TS, y: (center + 0.5) * TS };
+    seedOre(lv, center, 51);
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage11() {
+    const lv = makeLevel('stage11', 'Amethyst Cavern', 80, 50, false);
+    // Exactly three spacious chambers, joined by long five-tile-wide tunnels.
+    const rooms = [
+      { x: 13, y: 13, rx: 10, ry: 9 },
+      { x: 39, y: 33, rx: 10, ry: 9 },
+      { x: 66, y: 13, rx: 10, ry: 9 },
+    ];
+    carveCaverns(lv, rooms, [[0, 1], [1, 2]]);
+    lv.stairsUp = { tx: 10, ty: 13 }; lv.upTarget = 'stage10';
+    lv.tiles[idx(lv, 10, 13)] = STAIRS_UP;
+    lv.spawn = { x: 10.5 * TS, y: 14.6 * TS };
+    lv.stairsDown = { tx: 68, ty: 13 }; lv.downTarget = 'stage12';
+    lv.tiles[idx(lv, 68, 13)] = STAIRS_DOWN;
+    seedOre(lv, 10, 13);
+    // Crystal clusters sit on the chamber floors near their walls; the ore
+    // itself forms a continuous glittering ring around the three rooms.
+    for (const [tx, ty] of [[7, 8], [14, 5], [21, 12], [6, 17], [18, 20],
+      [32, 28], [39, 25], [47, 31], [33, 39], [43, 40],
+      [60, 8], [67, 5], [73, 11], [59, 17], [71, 20]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) {
+        lv.decor.push({ kind: 'crystal', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS, phase: hash2(tx, ty, 63) * TAU });
+      }
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage12() {
+    const lv = makeLevel('stage12', 'Ancient Temple', 80, 56, false);
+    // The entrance winds through rough caves; the eastern half is a deliberate
+    // ruin with rectangular rooms and straight, wide hallways.
+    const rocky = [
+      { x: 9, y: 9, rx: 7, ry: 7 }, { x: 22, y: 18, rx: 8, ry: 7 },
+      { x: 12, y: 37, rx: 7, ry: 7 }, { x: 31, y: 34, rx: 7, ry: 6 },
+    ];
+    carveCaverns(lv, rocky, [[0, 1], [1, 2], [2, 3]]);
+    carveRect(lv, 28, 32, 18, 5);
+    carveRect(lv, 43, 26, 13, 15); // entrance hall
+    carveRect(lv, 60, 6, 15, 15); // shrine chamber
+    carveRect(lv, 60, 31, 15, 14);
+    carveRect(lv, 49, 12, 4, 23);
+    carveRect(lv, 49, 11, 20, 4);
+    carveRect(lv, 51, 34, 18, 4);
+    lv.stairsUp = { tx: 7, ty: 8 }; lv.upTarget = 'stage11';
+    lv.tiles[idx(lv, 7, 8)] = STAIRS_UP;
+    lv.spawn = { x: 7.5 * TS, y: 9.6 * TS };
+    lv.stairsDown = { tx: 68, ty: 37 }; lv.downTarget = 'stage13';
+    lv.tiles[idx(lv, 68, 37)] = STAIRS_DOWN;
+    lv.golemShrine = { x: 67.5 * TS, y: 13.5 * TS };
+    seedOre(lv, 7, 8);
+    for (const [tx, ty] of [[45, 28], [53, 28], [45, 38], [53, 38],
+      [61, 8], [73, 8], [61, 19], [73, 19], [61, 33], [73, 33], [61, 42], [73, 42]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.decor.push({ kind: 'ruinPillar', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS });
+    }
+    for (const [tx, ty] of [[47, 30], [55, 34], [63, 16], [71, 38], [65, 41]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.decor.push({ kind: 'ruinDebris', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS });
+    }
+    return captureOriginalTiles(lv);
+  }
+
+  function buildStage13() {
+    const lv = makeLevel('stage13', 'Ancient Mine', 82, 58, false);
+    // Broad excavated galleries, straight shafts and old mine workings. Every
+    // route is wide enough for the Ancient Golems as well as the player.
+    for (const [x, y, w, h] of [
+      [4, 5, 17, 12], [18, 9, 25, 5], [36, 5, 17, 14],
+      [42, 16, 5, 18], [33, 29, 19, 13], [49, 33, 21, 5],
+      [65, 25, 13, 18], [13, 15, 5, 25], [6, 36, 19, 14], [23, 40, 14, 5],
+    ]) carveRect(lv, x, y, w, h);
+    lv.stairsUp = { tx: 8, ty: 10 }; lv.upTarget = 'stage12';
+    lv.tiles[idx(lv, 8, 10)] = STAIRS_UP;
+    lv.spawn = { x: 8.5 * TS, y: 11.6 * TS };
+    seedOre(lv, 8, 10);
+    for (const [tx, ty] of [[7, 7], [18, 7], [38, 7], [50, 7], [35, 31],
+      [49, 31], [67, 27], [75, 27], [8, 38], [22, 38], [8, 47], [22, 47]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.decor.push({ kind: 'mineSupport', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS });
+    }
+    for (const [tx, ty, vertical] of [[22, 11, false], [27, 11, false], [32, 11, false],
+      [44, 22, true], [44, 27, true], [55, 35, false], [60, 35, false],
+      [15, 21, true], [15, 26, true], [15, 31, true], [28, 42, false]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.decor.push({ kind: 'mineRail', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS, vertical });
+    }
+    for (const [tx, ty, phase] of [[10, 7, 0.3], [39, 8, 1.5], [48, 37, 2.2], [70, 29, 0.8], [10, 42, 2.7]]) {
+      if (lv.tiles[idx(lv, tx, ty)] === FLOOR) lv.decor.push({ kind: 'lantern', x: (tx + 0.5) * TS, y: (ty + 0.5) * TS, phase });
     }
     return captureOriginalTiles(lv);
   }
@@ -1098,7 +1434,33 @@
 
         const away = Math.hypot(tx - spawnTx, ty - spawnTy);
         const r = Math.random();
-        if (lv.id === 'special') {
+        if (lv.id === 'stage13') {
+          if (r < 0.31) lv.tiles[i] = GOLD;
+          else if (r < 0.48) lv.tiles[i] = DIAMOND;
+          else if (r < 0.61) lv.tiles[i] = IRON;
+          else if (r < 0.81) lv.tiles[i] = MOSSY_STONE;
+          else lv.tiles[i] = BASALT;
+        } else if (lv.id === 'stage12') {
+          if (r < 0.2) lv.tiles[i] = DIAMOND;
+          else if (r < 0.4) lv.tiles[i] = TITANIUM;
+          else if (r < 0.62) lv.tiles[i] = GOLD;
+          else lv.tiles[i] = MOSSY_STONE;
+        } else if (lv.id === 'stage11') {
+          if (r < 0.4) lv.tiles[i] = AMETHYST;
+          else if (r < 0.65) lv.tiles[i] = QUARTZ;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'stage10') {
+          lv.tiles[i] = r < 0.28 ? BLACK_AMETHYST : DARKSTONE;
+        } else if (lv.id === 'stage9') {
+          if (r < 0.22) lv.tiles[i] = SAPPHIRE;
+          else if (r < 0.43) lv.tiles[i] = RUBY;
+          else lv.tiles[i] = DARKSTONE;
+        } else if (lv.id === 'stage8') {
+          if (r < 0.2) lv.tiles[i] = RUBY;
+          else if (r < 0.46) lv.tiles[i] = QUARTZ;
+          else if (r < 0.72) lv.tiles[i] = SILVER;
+          else lv.tiles[i] = STONE;
+        } else if (lv.id === 'special') {
           if (r < 0.24) lv.tiles[i] = MERCURY;
           else if (r < 0.47) lv.tiles[i] = TITANIUM;
           else if (r < 0.69) lv.tiles[i] = IRIDIUM;
@@ -1147,6 +1509,12 @@
       stage4: [STONE, IRON, GOLD], stage5: [STONE, IRON, BAUXITE],
       stage6: [STONE, GOLD, COBALT, QUARTZ],
       stage7: [STONE, GOLD, COBALT, IRIDIUM, TITANIUM],
+      stage8: [STONE, SILVER, QUARTZ, RUBY],
+      stage9: [DARKSTONE, RUBY, SAPPHIRE],
+      stage10: [DARKSTONE, BLACK_AMETHYST],
+      stage11: [STONE, QUARTZ, AMETHYST],
+      stage12: [GOLD, TITANIUM, MOSSY_STONE, DIAMOND],
+      stage13: [GOLD, DIAMOND, MOSSY_STONE, IRON, BASALT],
       special: [STONE, TITANIUM, IRIDIUM, QUARTZ, MERCURY],
     };
     if (guaranteedOres[lv.id]) {
@@ -1311,11 +1679,12 @@
         cell.slot.classList.toggle('is-ingot', !!ITEMS[item.item].isIngot);
         cell.slot.classList.toggle('is-coin', !!ITEMS[item.item].isCoin);
         cell.slot.classList.toggle('is-creature', !!ITEMS[item.item].isCreature);
+        cell.slot.classList.toggle('is-polished', !!ITEMS[item.item].isPolished);
         cell.gem.style.setProperty('--gem', ITEMS[item.item].color);
         cell.count.textContent = item.count > 1 ? String(item.count) : '';
         cell.slot.title = ITEMS[item.item].name;
       } else {
-        cell.slot.classList.remove('has-item', 'is-ingot', 'is-coin', 'is-creature');
+        cell.slot.classList.remove('has-item', 'is-ingot', 'is-coin', 'is-creature', 'is-polished');
         cell.count.textContent = '';
         cell.slot.removeAttribute('title');
       }
@@ -1335,7 +1704,8 @@
       const resource = document.createElement('span');
       resource.className = 'storage-resource';
       const gem = document.createElement('span');
-      gem.className = def.isIngot ? 'gem is-ingot' : def.isCoin ? 'gem is-coin' : def.isCreature ? 'gem is-creature' : 'gem';
+      gem.className = def.isIngot ? 'gem is-ingot' : def.isCoin ? 'gem is-coin' :
+        def.isCreature ? 'gem is-creature' : def.isPolished ? 'gem is-polished' : 'gem';
       gem.setAttribute('aria-hidden', 'true');
       gem.style.setProperty('--gem', def.color);
       const name = document.createElement('span');
@@ -1456,16 +1826,24 @@
   /* ------------------------------------------------ Home Base stations */
 
   const STATION_LABELS = { melter: 'Melter', forge: 'Forge', storage: 'Storage',
-    press: 'Coin Press', trader: 'Coin Trader', elevator: 'Elevator' };
+    press: 'Coin Press', trader: 'Coin Trader', polisher: 'Gem Polisher', elevator: 'Elevator' };
 
-  function swordDamageFor(tier, mercurySword) {
-    const base = tier >= 4 ? BALANCE.swordDamageT4 : tier >= 3 ? BALANCE.swordDamageT3 :
+  function swordDamageFor(tier) {
+    return tier >= 4 ? BALANCE.swordDamageT4 : tier >= 3 ? BALANCE.swordDamageT3 :
       tier >= 2 ? BALANCE.swordDamageT2 : BALANCE.swordDamage;
-    return mercurySword ? base * BALANCE.mercurySwordMultiplier : base;
+  }
+
+  // Existing living Golems retain armour from the old Mercury damage bonus.
+  function legacySwordDamageFor(tier, mercurySword) {
+    return swordDamageFor(tier) * (mercurySword ? BALANCE.legacyMercuryMultiplier : 1);
   }
 
   function tierDamage() {
-    return swordDamageFor(state.tools.sword, state.mercurySword);
+    return swordDamageFor(state.tools.sword);
+  }
+
+  function playerSwordDamage() {
+    return tierDamage() * (state.voidPowerTime > 0 ? BALANCE.voidPowerMultiplier : 1);
   }
 
   // T4 removes exactly two hits from T3, but never reduces a block below one.
@@ -1531,12 +1909,14 @@
     el.viewStorage.classList.toggle('is-hidden', kind !== 'storage');
     el.viewPress.classList.toggle('is-hidden', kind !== 'press');
     el.viewTrader.classList.toggle('is-hidden', kind !== 'trader');
+    el.viewPolisher.classList.toggle('is-hidden', kind !== 'polisher');
     el.viewElevator.classList.toggle('is-hidden', kind !== 'elevator');
     el.stationPanel.classList.toggle('is-storage', kind === 'storage');
     el.station.setAttribute('aria-label', STATION_LABELS[kind]);
     el.station.classList.remove('is-hidden');
     if (kind === 'press') el.pressHint.textContent = 'Melt Bauxite first to make Aluminum.';
     if (kind === 'trader') el.traderHint.textContent = 'Press each new coin to unlock its coal exchange.';
+    if (kind === 'polisher') el.polisherHint.textContent = 'One raw gem makes one polished gem.';
     refreshStation();
   }
 
@@ -1612,6 +1992,89 @@
     return true;
   }
 
+  const gemUi = {};
+
+  function buildGemUI() {
+    el.polisherGems.innerHTML = '';
+    el.traderGems.innerHTML = '';
+    function makeRow(container, kind, polished, selling) {
+      const row = document.createElement('div'); row.className = 'coin-row';
+      const icon = document.createElement('span'); icon.className = 'coin-icon gem-mark';
+      icon.style.setProperty('--gem', ITEMS[selling ? polished : kind].color);
+      icon.textContent = '◆'; icon.setAttribute('aria-hidden', 'true');
+      const detail = document.createElement('span'); detail.className = 'coin-details';
+      const title = document.createElement('strong');
+      const sale = gemSale(kind), reward = `${sale.count} ${ITEMS[sale.item].name}${sale.count === 1 ? '' : 's'}`;
+      title.textContent = selling ? `${ITEMS[polished].name} → ${reward}`
+        : `${ITEMS[kind].name} → ${ITEMS[polished].name}`;
+      const status = document.createElement('small');
+      detail.appendChild(title); detail.appendChild(status);
+      const button = document.createElement('button'); button.type = 'button';
+      button.id = `${selling ? 'sell' : 'polish'}-${kind}`;
+      button.className = 'coin-action gem-action'; button.textContent = selling ? 'Sell' : 'Polish';
+      button.setAttribute('aria-label', selling ? `Sell ${ITEMS[polished].name} for ${reward}`
+        : `Polish ${ITEMS[kind].name}`);
+      button.addEventListener('click', () => selling ? sellPolishedGem(kind) : polishGem(kind));
+      row.appendChild(icon); row.appendChild(detail); row.appendChild(button); container.appendChild(row);
+      return { button, status };
+    }
+    for (const [kind, polished] of Object.entries(GEM_RECIPES)) {
+      gemUi[kind] = { polish: makeRow(el.polisherGems, kind, polished, false),
+        sell: makeRow(el.traderGems, kind, polished, true) };
+    }
+  }
+
+  function refreshGems() {
+    for (const [kind, polished] of Object.entries(GEM_RECIPES)) {
+      const ui = gemUi[kind];
+      if (!ui) continue;
+      const raw = countItem(kind), finished = countItem(polished);
+      const canPolish = !!planExchange(kind, 1, polished, 1);
+      const sale = gemSale(kind);
+      const canSell = !!planExchange(polished, 1, sale.item, sale.count);
+      ui.polish.button.disabled = !canPolish;
+      ui.polish.status.textContent = `${raw} raw in bag${raw && !canPolish ? ' · bag full' : ''}`;
+      ui.sell.button.disabled = !canSell;
+      ui.sell.status.textContent = `${finished} polished in bag${finished && !canSell ? ' · bag full' : ''}`;
+    }
+  }
+
+  function polishGem(kind) {
+    if (!Object.hasOwn(GEM_RECIPES, kind) || !level || !level.isBase) return false;
+    const polished = GEM_RECIPES[kind], plan = planExchange(kind, 1, polished, 1);
+    if (!plan) {
+      refreshStation();
+      el.polisherHint.textContent = countItem(kind) ? 'Your bag is full. Make room for the polished gem.'
+        : `No ${ITEMS[kind].name} in your bag.`;
+      return false;
+    }
+    commitExchange(plan); refreshStation();
+    el.polisherHint.textContent = `Polished one ${ITEMS[kind].name}!`;
+    const station = level.stations.find((st) => st.kind === 'polisher');
+    if (station) spawnPickup(polished, 1, station.x, station.y - 12, { alreadyCollected: true });
+    Sound.pickup();
+    return true;
+  }
+
+  function sellPolishedGem(kind) {
+    if (!Object.hasOwn(GEM_RECIPES, kind) || !level || !level.isBase) return false;
+    const polished = GEM_RECIPES[kind], sale = gemSale(kind);
+    const reward = `${sale.count} ${ITEMS[sale.item].name}${sale.count === 1 ? '' : 's'}`;
+    const plan = planExchange(polished, 1, sale.item, sale.count);
+    if (!plan) {
+      refreshStation();
+      el.traderHint.textContent = countItem(polished) ? `Your bag is full. Make room for ${reward}.`
+        : `No ${ITEMS[polished].name} in your bag.`;
+      return false;
+    }
+    commitExchange(plan); refreshStation();
+    el.traderHint.textContent = `Sold ${ITEMS[polished].name} for ${reward}.`;
+    const station = level.stations.find((st) => st.kind === 'trader');
+    if (station) spawnPickup(sale.item, sale.count, station.x, station.y - 12, { alreadyCollected: true });
+    Sound.pickup();
+    return true;
+  }
+
   // Keep the open menu's numbers in step with the bag.
   function refreshStation() {
     if (!el.viewMelter) return;
@@ -1678,6 +2141,7 @@
     refreshTierBadges();
     refreshStorage();
     refreshCoins();
+    refreshGems();
     refreshElevator();
   }
 
@@ -1829,7 +2293,7 @@
     removeItem('mercury', 3);
     state.mercurySword = true;
     Sound.forge();
-    showToast('Mercury edge: sword damage +15%!');
+    showToast('Mercury edge: sword hits now poison enemies!');
     refreshStation();
     return true;
   }
@@ -1920,10 +2384,15 @@
       case 'KeyQ': selectTool('pickaxe'); break;
       case 'KeyE': selectTool('sword'); break;
       case 'KeyF':
-        if (state.mode === 'playing' && level.elevators.length) {
+        if (state.mode === 'playing' && level) {
           const lift = level.elevators.find((entry) => Math.hypot(player.x - entry.x, player.y - entry.y) <= 2.5 * TS);
           if (lift) useElevator(lift);
+          else if (level.pedestal && Math.hypot(player.x - level.pedestal.x, player.y - level.pedestal.y) <= 2.5 * TS) useWardenPedestal();
+          else if (level.golemShrine && Math.hypot(player.x - level.golemShrine.x, player.y - level.golemShrine.y) <= 2.5 * TS) useGolemShrine();
         }
+        break;
+      case 'KeyX':
+        activateVoidPower();
         break;
       case 'Space':
         if (state.mode === 'playing') swing();
@@ -1972,6 +2441,8 @@
     const w = screenToWorld(pointer.x, pointer.y);
     const lift = elevatorAt(w.x, w.y);
     if (lift && useElevator(lift)) return;
+    if (level.pedestal && Math.hypot(w.x - level.pedestal.x, w.y - level.pedestal.y) <= 34 && useWardenPedestal()) return;
+    if (level.golemShrine && Math.hypot(w.x - level.golemShrine.x, w.y - level.golemShrine.y) <= 36 && useGolemShrine()) return;
     const st = stationAt(w.x, w.y);
     if (st) {
       openStation(st.kind);
@@ -1992,7 +2463,7 @@
       const w = screenToWorld(pointer.x, pointer.y);
       const dx = w.x - player.x;
       const dy = w.y - player.y;
-      if (Math.hypot(dx, dy) > 6) return Math.atan2(dy, dx);
+      if (Math.hypot(dx, dy) > 0.5) return Math.atan2(dy, dx);
     }
     return Math.atan2(player.faceY, player.faceX);
   }
@@ -2069,7 +2540,7 @@
     if (secretSeam) showToast('The seam reveals a hidden staircase!');
 
     if (def.drop) {
-      const amount = def.drop === 'stone' ? randInt(1, 2) : 1;
+      const amount = ['stone', 'darkstone', 'basalt'].includes(def.drop) ? randInt(1, 2) : 1;
       spawnPickup(def.drop, amount, (tx + 0.5) * TS, (ty + 0.5) * TS, { source: 'mining' });
       Sound.oreBreak();
     } else {
@@ -2085,7 +2556,8 @@
 
     // Snapshot all enemies: a slime's newly split children cannot be hit by
     // the same swing, and a prospector's loot is dropped exactly once.
-    for (const s of [...slimes, ...moles, ...spiders, ...golems, ...level.prospectors]) {
+    for (const s of [...slimes, ...moles, ...spiders, ...golems, ...level.prospectors,
+      ...ghosts, ...graveDiggers, ...infectedSkeletons, ...(warden ? [warden] : [])]) {
       if (s.dead) continue;
       const dx = s.x - player.x;
       const dy = s.y - player.y;
@@ -2095,26 +2567,35 @@
       const ang = Math.atan2(dy, dx);
       let diff = Math.abs(ang - aim);
       if (diff > Math.PI) diff = TAU - diff;
-      if (diff > BALANCE.swordArc) continue;
+      // An enemy overlapping the player is in contact whichever way they
+      // point; still honor the aimed arc for everyone further away.
+      if (diff > BALANCE.swordArc && dist > 6) continue;
 
       hitAny = true;
-      if (s.kind === 'mole') damageMole(s, tierDamage(), ang);
-      else if (s.kind === 'spider') damageSpider(s, tierDamage(), ang);
-      else if (s.kind === 'golem') damageGolem(s, tierDamage(), ang);
-      else if (s.kind === 'prospector') damageProspector(s, tierDamage(), ang);
-      else damageSlime(s, tierDamage(), ang);
+      if (s.kind === 'mole') damageMole(s, playerSwordDamage(), ang);
+      else if (s.kind === 'spider' || s.kind === 'crabock') damageSpider(s, playerSwordDamage(), ang);
+      else if (s.kind === 'golem') damageGolem(s, playerSwordDamage(), ang);
+      else if (s.kind === 'prospector') damageProspector(s, playerSwordDamage(), ang);
+      else if (s.kind === 'ghost') damageGhost(s, playerSwordDamage(), ang);
+      else if (s.kind === 'graveDigger') damageGraveDigger(s, playerSwordDamage(), ang, true);
+      else if (s.kind === 'infectedSkeleton' || s.kind === 'skeleton') damageInfectedSkeleton(s, playerSwordDamage(), ang);
+      else if (s.kind === 'warden') damageWarden(s, playerSwordDamage());
+      else damageSlime(s, playerSwordDamage(), ang);
+      if (state.mercurySword && !s.dead) inflictEnemyPoison(s);
     }
 
     if (hitAny) Sound.swordHit();
   }
 
-  function damageSlime(s, amount, angle) {
-    if (s.tropical) s.provoked = true;
+  function damageSlime(s, amount, angle, poison = false) {
+    if (s.tropical && !poison) s.provoked = true;
     s.hp -= amount;
     s.flash = 0.16;
-    s.knockX += Math.cos(angle) * 150;
-    s.knockY += Math.sin(angle) * 150;
-    shake(0.3);
+    if (!poison) {
+      s.knockX += Math.cos(angle) * 150;
+      s.knockY += Math.sin(angle) * 150;
+      shake(0.3);
+    }
 
     floaters.push({
       x: s.x,
@@ -2129,12 +2610,14 @@
     if (s.hp <= 0) killSlime(s);
   }
 
-  function damageMole(mole, amount, angle) {
+  function damageMole(mole, amount, angle, poison = false) {
     mole.hp -= amount;
     mole.flash = 0.16;
-    mole.knockX += Math.cos(angle) * 150;
-    mole.knockY += Math.sin(angle) * 150;
-    shake(0.3);
+    if (!poison) {
+      mole.knockX += Math.cos(angle) * 150;
+      mole.knockY += Math.sin(angle) * 150;
+      shake(0.3);
+    }
     floaters.push({
       x: mole.x, y: mole.y - mole.r - 4, text: String(amount),
       color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
@@ -2147,34 +2630,79 @@
     }
   }
 
-  function damageSpider(spider, amount, angle) {
+  function damageSpider(spider, amount, angle, poison = false) {
     if (spider.dead) return;
     spider.hp -= amount;
     spider.flash = 0.16;
-    spider.knockX += Math.cos(angle) * 150;
-    spider.knockY += Math.sin(angle) * 150;
-    shake(0.3);
+    if (!poison) {
+      spider.knockX += Math.cos(angle) * 150;
+      spider.knockY += Math.sin(angle) * 150;
+      shake(0.3);
+    }
     floaters.push({
       x: spider.x, y: spider.y - spider.r - 8, text: String(amount),
       color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
     });
     if (spider.hp > 0) return;
     spider.dead = true;
-    state.spidersSlain += 1;
+    if (spider.crabock) state.crabocksSlain += 1;
+    else state.spidersSlain += 1;
     Sound.slimeDie();
-    burst(spider.x, spider.y, 12, ['#59465f', '#a88192', '#dfc9c0'], 140, 0.45, 0.1);
+    burst(spider.x, spider.y, 12, spider.crabock ? ['#514a5b', '#8b718d', '#d0b6d1'] : ['#59465f', '#a88192', '#dfc9c0'], 140, 0.45, 0.1);
   }
 
-  function damageGolem(golem, amount, angle) {
+  function damageGhost(ghost, amount, angle) {
+    if (ghost.dead) return;
+    ghost.hp -= amount; ghost.flash = 0.16;
+    ghost.knockX += Math.cos(angle) * 80; ghost.knockY += Math.sin(angle) * 80;
+    floaters.push({ x: ghost.x, y: ghost.y - ghost.r - 12, text: String(amount),
+      color: '#d9fbff', life: 0.7, maxLife: 0.7, vy: -52 });
+    if (ghost.hp > 0) return;
+    ghost.dead = true; state.ghostsSlain += 1;
+    Sound.slimeDie();
+    burst(ghost.x, ghost.y, 14, ['#b5eff0', '#dffbff', '#94bfcb'], 105, 0.6, 0.1);
+  }
+
+  function damageGraveDigger(digger, amount, angle, byPlayer = false, poison = false) {
+    if (digger.dead) return;
+    if (byPlayer) digger.provoked = true;
+    digger.hp -= amount; digger.flash = 0.16;
+    if (!poison) { digger.knockX += Math.cos(angle) * 110; digger.knockY += Math.sin(angle) * 110; }
+    // A surprise sword hit interrupts digging, but not an already wound-up spin.
+    if (byPlayer && digger.digWindup > 0) { digger.digWindup = 0; digger.digCooldown = 3; }
+    floaters.push({ x: digger.x, y: digger.y - digger.r - 15, text: String(amount),
+      color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52 });
+    if (digger.hp > 0) return;
+    digger.dead = true; state.graveDiggersSlain += 1;
+    Sound.moleDie();
+    burst(digger.x, digger.y, 14, ['#716956', '#b3a687', '#e0d9c0'], 120, 0.5, 0.1);
+  }
+
+  function damageInfectedSkeleton(skeleton, amount, angle, poison = false) {
+    if (skeleton.dead) return;
+    if (skeleton.hidden) revealInfectedSkeleton(skeleton);
+    skeleton.hp -= amount; skeleton.flash = 0.16;
+    if (!poison) { skeleton.knockX += Math.cos(angle) * 95; skeleton.knockY += Math.sin(angle) * 95; }
+    floaters.push({ x: skeleton.x, y: skeleton.y - skeleton.r - 15, text: String(amount),
+      color: '#d7ffd2', life: 0.7, maxLife: 0.7, vy: -52 });
+    if (skeleton.hp > 0) return;
+    skeleton.dead = true;
+    if (skeleton.kind === 'skeleton') state.skeletonsSlain += 1;
+    else state.infectedSkeletonsSlain += 1;
+    Sound.moleDie();
+    burst(skeleton.x, skeleton.y, 14, ['#d2dcc0', '#8ba289', '#7dcb86'], 120, 0.5, 0.1);
+  }
+
+  function damageGolem(golem, amount, angle, poison = false) {
     if (golem.dead) return;
     golem.hp -= amount;
     golem.flash = 0.16;
     // A disabled Golem stays completely still, even when struck.
-    if (golem.disabled <= 0) {
+    if (!poison && golem.disabled <= 0) {
       golem.knockX += Math.cos(angle) * 70;
       golem.knockY += Math.sin(angle) * 70;
     }
-    shake(0.3);
+    if (!poison) shake(0.3);
     floaters.push({
       x: golem.x, y: golem.y - golem.r - 12, text: String(amount),
       color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
@@ -2186,7 +2714,12 @@
     burst(golem.x, golem.y, 16, golem.mercury ? ['#79a9b0', '#bce9e9', '#f4ffff'] : ['#766e65', '#b6a99a', '#e4b285'], 150, 0.55, 0.14);
     // Ground loot belongs to the current area, survives a full bag, and is
     // never duplicated by another swing against the same defeated Golem.
-    if (golem.mercury) {
+    if (golem.shrine) {
+      level.shrineCooldown = BALANCE.shrineRespawnTime;
+      spawnPickup('diamond', 2, golem.x - 8, golem.y, { startOnGround: true, source: 'golem' });
+      spawnPickup('stone', 5, golem.x + 8, golem.y, { startOnGround: true, source: 'golem' });
+      showToast('The shrine guardian will return.');
+    } else if (golem.mercury) {
       spawnPickup('mercury', randInt(2, 4), golem.x, golem.y, { startOnGround: true, source: 'golem' });
     } else {
       spawnPickup('stone', 2, golem.x - 6, golem.y, { startOnGround: true, source: 'golem' });
@@ -2195,13 +2728,15 @@
     }
   }
 
-  function damageProspector(prospector, amount, angle) {
+  function damageProspector(prospector, amount, angle, poison = false) {
     if (prospector.dead) return;
     prospector.hp -= amount;
     prospector.flash = 0.16;
-    prospector.knockX += Math.cos(angle) * 150;
-    prospector.knockY += Math.sin(angle) * 150;
-    shake(0.3);
+    if (!poison) {
+      prospector.knockX += Math.cos(angle) * 150;
+      prospector.knockY += Math.sin(angle) * 150;
+      shake(0.3);
+    }
     floaters.push({
       x: prospector.x, y: prospector.y - prospector.r - 12, text: String(amount),
       color: '#fff0c0', life: 0.7, maxLife: 0.7, vy: -52,
@@ -2227,6 +2762,9 @@
     Sound.slimeDie();
     burst(s.x, s.y, 14, [s.color, shade(s.color, 1.25), '#ffffff'], 170, 0.55, 0.14);
 
+    if (s.purple && s.tiny && Math.random() < 0.5) {
+      spawnPickup('amethyst', 1, s.x, s.y, { startOnGround: true, source: 'other' });
+    }
     if (!s.tiny) {
       // Large slimes split into two regular slimes; regulars split into tinies.
       for (let i = 0; i < 2; i++) {
@@ -2237,7 +2775,7 @@
         let y = s.y + Math.sin(a) * 10;
         if (collidesAt(x, y, radius)) { x = s.x; y = s.y; }
         // Each tropical offspring is peaceful until that individual is hit.
-        slimes.push(makeSlime(x, y, tiny, false, s.tropical));
+        slimes.push(makeSlime(x, y, tiny, false, s.tropical, s.purple));
       }
       floaters.push({
         x: s.x,
@@ -2251,9 +2789,67 @@
     }
   }
 
+  // Mercury poison uses a continuous timer and whole one-second damage ticks.
+  // Re-hitting refreshes its duration without discarding a partially earned tick.
+  function inflictEnemyPoison(enemy) {
+    if (enemy.dead || enemy.kind === 'ghost' || enemy.venom) return false;
+    if (!(enemy.poisonTime > 0)) enemy.poisonProgress = 0;
+    enemy.poisonTime = Math.max(enemy.poisonTime, randInt(BALANCE.enemyPoisonMinDuration, BALANCE.enemyPoisonMaxDuration));
+    return true;
+  }
+
+  function updateEnemyPoisons(dt) {
+    const enemies = [...slimes, ...moles, ...spiders, ...golems, ...level.prospectors,
+      ...ghosts, ...graveDiggers, ...infectedSkeletons, ...(warden ? [warden] : [])];
+    for (const enemy of enemies) {
+      if (enemy.dead || !(enemy.poisonTime > 0)) continue;
+      const elapsed = Math.min(dt, enemy.poisonTime);
+      enemy.poisonProgress += elapsed;
+      enemy.poisonTime = Math.max(0, enemy.poisonTime - elapsed);
+      while (enemy.poisonProgress >= 1 - 1e-9 && !enemy.dead) {
+        enemy.poisonProgress = Math.max(0, enemy.poisonProgress - 1);
+        const damage = enemy.maxHp * BALANCE.enemyPoisonDamageFraction;
+        if (enemy.kind === 'mole') damageMole(enemy, damage, 0, true);
+        else if (enemy.kind === 'spider' || enemy.kind === 'crabock') damageSpider(enemy, damage, 0, true);
+        else if (enemy.kind === 'golem') damageGolem(enemy, damage, 0, true);
+        else if (enemy.kind === 'prospector') damageProspector(enemy, damage, 0, true);
+        else if (enemy.kind === 'graveDigger') damageGraveDigger(enemy, damage, 0, false, true);
+        else if (enemy.kind === 'infectedSkeleton' || enemy.kind === 'skeleton') damageInfectedSkeleton(enemy, damage, 0, true);
+        else if (enemy.kind === 'warden') damageWarden(enemy, damage);
+        else if (enemy.kind !== 'ghost') damageSlime(enemy, damage, 0, true);
+      }
+      if (enemy.poisonTime <= 1e-9) { enemy.poisonTime = 0; enemy.poisonProgress = 0; }
+    }
+  }
+
+  function inflictPlayerPoison() {
+    if (!(state.poisonTime > 0)) state.poisonDistance = 0;
+    state.poisonTime = BALANCE.playerPoisonDuration;
+    syncPoisonUI();
+    showToast('Poisoned! Moving costs 5 HP per tile.');
+  }
+
+  function applyPlayerPoisonDistance(distance) {
+    state.poisonDistance += distance;
+    while (state.poisonDistance >= TS - 1e-9 && state.mode === 'playing') {
+      state.poisonDistance = Math.max(0, state.poisonDistance - TS);
+      // Poison damage is not a physical hit: it ignores existing invulnerability,
+      // causes no knockback and does not grant or shorten invulnerability.
+      state.hp = Math.max(0, state.hp - BALANCE.playerPoisonTileDamage);
+      state.healDelay = BALANCE.healingDelay; state.healProgress = 0;
+      player.hurtFlash = 0.25;
+      floaters.push({ x: player.x, y: player.y - 24, text: '-5', color: '#b6ef84', life: 0.9, maxLife: 0.9, vy: -46 });
+      Sound.hurt(); syncVitals();
+      if (state.hp <= 0) die();
+    }
+  }
+
   function hurtPlayer(amount, fromAngle, ignoreInvulnerability = false, invulnerabilityTime = BALANCE.invulnerableTime) {
-    if (state.mode !== 'playing' || (state.invuln > 0 && !ignoreInvulnerability)) return;
+    if (state.mode !== 'playing' || (state.invuln > 0 && !ignoreInvulnerability)) return false;
     state.hp = Math.max(0, state.hp - amount);
+    // Only real damage restarts natural healing; an invulnerable hit did not
+    // reduce HP and therefore must not postpone recovery.
+    if (amount > 0) { state.healDelay = BALANCE.healingDelay; state.healProgress = 0; }
     state.invuln = invulnerabilityTime;
     player.hurtFlash = 0.35;
     shake(0.8);
@@ -2278,14 +2874,16 @@
 
     syncVitals();
     if (state.hp <= 0) die();
+    return true;
   }
 
   /* ---------------------------------------------------------------- slimes */
 
-  function makeSlime(x, y, tiny, large = false, tropical = false) {
-    const hp = large ? BALANCE.largeSlimeHp : tiny ? BALANCE.tinyHp : BALANCE.slimeHp;
+  function makeSlime(x, y, tiny, large = false, tropical = false, purple = false) {
+    const baseHp = large ? BALANCE.largeSlimeHp : tiny ? BALANCE.tinyHp : BALANCE.slimeHp;
+    const hp = purple && !large && !tropical ? baseHp * 1.5 : baseHp;
     return {
-      x,
+      ...freshEnemyPoison(), x,
       y,
       r: large ? BALANCE.largeSlimeRadius : tiny ? BALANCE.tinyRadius : BALANCE.slimeRadius,
       hp,
@@ -2296,8 +2894,10 @@
       tiny: !!tiny && !large,
       large: !!large,
       tropical: !!tropical && !large,
+      purple: !!purple && !large && !tropical,
       provoked: false,
-      color: tropical && !large ? (tiny ? '#84d9ee' : '#3badd3') : large ? '#419b78' : tiny ? '#a8e88b' : '#5fbf6e',
+      color: purple && !large && !tropical ? (tiny ? '#ddb4f6' : '#a25ad2')
+        : tropical && !large ? (tiny ? '#84d9ee' : '#3badd3') : large ? '#419b78' : tiny ? '#a8e88b' : '#5fbf6e',
       dead: false,
       flash: 0,
       attackCd: 0,
@@ -2313,9 +2913,9 @@
   }
 
   function spawnSlimeAwayFromPlayer() {
-    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6'].includes(level.id)) return null;
+    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6', 'stage11'].includes(level.id)) return null;
     const p = playerTile();
-    const tropical = level.id === 'stage6';
+    const tropical = level.id === 'stage6', purple = level.id === 'stage11';
     // Prefer different pools, not a crowd at a single one. Some slimes still
     // spawn throughout the cavern, and the existing global cap stays intact.
     const preferWater = tropical && Math.random() < 0.7;
@@ -2339,9 +2939,9 @@
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
       if (collidesAt(x, y, large ? BALANCE.largeSlimeRadius : BALANCE.slimeRadius)) continue;
       if (tropical && slimes.some((s) => !s.dead && Math.hypot(s.x - x, s.y - y) < 2 * TS)) continue;
-      const s = makeSlime(x, y, false, large, tropical);
+      const s = makeSlime(x, y, false, large, tropical, purple);
       slimes.push(s);
-      burst(s.x, s.y, 8, s.tropical ? ['#9feefa', '#48add7'] : ['#8ce09a', '#4f9e5c'], 90, 0.45, 0.1);
+      burst(s.x, s.y, 8, s.purple ? ['#e8c5ff', '#a560d4'] : s.tropical ? ['#9feefa', '#48add7'] : ['#8ce09a', '#4f9e5c'], 90, 0.45, 0.1);
       return s;
     }
     return null;
@@ -2362,7 +2962,7 @@
   }
 
   function updateSlimes(dt) {
-    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6'].includes(level.id)) return;
+    if (!['stage1', 'stage2', 'stage4', 'stage5', 'stage6', 'stage11'].includes(level.id)) return;
 
     const alive = slimes.filter((s) => !s.dead).length;
     const largeStage = level.id === 'stage4' || level.id === 'stage5';
@@ -2411,6 +3011,7 @@
         moveY = Math.sin(s.wanderAngle) * amble;
       }
 
+      moveX *= poisonSpeed(s); moveY *= poisonSpeed(s);
       const kx = s.knockX;
       const ky = s.knockY;
       s.knockX *= 1 - 8 * dt;
@@ -2452,7 +3053,7 @@
 
   function makeMole(x, y) {
     return {
-      kind: 'mole', x, y,
+      ...freshEnemyPoison(), kind: 'mole', x, y,
       r: BALANCE.moleRadius,
       hp: BALANCE.moleHp, maxHp: BALANCE.moleHp,
       dmg: BALANCE.moleDamage, speed: BALANCE.moleSpeed,
@@ -2541,6 +3142,7 @@
         moveX = Math.cos(mole.wanderAngle) * mole.speed * 0.5;
         moveY = Math.sin(mole.wanderAngle) * mole.speed * 0.5;
       }
+      moveX *= poisonSpeed(mole); moveY *= poisonSpeed(mole);
       if (Math.hypot(moveX, moveY) > 0.01) mole.angle = Math.atan2(moveY, moveX);
       mole.drillSpin += dt * 18;
 
@@ -2564,11 +3166,13 @@
 
   /* ---------------------------------------------------------------- spiders */
 
-  function makeSpider(x, y) {
+  function makeSpider(x, y, crabock = false, venom = false) {
+    const hp = venom ? BALANCE.venomSpiderHp : crabock ? BALANCE.crabockHp : BALANCE.spiderHp;
     return {
-      kind: 'spider', x, y, r: BALANCE.spiderRadius,
-      hp: BALANCE.spiderHp, maxHp: BALANCE.spiderHp,
-      dmg: BALANCE.spiderDamage, speed: BALANCE.spiderSpeed,
+      ...freshEnemyPoison(), kind: crabock ? 'crabock' : 'spider', crabock: !!crabock, venom: !!venom, x, y,
+      r: crabock ? BALANCE.crabockRadius : BALANCE.spiderRadius,
+      hp, maxHp: hp,
+      dmg: BALANCE.spiderDamage, speed: crabock ? BALANCE.crabockSpeed : BALANCE.spiderSpeed,
       detect: BALANCE.spiderDetect, dead: false, flash: 0,
       attackCd: 0, bite: 0, knockX: 0, knockY: 0,
       facing: 0, walk: 0, chasing: false,
@@ -2579,16 +3183,16 @@
   }
 
   function spawnSpiderAwayFromPlayer() {
-    if (!['stage4', 'stage5', 'stage7'].includes(level.id)) return null;
-    const p = playerTile();
+    if (!['stage4', 'stage5', 'stage7', 'stage11', 'stage12', 'stage13'].includes(level.id)) return null;
+    const p = playerTile(), crabock = level.id === 'stage11', venom = level.id === 'stage13';
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
       const tile = getTile(tx, ty);
       if (isSolid(tx, ty) || tile === STAIRS_UP || tile === STAIRS_DOWN) continue;
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
-      if (collidesAt(x, y, BALANCE.spiderRadius)) continue;
-      const spider = makeSpider(x, y);
+      if (collidesAt(x, y, crabock ? BALANCE.crabockRadius : BALANCE.spiderRadius)) continue;
+      const spider = makeSpider(x, y, crabock, venom);
       spiders.push(spider);
       burst(x, y, 7, ['#58465f', '#a78191', '#d6c6b6'], 65, 0.35, 0.07);
       return spider;
@@ -2597,7 +3201,7 @@
   }
 
   function updateSpiders(dt) {
-    if (!['stage4', 'stage5', 'stage7'].includes(level.id)) return;
+    if (!['stage4', 'stage5', 'stage7', 'stage11', 'stage12', 'stage13'].includes(level.id)) return;
     if (spiders.filter((spider) => !spider.dead).length < BALANCE.maxSpiders) {
       level.spiderTimer -= dt;
       if (level.spiderTimer <= 0) {
@@ -2616,7 +3220,7 @@
       const dist = Math.hypot(dx, dy);
       spider.chasing = dist <= spider.detect;
       let direction;
-      let speed = spider.speed;
+      let speed = spider.speed * poisonSpeed(spider);
       if (spider.chasing) {
         direction = chaseDirection(spider, dt);
         spider.wanderTimer = 0;
@@ -2653,7 +3257,8 @@
         spider.bite = 0.18;
         // A short recovery from a spider bite lets its rapid, low-damage
         // attacks land while retaining normal protection after other enemies.
-        hurtPlayer(spider.dmg, Math.atan2(player.y - spider.y, player.x - spider.x), false, BALANCE.spiderHitInvulnerability);
+        const hit = hurtPlayer(spider.dmg, Math.atan2(player.y - spider.y, player.x - spider.x), false, BALANCE.spiderHitInvulnerability);
+        if (hit && spider.venom && state.mode === 'playing') inflictPlayerPoison();
         if (state.mode !== 'playing') return;
       }
     }
@@ -2661,15 +3266,19 @@
 
   /* ---------------------------------------------------------------- Golems */
 
-  function makeGolem(x, y, mercury = false, armour = tierDamage()) {
-    // One extra swing at the player's current sword strength, for every tier
-    // and with or without Mercury Edge. Store the resulting max HP in saves.
-    const hp = (mercury ? BALANCE.mercuryGolemHp : BALANCE.golemHp) + armour;
+  function makeGolem(x, y, mercury = false, armour = tierDamage(), shrine = false, ancient = false) {
+    // Ancient Golems have a fixed fourteen T4-hit health pool. The shrine
+    // guardian instead triples an ordinary Golem's spawn-time armour too.
+    const hp = ancient ? BALANCE.ancientGolemHp :
+      ((mercury ? BALANCE.mercuryGolemHp : BALANCE.golemHp) + armour * 2) *
+      (shrine ? BALANCE.shrineGolemMultiplier : 1);
     return {
-      kind: 'golem', mercury: !!mercury, x, y, r: BALANCE.golemRadius,
+      ...freshEnemyPoison(), kind: 'golem', mercury: !!mercury, shrine: !!shrine, ancient: !!ancient, x, y,
+      r: shrine ? BALANCE.shrineGolemRadius : BALANCE.golemRadius,
       hp, maxHp: hp,
       dmg: mercury ? BALANCE.mercuryGolemDamage : BALANCE.golemDamage,
       speed: mercury ? BALANCE.mercuryGolemSpeed : BALANCE.golemSpeed,
+      moveLimit: ancient ? BALANCE.ancientGolemMoveLimit : BALANCE.golemMoveLimit,
       detect: BALANCE.golemDetect, dead: false, flash: 0,
       attackCd: 0, knockX: 0, knockY: 0,
       facing: 0, walk: 0, chasing: false, moved: 0, disabled: 0,
@@ -2680,7 +3289,7 @@
   }
 
   function spawnGolemAwayFromPlayer() {
-    if (!['stage5', 'stage7', 'special'].includes(level.id)) return null;
+    if (!['stage5', 'stage7', 'stage12', 'stage13', 'special'].includes(level.id)) return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
@@ -2689,7 +3298,7 @@
       if (Math.hypot(tx - p.tx, ty - p.ty) < 7) continue;
       const x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
       if (collidesAt(x, y, BALANCE.golemRadius)) continue;
-      const golem = makeGolem(x, y, level.id === 'special');
+      const golem = makeGolem(x, y, level.id === 'special', tierDamage(), false, level.id === 'stage13');
       golems.push(golem);
       burst(x, y, 9, golem.mercury ? ['#8cb7bb', '#daf6ed', '#73c8d1'] : ['#766d63', '#b5a696', '#d4b290'], 65, 0.4, 0.08);
       return golem;
@@ -2698,8 +3307,8 @@
   }
 
   function updateGolems(dt) {
-    if (!['stage5', 'stage7', 'special'].includes(level.id)) return;
-    if (golems.filter((golem) => !golem.dead).length < BALANCE.maxGolems) {
+    if (!['stage5', 'stage7', 'stage12', 'stage13', 'special'].includes(level.id)) return;
+    if (golems.filter((golem) => !golem.dead && !golem.shrine).length < BALANCE.maxGolems) {
       level.golemTimer -= dt;
       if (level.golemTimer <= 0) {
         level.golemTimer = BALANCE.golemSpawnEvery;
@@ -2722,7 +3331,7 @@
       const dx = player.x - golem.x, dy = player.y - golem.y;
       const distance = Math.hypot(dx, dy);
       golem.chasing = distance <= golem.detect;
-      let direction, speed = golem.speed;
+      let direction, speed = golem.speed * poisonSpeed(golem);
       if (golem.chasing) {
         direction = chaseDirection(golem, dt);
         golem.wanderTimer = 0;
@@ -2741,9 +3350,9 @@
       golem.knockX *= Math.max(0, 1 - 8 * dt);
       golem.knockY *= Math.max(0, 1 - 8 * dt);
 
-      // Stop at exactly ten tiles of actual travel, not time spent trying to
-      // walk into a wall. Sword knockback also counts as physical movement.
-      const remaining = Math.max(0, BALANCE.golemMoveLimit - golem.moved);
+      // Ordinary Golems stop after ten tiles; Ancient ones after twenty.
+      // Only actual travel counts, including sword knockback, not blocked steps.
+      const remaining = Math.max(0, golem.moveLimit - golem.moved);
       const intended = Math.hypot(stepX, stepY);
       if (intended > remaining && intended > 0) {
         stepX *= remaining / intended;
@@ -2765,7 +3374,7 @@
           golem.chasePathTimer = 0;
         }
       }
-      if (golem.moved >= BALANCE.golemMoveLimit - 1e-7) {
+      if (golem.moved >= golem.moveLimit - 1e-7) {
         golem.moved = 0;
         golem.disabled = BALANCE.golemDisabledTime;
         golem.knockX = golem.knockY = 0;
@@ -2781,15 +3390,725 @@
     }
   }
 
+  /* --------------------------------------------------- temple golem shrine */
+
+  function spawnShrineGolem() {
+    if (!level || level.id !== 'stage12' || !level.golemShrine ||
+        golems.some((g) => g.shrine && !g.dead)) return false;
+    const shrine = level.golemShrine;
+    let x = shrine.x, y = shrine.y;
+    const dx = player.x - x, dy = player.y - y, distance = Math.hypot(dx, dy);
+    if (distance < BALANCE.shrineGolemRadius + BALANCE.playerRadius + 18) {
+      // Never materialise directly on the player: rise on the opposite side.
+      const length = distance || 1;
+      x -= (distance ? dx / length : -1) * 2 * TS;
+      y -= (distance ? dy / length : 0) * 2 * TS;
+    }
+    if (collidesAt(x, y, BALANCE.shrineGolemRadius)) return false;
+    const guardian = makeGolem(x, y, false, tierDamage(), true);
+    golems.push(guardian);
+    level.shrineActivated = true; level.shrineCooldown = 0;
+    burst(x, y, 20, ['#a9bca3', '#d9d0a3', '#96d4db'], 120, 0.7, 0.1);
+    if (Math.hypot(player.x - x, player.y - y) < 10 * TS) showToast('The shrine guardian awakens!');
+    Sound.rockBreak();
+    return true;
+  }
+
+  function useGolemShrine() {
+    if (state.mode !== 'playing' || !level || level.id !== 'stage12' || !level.golemShrine) return false;
+    if (Math.hypot(player.x - level.golemShrine.x, player.y - level.golemShrine.y) > 2.5 * TS) {
+      showToast('Walk closer to the golem shrine.'); return false;
+    }
+    if (golems.some((g) => g.shrine && !g.dead)) return false; // let a click attack the guardian
+    if (level.shrineCooldown > 0) {
+      showToast(`The shrine reawakens in ${Math.ceil(level.shrineCooldown)} seconds.`); return true;
+    }
+    return spawnShrineGolem();
+  }
+
+  function updateGolemShrine(dt) {
+    if (level.id !== 'stage12' || !level.shrineActivated || golems.some((g) => g.shrine && !g.dead)) return;
+    level.shrineCooldown = Math.max(0, level.shrineCooldown - dt);
+    if (level.shrineCooldown <= 1e-9) { level.shrineCooldown = 0; spawnShrineGolem(); }
+  }
+
+  /* ----------------------------------------------- ghosts & grave diggers */
+
+  function makeGhost(x, y) {
+    return { ...freshEnemyPoison(), kind: 'ghost', x, y, r: BALANCE.ghostRadius,
+      hp: BALANCE.ghostHp, maxHp: BALANCE.ghostHp, dmg: BALANCE.ghostDamage,
+      speed: BALANCE.ghostChaseSpeed, detect: BALANCE.ghostDetect,
+      dead: false, flash: 0, attackCd: 0, knockX: 0, knockY: 0,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.5, 2), bob: rand(0, TAU),
+      dashCooldown: 0, dashRemaining: 0, dashX: 0, dashY: 0, chasing: false };
+  }
+
+  function makeGraveDigger(x, y, graveIndex = 0) {
+    return { ...freshEnemyPoison(), kind: 'graveDigger', x, y, r: BALANCE.graveDiggerRadius,
+      hp: BALANCE.graveDiggerHp, maxHp: BALANCE.graveDiggerHp,
+      dmg: BALANCE.graveDiggerDamage, speed: BALANCE.graveDiggerSpeed,
+      detect: BALANCE.graveDiggerDetect, graveIndex,
+      dead: false, flash: 0, attackCd: 0, knockX: 0, knockY: 0,
+      wanderAngle: rand(0, TAU), wanderTimer: rand(0.5, 2), facing: 0, walk: 0,
+      provoked: false, fleeing: false, chasing: false,
+      digCooldown: rand(6, 10), digWindup: 0,
+      spinCooldown: 0, spinWindup: 0, spinFlash: 0,
+      chaseRoute: [], chaseRouteIndex: 0, chaseGoal: '', chasePathTimer: 0 };
+  }
+
+  function closestGrave(x, y) {
+    let found = null, distance = Infinity;
+    for (const grave of level.graves) {
+      const d = Math.hypot(grave.x - x, grave.y - y);
+      if (d < distance) { found = grave; distance = d; }
+    }
+    return { grave: found, distance };
+  }
+
+  function spawnGhostAwayFromPlayer() {
+    if (!['stage8', 'stage9'].includes(level.id)) return null;
+    const spots = level.graves.filter((g) => Math.hypot(g.x - player.x, g.y - player.y) >= 7 * TS);
+    if (!spots.length) return null;
+    const grave = pick(spots), angle = rand(0, TAU), radius = rand(15, 35);
+    const ghost = makeGhost(grave.x + Math.cos(angle) * radius, grave.y + Math.sin(angle) * radius);
+    ghosts.push(ghost);
+    burst(ghost.x, ghost.y, 7, ['#b3ebef', '#e1ffff'], 65, 0.5, 0.08);
+    return ghost;
+  }
+
+  function spawnGraveDiggerAwayFromPlayer() {
+    if (!['stage8', 'stage9'].includes(level.id)) return null;
+    const available = level.graves.map((grave, index) => ({ grave, index })).filter(({ grave }) =>
+      Math.hypot(grave.x - player.x, grave.y - player.y) >= 7 * TS &&
+      graveDiggers.every((d) => d.dead || Math.hypot(d.x - grave.x, d.y - grave.y) >= 3 * TS));
+    if (!available.length) return null;
+    const { grave, index } = pick(available);
+    const digger = makeGraveDigger(grave.x, grave.y, index);
+    graveDiggers.push(digger);
+    burst(digger.x, digger.y, 7, ['#857961', '#b0a58f'], 65, 0.5, 0.08);
+    return digger;
+  }
+
+  function updateGhosts(dt) {
+    if (!['stage8', 'stage9'].includes(level.id)) return;
+    const alive = ghosts.filter((g) => !g.dead).length;
+    const reservations = graveDiggers.filter((d) => !d.dead && d.digWindup > 0).length * 3;
+    if (alive < BALANCE.maxNaturalGhosts && alive + reservations < BALANCE.maxGhosts) {
+      level.ghostTimer -= dt;
+      if (level.ghostTimer <= 0) { level.ghostTimer = BALANCE.ghostSpawnEvery; spawnGhostAwayFromPlayer(); }
+    }
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+      const ghost = ghosts[i];
+      if (ghost.dead) { ghosts.splice(i, 1); continue; }
+      ghost.flash = Math.max(0, ghost.flash - dt);
+      ghost.attackCd = Math.max(0, ghost.attackCd - dt);
+      ghost.dashCooldown = Math.max(0, ghost.dashCooldown - dt);
+      ghost.bob += dt * 3;
+      const dx = player.x - ghost.x, dy = player.y - ghost.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      ghost.chasing = distance <= ghost.detect;
+      if (ghost.dashRemaining <= 0 && ghost.chasing && distance > TS && ghost.dashCooldown <= 0) {
+        ghost.dashX = dx / distance; ghost.dashY = dy / distance;
+        ghost.dashRemaining = BALANCE.ghostDashDistance;
+        ghost.dashCooldown = BALANCE.ghostDashCooldown;
+      }
+      let stepX, stepY;
+      const dashing = ghost.dashRemaining > 0;
+      if (dashing) {
+        const distanceStep = Math.min(ghost.dashRemaining, ghost.speed * 2 * dt);
+        stepX = ghost.dashX * distanceStep; stepY = ghost.dashY * distanceStep;
+        ghost.dashRemaining = Math.max(0, ghost.dashRemaining - distanceStep);
+      } else if (ghost.chasing) {
+        stepX = dx / distance * ghost.speed * dt; stepY = dy / distance * ghost.speed * dt;
+        ghost.wanderTimer = 0;
+      } else {
+        ghost.wanderTimer -= dt;
+        if (ghost.wanderTimer <= 0) {
+          const nearest = closestGrave(ghost.x, ghost.y);
+          ghost.wanderAngle = nearest.grave && nearest.distance > 2.5 * TS && Math.random() < 0.75
+            ? Math.atan2(nearest.grave.y - ghost.y, nearest.grave.x - ghost.x) + rand(-0.8, 0.8)
+            : rand(0, TAU);
+          ghost.wanderTimer = rand(1.2, 2.8);
+        }
+        stepX = Math.cos(ghost.wanderAngle) * BALANCE.ghostWanderSpeed * dt;
+        stepY = Math.sin(ghost.wanderAngle) * BALANCE.ghostWanderSpeed * dt;
+      }
+      // Ghosts ignore interior walls and ore, but stay inside the outer boundary.
+      ghost.x = clamp(ghost.x + stepX + (dashing ? 0 : ghost.knockX * dt), TS + ghost.r, (level.w - 1) * TS - ghost.r);
+      ghost.y = clamp(ghost.y + stepY + (dashing ? 0 : ghost.knockY * dt), TS + ghost.r, (level.h - 1) * TS - ghost.r);
+      ghost.knockX *= Math.max(0, 1 - 8 * dt); ghost.knockY *= Math.max(0, 1 - 8 * dt);
+      if (Math.hypot(player.x - ghost.x, player.y - ghost.y) < ghost.r + BALANCE.playerRadius && ghost.attackCd <= 0) {
+        ghost.attackCd = 1;
+        hurtPlayer(ghost.dmg, Math.atan2(ghost.y - player.y, ghost.x - player.x));
+        if (state.mode !== 'playing') return;
+      }
+    }
+  }
+
+  function moveGraveDigger(digger, direction, speed, dt) {
+    speed *= poisonSpeed(digger);
+    const beforeX = digger.x, beforeY = digger.y;
+    const dx = ((direction ? direction.x * speed : 0) + digger.knockX) * dt;
+    const dy = ((direction ? direction.y * speed : 0) + digger.knockY) * dt;
+    if (!collidesAt(digger.x + dx, digger.y, digger.r)) digger.x += dx;
+    if (!collidesAt(digger.x, digger.y + dy, digger.r)) digger.y += dy;
+    digger.knockX *= Math.max(0, 1 - 8 * dt); digger.knockY *= Math.max(0, 1 - 8 * dt);
+    // When fleeing into a wall, try a sideways escape rather than freezing.
+    if (direction && digger.fleeing && Math.hypot(digger.x - beforeX, digger.y - beforeY) < 0.05) {
+      for (const sign of [1, -1]) {
+        const sx = -direction.y * sign * speed * dt, sy = direction.x * sign * speed * dt;
+        if (!collidesAt(digger.x + sx, digger.y + sy, digger.r)) { digger.x += sx; digger.y += sy; break; }
+      }
+    }
+    digger.walk += Math.hypot(digger.x - beforeX, digger.y - beforeY) * 0.12;
+    if (direction) digger.facing = Math.atan2(direction.y, direction.x);
+  }
+
+  function shovelSpin(digger) {
+    const tx = Math.floor(digger.x / TS), ty = Math.floor(digger.y / TS);
+    const inRing = (x, y) => Math.abs(Math.floor(x / TS) - tx) <= 1 && Math.abs(Math.floor(y / TS) - ty) <= 1;
+    const damage = BALANCE.graveDiggerSpinDamage;
+    // The shovel can hit any creature in the surrounding eight tiles (or on
+    // the same tile), including other ghosts and Grave Diggers, but not itself.
+    for (const target of [...ghosts, ...graveDiggers, ...infectedSkeletons, ...slimes, ...moles, ...spiders, ...golems, ...level.prospectors]) {
+      if (target === digger || target.dead || !inRing(target.x, target.y)) continue;
+      const angle = Math.atan2(target.y - digger.y, target.x - digger.x);
+      if (target.kind === 'ghost') damageGhost(target, damage, angle);
+      else if (target.kind === 'graveDigger') damageGraveDigger(target, damage, angle, false);
+      else if (target.kind === 'infectedSkeleton' || target.kind === 'skeleton') damageInfectedSkeleton(target, damage, angle);
+      else if (target.kind === 'mole') damageMole(target, damage, angle);
+      else if (target.kind === 'spider' || target.kind === 'crabock') damageSpider(target, damage, angle);
+      else if (target.kind === 'golem') damageGolem(target, damage, angle);
+      else if (target.kind === 'prospector') damageProspector(target, damage, angle);
+      else damageSlime(target, damage, angle);
+    }
+    if (inRing(player.x, player.y)) hurtPlayer(damage, Math.atan2(digger.y - player.y, digger.x - player.x));
+    digger.spinFlash = 0.3;
+    burst(digger.x, digger.y, 10, ['#e5d5a1', '#c4ba9d', '#9ea6a7'], 110, 0.35, 0.08);
+  }
+
+  function summonGraveGhosts(digger, grave) {
+    for (let i = 0; i < 3; i++) {
+      const angle = i * TAU / 3 - Math.PI / 2;
+      const ghost = makeGhost(grave.x + Math.cos(angle) * 24, grave.y + Math.sin(angle) * 24);
+      ghost.dashCooldown = 1.5; // a short warning before the new ghosts can dash
+      ghosts.push(ghost);
+      burst(ghost.x, ghost.y, 5, ['#c9f7f4', '#95cdd5'], 60, 0.4, 0.08);
+    }
+    digger.digCooldown = BALANCE.graveDiggerDigCooldown;
+    Sound.oreBreak();
+  }
+
+  function updateGraveDiggers(dt) {
+    if (!['stage8', 'stage9'].includes(level.id)) return;
+    if (graveDiggers.filter((d) => !d.dead).length < BALANCE.maxGraveDiggers) {
+      level.graveDiggerTimer -= dt;
+      if (level.graveDiggerTimer <= 0) {
+        level.graveDiggerTimer = BALANCE.graveDiggerSpawnEvery; spawnGraveDiggerAwayFromPlayer();
+      }
+    }
+    for (let i = graveDiggers.length - 1; i >= 0; i--) {
+      const digger = graveDiggers[i];
+      if (digger.dead) { graveDiggers.splice(i, 1); continue; }
+      digger.flash = Math.max(0, digger.flash - dt);
+      digger.attackCd = Math.max(0, digger.attackCd - dt);
+      digger.spinCooldown = Math.max(0, digger.spinCooldown - dt);
+      digger.spinFlash = Math.max(0, digger.spinFlash - dt);
+      digger.digCooldown = Math.max(0, digger.digCooldown - dt);
+      const dx = player.x - digger.x, dy = player.y - digger.y, distance = Math.hypot(dx, dy) || 1;
+      const inSight = distance <= digger.detect;
+      digger.fleeing = !digger.provoked && inSight;
+      digger.chasing = digger.provoked && inSight;
+      const grave = level.graves[digger.graveIndex] || closestGrave(digger.x, digger.y).grave;
+
+      if (digger.spinWindup > 0) {
+        digger.spinWindup = Math.max(0, digger.spinWindup - dt);
+        if (digger.spinWindup <= 1e-9) { digger.spinWindup = 0; shovelSpin(digger); }
+        if (state.mode !== 'playing') return;
+        continue;
+      }
+      if (digger.fleeing) {
+        if (digger.digWindup > 0) { digger.digWindup = 0; digger.digCooldown = 3; }
+        moveGraveDigger(digger, { x: -dx / distance, y: -dy / distance }, digger.speed, dt);
+        continue;
+      }
+      if (digger.digWindup > 0) {
+        digger.digWindup = Math.max(0, digger.digWindup - dt);
+        if (digger.digWindup <= 1e-9 && grave) { digger.digWindup = 0; summonGraveGhosts(digger, grave); }
+        continue;
+      }
+      if (digger.chasing) {
+        digger.facing = Math.atan2(dy, dx);
+        if (distance <= 1.5 * TS && digger.spinCooldown <= 0) {
+          digger.spinWindup = BALANCE.graveDiggerSpinWindup;
+          digger.spinCooldown = BALANCE.graveDiggerSpinCooldown;
+          Sound.throwDynamite();
+        } else {
+          const direction = distance > digger.r + BALANCE.playerRadius ? chaseDirection(digger, dt) : null;
+          moveGraveDigger(digger, direction, digger.speed, dt);
+          if (distance < digger.r + BALANCE.playerRadius + 8 && digger.attackCd <= 0) {
+            digger.attackCd = 1;
+            hurtPlayer(digger.dmg, Math.atan2(digger.y - player.y, digger.x - player.x));
+            if (state.mode !== 'playing') return;
+          }
+        }
+        continue;
+      }
+      // Idle Grave Diggers stay near their own grave and occasionally dig.
+      const graveDistance = grave ? Math.hypot(grave.x - digger.x, grave.y - digger.y) : Infinity;
+      const reserved = graveDiggers.filter((d) => !d.dead && d.digWindup > 0).length * 3;
+      if (grave && graveDistance <= 1.25 * TS && digger.digCooldown <= 0 &&
+          ghosts.filter((g) => !g.dead).length + reserved + 3 <= BALANCE.maxGhosts) {
+        digger.digWindup = BALANCE.graveDiggerDigWindup;
+        continue;
+      }
+      let direction = null;
+      if (grave && graveDistance > 1.5 * TS) {
+        direction = { x: (grave.x - digger.x) / graveDistance, y: (grave.y - digger.y) / graveDistance };
+      } else {
+        digger.wanderTimer -= dt;
+        if (digger.wanderTimer <= 0) { digger.wanderTimer = rand(1.3, 3); digger.wanderAngle = rand(0, TAU); }
+        direction = { x: Math.cos(digger.wanderAngle), y: Math.sin(digger.wanderAngle) };
+      }
+      moveGraveDigger(digger, direction, digger.speed * 0.35, dt);
+    }
+  }
+
+  /* ---------------------------------------------------- infected skeletons */
+
+  function makeInfectedSkeleton(x, y, graveIndex = 0, normal = false) {
+    const hp = normal ? BALANCE.skeletonHp : BALANCE.infectedSkeletonHp;
+    return { ...freshEnemyPoison(), kind: normal ? 'skeleton' : 'infectedSkeleton', x, y, graveIndex: normal ? -1 : graveIndex,
+      r: BALANCE.infectedSkeletonRadius, hp,
+      maxHp: hp, speed: BALANCE.infectedSkeletonSpeed,
+      detect: BALANCE.infectedSkeletonDetect, dead: false, flash: 0, attackCd: 0,
+      knockX: 0, knockY: 0, wanderAngle: 0, wanderTimer: 0, facing: 0, walk: 0,
+      hidden: !normal, emergeTimer: 0, throwCooldown: 0, strafeTimer: 0, strafeSign: 1,
+      chasing: false, chaseRoute: [], chaseRouteIndex: 0, chaseGoal: '', chasePathTimer: 0 };
+  }
+
+  function spawnInfectedSkeletonAwayFromPlayer() {
+    if (level.id === 'stage13') {
+      const p = playerTile();
+      for (let attempt = 0; attempt < 90; attempt++) {
+        const tx = randInt(1, level.w - 2), ty = randInt(1, level.h - 2);
+        const tile = getTile(tx, ty), x = (tx + 0.5) * TS, y = (ty + 0.5) * TS;
+        if (isSolid(tx, ty) || tile === STAIRS_UP || tile === STAIRS_DOWN ||
+            Math.hypot(tx - p.tx, ty - p.ty) < 7 || collidesAt(x, y, BALANCE.infectedSkeletonRadius)) continue;
+        const skeleton = makeInfectedSkeleton(x, y, -1, true);
+        infectedSkeletons.push(skeleton);
+        burst(x, y, 8, ['#e4dbbf', '#a8a08b', '#c8c8ae'], 60, 0.35, 0.06);
+        return skeleton;
+      }
+      return null;
+    }
+    if (level.id !== 'stage9') return null;
+    const available = level.graves.map((grave, index) => ({ grave, index })).filter(({ grave, index }) =>
+      Math.hypot(grave.x - player.x, grave.y - player.y) >= 7 * TS &&
+      infectedSkeletons.every((s) => s.dead || s.graveIndex !== index));
+    if (!available.length) return null;
+    const { grave, index } = pick(available);
+    const skeleton = makeInfectedSkeleton(grave.x, grave.y, index);
+    infectedSkeletons.push(skeleton);
+    return skeleton; // no burst: it looks like a goop-covered grave until approached
+  }
+
+  function revealInfectedSkeleton(skeleton) {
+    if (!skeleton.hidden) return;
+    skeleton.hidden = false;
+    skeleton.emergeTimer = BALANCE.infectedSkeletonEmergeTime;
+    skeleton.throwCooldown = BALANCE.infectedSkeletonEmergeTime + 0.3;
+    burst(skeleton.x, skeleton.y, 9, ['#67ae72', '#a0dc96', '#7e9487'], 70, 0.5, 0.08);
+    Sound.rockBreak();
+  }
+
+  function moveInfectedSkeleton(skeleton, direction, speed, dt, retreating) {
+    speed *= poisonSpeed(skeleton);
+    const oldX = skeleton.x, oldY = skeleton.y;
+    const dx = ((direction ? direction.x * speed : 0) + skeleton.knockX) * dt;
+    const dy = ((direction ? direction.y * speed : 0) + skeleton.knockY) * dt;
+    if (!collidesAt(skeleton.x + dx, skeleton.y, skeleton.r)) skeleton.x += dx;
+    if (!collidesAt(skeleton.x, skeleton.y + dy, skeleton.r)) skeleton.y += dy;
+    skeleton.knockX *= Math.max(0, 1 - 8 * dt);
+    skeleton.knockY *= Math.max(0, 1 - 8 * dt);
+    if (direction && retreating && Math.hypot(skeleton.x - oldX, skeleton.y - oldY) < 0.05) {
+      // Try a diagonal around an obstacle without turning back toward danger.
+      for (const side of [1, -1]) {
+        const sx = (direction.x - side * direction.y) * speed * dt * 0.707;
+        const sy = (direction.y + side * direction.x) * speed * dt * 0.707;
+        if (!collidesAt(skeleton.x + sx, skeleton.y + sy, skeleton.r)) {
+          skeleton.x += sx; skeleton.y += sy; break;
+        }
+      }
+    }
+    skeleton.walk += Math.hypot(skeleton.x - oldX, skeleton.y - oldY) * 0.12;
+  }
+
+  function throwBone(skeleton, dx, dy, distance) {
+    const nx = dx / distance, ny = dy / distance;
+    level.boneProjectiles.push({ x: skeleton.x + nx * (skeleton.r + 4),
+      y: skeleton.y + ny * (skeleton.r + 4), vx: nx * BALANCE.boneSpeed,
+      vy: ny * BALANCE.boneSpeed, age: 0 });
+    skeleton.throwCooldown = BALANCE.infectedSkeletonThrowCooldown;
+    Sound.throwDynamite();
+  }
+
+  function updateInfectedSkeletons(dt) {
+    if (!['stage9', 'stage13'].includes(level.id)) return;
+    if (infectedSkeletons.filter((s) => !s.dead).length < BALANCE.maxInfectedSkeletons) {
+      level.infectedSkeletonTimer -= dt;
+      if (level.infectedSkeletonTimer <= 0) {
+        level.infectedSkeletonTimer = BALANCE.infectedSkeletonSpawnEvery;
+        spawnInfectedSkeletonAwayFromPlayer();
+      }
+    }
+    for (let i = infectedSkeletons.length - 1; i >= 0; i--) {
+      const skeleton = infectedSkeletons[i];
+      if (skeleton.dead) { infectedSkeletons.splice(i, 1); continue; }
+      skeleton.flash = Math.max(0, skeleton.flash - dt);
+      const dx = player.x - skeleton.x, dy = player.y - skeleton.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      skeleton.chasing = distance <= skeleton.detect;
+      if (skeleton.hidden) {
+        if (!skeleton.chasing) continue;
+        revealInfectedSkeleton(skeleton);
+      }
+      skeleton.throwCooldown = Math.max(0, skeleton.throwCooldown - dt);
+      if (skeleton.emergeTimer > 0) {
+        skeleton.emergeTimer = Math.max(0, skeleton.emergeTimer - dt);
+        continue;
+      }
+      let direction = null, speed = skeleton.speed, retreating = false;
+      if (skeleton.chasing) {
+        skeleton.facing = Math.atan2(dy, dx);
+        if (skeleton.kind === 'skeleton') {
+          // Uninfected skeletons weave unpredictably even while approaching
+          // or retreating, rather than waiting at a fixed standoff distance.
+          skeleton.strafeTimer -= dt;
+          if (skeleton.strafeTimer <= 0) {
+            skeleton.strafeTimer = rand(0.3, 1.1);
+            skeleton.strafeSign = Math.random() < 0.5 ? -1 : 1;
+          }
+          const radial = distance < BALANCE.infectedSkeletonPreferredDistance - 0.4 * TS ? -1 :
+            distance > BALANCE.infectedSkeletonPreferredDistance + 0.6 * TS ? 0.7 : 0;
+          const lateral = skeleton.strafeSign * (radial === 0 ? 1 : 0.65);
+          const vx = dx / distance * radial - dy / distance * lateral;
+          const vy = dy / distance * radial + dx / distance * lateral;
+          const len = Math.hypot(vx, vy) || 1;
+          direction = { x: vx / len, y: vy / len };
+          retreating = radial < 0;
+          if (radial === 0) speed *= 0.7;
+        } else if (distance < BALANCE.infectedSkeletonPreferredDistance - 0.4 * TS) {
+          direction = { x: -dx / distance, y: -dy / distance };
+          retreating = true;
+        } else if (distance > BALANCE.infectedSkeletonPreferredDistance + 0.6 * TS) {
+          direction = chaseDirection(skeleton, dt);
+          speed *= 0.65;
+        } else {
+          skeleton.strafeTimer -= dt;
+          if (skeleton.strafeTimer <= 0) {
+            skeleton.strafeTimer = rand(1.5, 3);
+            skeleton.strafeSign = Math.random() < 0.5 ? -1 : 1;
+          }
+          direction = { x: -dy / distance * skeleton.strafeSign, y: dx / distance * skeleton.strafeSign };
+          speed *= 0.35;
+        }
+        if (skeleton.throwCooldown <= 0) throwBone(skeleton, dx, dy, distance);
+      } else if (skeleton.kind === 'skeleton') {
+        skeleton.wanderTimer -= dt;
+        if (skeleton.wanderTimer <= 0) {
+          skeleton.wanderTimer = rand(0.5, 1.8);
+          skeleton.wanderAngle = rand(0, TAU);
+        }
+        direction = { x: Math.cos(skeleton.wanderAngle), y: Math.sin(skeleton.wanderAngle) };
+        skeleton.facing = skeleton.wanderAngle;
+        speed *= 0.35;
+      }
+      moveInfectedSkeleton(skeleton, direction, speed, dt, retreating);
+    }
+  }
+
+  function updateBoneProjectiles(dt) {
+    for (let i = level.boneProjectiles.length - 1; i >= 0; i--) {
+      const bone = level.boneProjectiles[i];
+      bone.age += dt;
+      if (bone.age >= BALANCE.boneLifetime) { level.boneProjectiles.splice(i, 1); continue; }
+      // Small collision steps prevent a fast bone from tunnelling through a
+      // wall or a player even during the largest simulation frame.
+      const steps = Math.max(1, Math.ceil(Math.hypot(bone.vx, bone.vy) * dt / 4));
+      let hit = false;
+      for (let n = 0; n < steps; n++) {
+        bone.x += bone.vx * dt / steps;
+        bone.y += bone.vy * dt / steps;
+        if (collidesAt(bone.x, bone.y, BALANCE.boneRadius)) { hit = true; break; }
+        if (Math.hypot(bone.x - player.x, bone.y - player.y) <= BALANCE.boneRadius + BALANCE.playerRadius) {
+          hurtPlayer(BALANCE.boneDamage, Math.atan2(-bone.vy, -bone.vx));
+          hit = true; break;
+        }
+      }
+      if (hit) {
+        level.boneProjectiles.splice(i, 1);
+        burst(bone.x, bone.y, 5, ['#dce7cd', '#b6cbb0'], 50, 0.25, 0.05);
+      }
+      if (state.mode !== 'playing') return;
+    }
+  }
+
+  /* ------------------------------------------------------ Warden encounter */
+
+  const WARDEN_ACTIONS = ['approach', 'idle', 'chargeWarning', 'charge', 'slamWarning',
+    'slamImpact', 'spikeWarning', 'spikes', 'swordWarning', 'sword', 'beamWarning', 'beam'];
+
+  function makeWarden(x, y) {
+    return { ...freshEnemyPoison(), kind: 'warden', x, y, r: BALANCE.wardenRadius, hp: BALANCE.wardenHp,
+      maxHp: BALANCE.wardenHp, dead: false, flash: 0, phase: 1,
+      action: 'approach', timer: 2.2, attackIndex: 0, angle: 0,
+      originX: x, originY: y, travel: 0, hit: false, spikeCooldown: 0,
+      swordX: x, swordY: y, swordReturning: false };
+  }
+
+  function wardenPhaseFor(hp) {
+    return hp <= BALANCE.wardenHp / 3 ? 3 : hp <= BALANCE.wardenHp * 2 / 3 ? 2 : 1;
+  }
+
+  function syncWardenUI() {
+    const visible = !!warden && level && level.id === 'stage10' && !warden.dead;
+    el.wardenHud.classList.toggle('is-hidden', !visible);
+    el.areaBanner.classList.toggle('has-warden', visible);
+    if (!visible) return;
+    state.areaIntro = 0;
+    el.areaBanner.classList.remove('is-arriving');
+    el.wardenHpFill.style.width = `${clamp(warden.hp / warden.maxHp, 0, 1) * 100}%`;
+    el.wardenPhase.textContent = `PHASE ${warden.phase}`;
+  }
+
+  function syncVoidUI() {
+    el.voidPower.classList.toggle('is-hidden', !state.wardenDefeated);
+    el.voidPower.classList.toggle('is-active', state.voidPowerTime > 0);
+    el.voidPower.disabled = state.voidPowerCooldown > 0;
+    el.voidStatus.textContent = state.voidPowerTime > 0 ? `${state.voidPowerTime.toFixed(1)}s ACTIVE`
+      : state.voidPowerCooldown > 0 ? `${Math.ceil(state.voidPowerCooldown)}s RECHARGE` : 'READY';
+  }
+
+  function activateVoidPower() {
+    if (state.mode !== 'playing' || !state.wardenDefeated || state.voidPowerCooldown > 0) return false;
+    state.voidPowerTime = BALANCE.voidPowerDuration;
+    state.voidPowerCooldown = BALANCE.voidPowerCooldown;
+    syncVoidUI();
+    showToast('Void Power: +50% sword damage for 8 seconds!');
+    Sound.forge();
+    return true;
+  }
+
+  function useWardenPedestal() {
+    if (state.mode !== 'playing' || !level || level.id !== 'stage10' || !level.pedestal) return false;
+    if (Math.hypot(player.x - level.pedestal.x, player.y - level.pedestal.y) > 2.5 * TS) {
+      showToast('Walk closer to the pedestal.');
+      return false;
+    }
+    if (state.wardenDefeated) { showToast('The Core of Darkness is already yours.'); return true; }
+    if (warden) return false; // a click through the active boss still swings
+    warden = makeWarden(level.pedestal.x, level.pedestal.y);
+    syncWardenUI();
+    showToast('The Warden of Darkness awakens!');
+    burst(warden.x, warden.y, 20, ['#c08ff1', '#6c3c92', '#ead6ff'], 110, 0.8, 0.1);
+    Sound.rockBreak();
+    return true;
+  }
+
+  function damageWarden(boss, amount) {
+    if (boss.dead || boss !== warden) return;
+    boss.hp = Math.max(0, boss.hp - amount);
+    boss.flash = 0.15;
+    floaters.push({ x: boss.x, y: boss.y - boss.r - 20, text: String(amount),
+      color: '#f1d5ff', life: 0.7, maxLife: 0.7, vy: -52 });
+    if (boss.hp <= 0) {
+      boss.dead = true;
+      state.wardenDefeated = true;
+      state.voidPowerTime = state.voidPowerCooldown = 0;
+      burst(boss.x, boss.y, 36, ['#be80ed', '#8c4bb9', '#f4d4ff'], 180, 1, 0.12);
+      warden = null;
+      syncWardenUI(); syncVoidUI();
+      showToast('Core of Darkness obtained! Press X or tap VOID POWER.');
+      Sound.forge();
+      return;
+    }
+    const phase = wardenPhaseFor(boss.hp);
+    if (phase > boss.phase) {
+      boss.phase = phase;
+      // In the later phases the Warden returns to the central pedestal and
+      // remains there; any old attack is canceled before its new pattern.
+      boss.x = level.pedestal.x; boss.y = level.pedestal.y;
+      boss.originX = boss.x; boss.originY = boss.y;
+      boss.action = 'idle'; boss.timer = 1.1; boss.attackIndex = 0;
+      boss.travel = 0; boss.hit = false; boss.spikeCooldown = 0; boss.swordReturning = false;
+      boss.swordX = boss.x; boss.swordY = boss.y;
+      burst(boss.x, boss.y, 18, ['#b477ec', '#e5c0ff'], 120, 0.6, 0.08);
+      showToast(`Warden · Phase ${phase}`);
+    }
+    syncWardenUI();
+  }
+
+  // Project a point onto a frozen attack direction. The player radius is
+  // included so the visible rectangle and its actual hit area agree.
+  function wardenRectHitsPlayer(boss, length, width) {
+    const dx = player.x - boss.originX, dy = player.y - boss.originY;
+    const c = Math.cos(boss.angle), s = Math.sin(boss.angle);
+    const along = dx * c + dy * s, side = -dx * s + dy * c;
+    return along >= -BALANCE.playerRadius && along <= length + BALANCE.playerRadius &&
+      Math.abs(side) <= width / 2 + BALANCE.playerRadius;
+  }
+
+  function wardenHitPlayer(boss, damage, sourceX = boss.x, sourceY = boss.y) {
+    if (boss.hit) return;
+    // A blocked hit should not consume the attack: it may still connect once
+    // invulnerability ends while a long-lasting hazard is under the player.
+    if (state.invuln > 0) return;
+    boss.hit = true;
+    hurtPlayer(damage, Math.atan2(player.y - sourceY, player.x - sourceX));
+  }
+
+  function beginWardenAttack(boss, action, warning) {
+    boss.action = action;
+    boss.timer = warning;
+    boss.originX = boss.x; boss.originY = boss.y;
+    boss.angle = Math.atan2(player.y - boss.y, player.x - boss.x);
+    boss.travel = 0; boss.hit = false; boss.spikeCooldown = 0;
+  }
+
+  function finishWardenAttack(boss) {
+    boss.action = boss.phase === 1 ? 'approach' : 'idle';
+    boss.timer = boss.phase === 1 ? 1.35 : 0.85;
+    boss.hit = false; boss.travel = 0; boss.spikeCooldown = 0; boss.swordReturning = false;
+  }
+
+  function updateWarden(dt) {
+    if (!warden || !level || level.id !== 'stage10') return;
+    const boss = warden;
+    boss.flash = Math.max(0, boss.flash - dt);
+    if (boss.action === 'approach' || boss.action === 'idle') {
+      if (boss.phase === 1 && boss.action === 'approach') {
+        const dx = player.x - boss.x, dy = player.y - boss.y, dist = Math.hypot(dx, dy) || 1;
+        if (dist > boss.r + BALANCE.playerRadius + 12) {
+          const vx = dx / dist * BALANCE.wardenWalkSpeed * poisonSpeed(boss) * dt, vy = dy / dist * BALANCE.wardenWalkSpeed * poisonSpeed(boss) * dt;
+          if (!collidesAt(boss.x + vx, boss.y, boss.r)) boss.x += vx;
+          if (!collidesAt(boss.x, boss.y + vy, boss.r)) boss.y += vy;
+        }
+      }
+      boss.timer = Math.max(0, boss.timer - dt);
+      if (boss.timer > 0) return;
+      if (boss.phase === 1) {
+        const charge = boss.attackIndex++ % 2 === 0;
+        beginWardenAttack(boss, charge ? 'chargeWarning' : 'slamWarning', charge ? 1.15 : 1.05);
+      } else if (boss.phase === 2) {
+        const spikes = boss.attackIndex++ % 2 === 0;
+        beginWardenAttack(boss, spikes ? 'spikeWarning' : 'swordWarning', spikes ? 1.05 : 0.75);
+      } else {
+        const index = boss.attackIndex++ % 3;
+        beginWardenAttack(boss, ['spikeWarning', 'swordWarning', 'beamWarning'][index], [0.55, 0.6, 1.2][index]);
+      }
+      return;
+    }
+    if (['chargeWarning', 'slamWarning', 'spikeWarning', 'swordWarning', 'beamWarning'].includes(boss.action)) {
+      boss.timer = Math.max(0, boss.timer - dt);
+      if (boss.timer > 0) return;
+      if (boss.action === 'chargeWarning') { boss.action = 'charge'; boss.timer = 2; }
+      else if (boss.action === 'slamWarning') {
+        if (wardenRectHitsPlayer(boss, BALANCE.wardenSlamLength, BALANCE.wardenSlamWidth)) wardenHitPlayer(boss, BALANCE.wardenSlamDamage);
+        boss.action = 'slamImpact'; boss.timer = 0.35;
+        shake(1); Sound.rockBreak();
+      } else if (boss.action === 'spikeWarning') {
+        boss.action = 'spikes'; boss.timer = (boss.phase === 3 ? 0.3 : 0.65) + 2 + 1.2;
+        Sound.rockBreak();
+      } else if (boss.action === 'swordWarning') {
+        boss.action = 'sword'; boss.swordX = boss.x; boss.swordY = boss.y;
+        boss.travel = 0; boss.swordReturning = false; boss.timer = 8;
+        Sound.throwDynamite();
+      } else { boss.action = 'beam'; boss.timer = 1.15; Sound.oreBreak(); }
+      return;
+    }
+    if (boss.action === 'charge') {
+      const amount = Math.min(BALANCE.wardenChargeSpeed * poisonSpeed(boss) * dt, BALANCE.wardenChargeLength - boss.travel);
+      const steps = Math.max(1, Math.ceil(amount / 4));
+      for (let i = 0; i < steps; i++) {
+        const nx = boss.x + Math.cos(boss.angle) * amount / steps;
+        const ny = boss.y + Math.sin(boss.angle) * amount / steps;
+        if (collidesAt(nx, ny, boss.r)) { finishWardenAttack(boss); break; }
+        boss.x = nx; boss.y = ny; boss.travel += amount / steps;
+        if (Math.hypot(player.x - boss.x, player.y - boss.y) <= boss.r + BALANCE.playerRadius) {
+          wardenHitPlayer(boss, BALANCE.wardenChargeDamage);
+          if (state.mode !== 'playing') return;
+        }
+      }
+      if (boss.action === 'charge' && boss.travel >= BALANCE.wardenChargeLength - 1e-7) finishWardenAttack(boss);
+      return;
+    }
+    if (boss.action === 'slamImpact') {
+      boss.timer = Math.max(0, boss.timer - dt);
+      if (boss.timer <= 0) finishWardenAttack(boss);
+      return;
+    }
+    if (boss.action === 'spikes') {
+      boss.timer = Math.max(0, boss.timer - dt);
+      boss.spikeCooldown = Math.max(0, boss.spikeCooldown - dt);
+      // Spikes remain dangerous while they rise, hold and sink. Each tick has
+      // its own recovery window, rather than the other attacks' one-hit flag.
+      if (boss.timer > 0 && boss.spikeCooldown <= 1e-9 && state.invuln <= 0 &&
+          wardenRectHitsPlayer(boss, BALANCE.wardenSpikeLength, BALANCE.wardenSpikeWidth)) {
+        boss.spikeCooldown = BALANCE.wardenSpikeTick;
+        hurtPlayer(BALANCE.wardenSpikeDamage, Math.atan2(player.y - boss.originY, player.x - boss.originX),
+          false, BALANCE.wardenSpikeTick);
+        if (state.mode !== 'playing') return;
+      }
+      if (boss.timer <= 0) finishWardenAttack(boss);
+      return;
+    }
+    if (boss.action === 'sword') {
+      const speed = boss.phase === 3 ? BALANCE.wardenSwordSpeedPhase3 : BALANCE.wardenSwordSpeed;
+      const steps = Math.max(1, Math.ceil(speed * dt / 4)), step = speed * dt / steps;
+      boss.timer = Math.max(0, boss.timer - dt);
+      for (let i = 0; i < steps; i++) {
+        let dx = Math.cos(boss.angle), dy = Math.sin(boss.angle);
+        if (boss.swordReturning) {
+          const vx = boss.x - boss.swordX, vy = boss.y - boss.swordY, distance = Math.hypot(vx, vy);
+          if (distance <= step + 2) { finishWardenAttack(boss); break; }
+          dx = vx / distance; dy = vy / distance;
+        }
+        const nx = boss.swordX + dx * step, ny = boss.swordY + dy * step;
+        if (!boss.swordReturning && collidesAt(nx, ny, 5)) { boss.swordReturning = true; continue; }
+        boss.swordX = nx; boss.swordY = ny;
+        if (!boss.swordReturning) {
+          boss.travel += step;
+          if (boss.travel >= BALANCE.wardenSwordRange) boss.swordReturning = true;
+        }
+        if (Math.hypot(player.x - boss.swordX, player.y - boss.swordY) <= BALANCE.playerRadius + 9) {
+          wardenHitPlayer(boss, BALANCE.wardenSwordDamage, boss.swordX, boss.swordY);
+          if (state.mode !== 'playing') return;
+        }
+      }
+      if (boss.action === 'sword' && boss.timer <= 0) finishWardenAttack(boss);
+      return;
+    }
+    if (boss.action === 'beam') {
+      boss.timer = Math.max(0, boss.timer - dt);
+      if (boss.timer > 0 && wardenRectHitsPlayer(boss, BALANCE.wardenBeamLength, BALANCE.wardenBeamWidth)) {
+        wardenHitPlayer(boss, BALANCE.wardenBeamDamage, boss.originX, boss.originY);
+        if (state.mode !== 'playing') return;
+      }
+      if (boss.timer <= 0) finishWardenAttack(boss);
+    }
+  }
+
   /* ------------------------------------------------------------ Prospectors */
 
   const FOUR_WAYS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-  function makeProspector(x, y) {
+  function makeProspector(x, y, skeleton = false) {
+    const hp = skeleton ? BALANCE.skeletonProspectorHp : BALANCE.prospectorHp;
     return {
-      kind: 'prospector', x, y, r: BALANCE.prospectorRadius,
-      hp: BALANCE.prospectorHp, maxHp: BALANCE.prospectorHp,
-      dmg: BALANCE.slimeDamage, speed: BALANCE.slimeSpeed,
+      ...freshEnemyPoison(), kind: 'prospector', skeleton: !!skeleton, x, y, r: BALANCE.prospectorRadius,
+      hp, maxHp: hp,
+      dmg: BALANCE.slimeDamage, speed: skeleton ? BALANCE.skeletonProspectorSpeed : BALANCE.slimeSpeed,
       haul: { gold: 0, silver: 0 },
       dead: false, flash: 0, attackCd: 0, throwCd: 0,
       knockX: 0, knockY: 0, facing: 0, walk: 0, swingTime: 0,
@@ -2801,7 +4120,7 @@
   }
 
   function spawnProspectorAwayFromPlayer() {
-    if (!['stage3', 'stage4', 'stage7'].includes(level.id)) return null;
+    if (!['stage3', 'stage4', 'stage7', 'stage12', 'stage13'].includes(level.id)) return null;
     const p = playerTile();
     for (let attempt = 0; attempt < 90; attempt++) {
       const tx = randInt(1, level.w - 2);
@@ -2811,7 +4130,7 @@
       const x = (tx + 0.5) * TS;
       const y = (ty + 0.5) * TS;
       if (collidesAt(x, y, BALANCE.prospectorRadius)) continue;
-      const prospector = makeProspector(x, y);
+      const prospector = makeProspector(x, y, level.id === 'stage13');
       level.prospectors.push(prospector);
       burst(x, y, 8, ['#9b876a', '#d4b980', '#f8dc85'], 75, 0.4, 0.08);
       return prospector;
@@ -2910,7 +4229,7 @@
         const tx = ore.tx + dx;
         const ty = ore.ty + dy;
         const tile = getTile(tx, ty);
-        if (tile !== STONE && tile !== GOLD && tile !== SILVER) continue;
+        if (tile !== STONE && tile !== MOSSY_STONE && tile !== BASALT && tile !== GOLD && tile !== SILVER) continue;
         const best = accessibleSide(tx, ty);
         if (best && (!obstruction || best.distance < obstruction.best.distance)) {
           obstruction = { tile: { tx, ty, tile }, best };
@@ -2989,7 +4308,7 @@
       fromX: prospector.x, fromY: prospector.y,
       x: prospector.x, y: prospector.y,
       targetX: (tx + 0.5) * TS, targetY: (ty + 0.5) * TS,
-      age: 0,
+      skeleton: !!prospector.skeleton, age: 0,
     };
     level.dynamites.push(dynamite);
     prospector.throwCd = BALANCE.dynamiteThrowCooldown;
@@ -2999,7 +4318,7 @@
   }
 
   function updateProspectors(dt) {
-    if (!['stage3', 'stage4', 'stage7'].includes(level.id)) return;
+    if (!['stage3', 'stage4', 'stage7', 'stage12', 'stage13'].includes(level.id)) return;
     const alive = level.prospectors.filter((prospector) => !prospector.dead).length;
     if (alive < BALANCE.maxProspectors) {
       level.prospectorTimer -= dt;
@@ -3106,6 +4425,7 @@
       }
 
       if (direction && !prospector.mining) prospector.facing = Math.atan2(direction.y, direction.x);
+      speed *= poisonSpeed(prospector);
       const vx = (direction ? direction.x * speed : 0) + prospector.knockX;
       const vy = (direction ? direction.y * speed : 0) + prospector.knockY;
       prospector.knockX *= Math.max(0, 1 - 8 * dt);
@@ -3155,7 +4475,7 @@
       level.dynamites.splice(i, 1);
       const x = dynamite.targetX;
       const y = dynamite.targetY;
-      level.explosions.push({ x, y, age: 0, duration: 0.5 });
+      level.explosions.push({ x, y, age: 0, duration: 0.5, skeleton: !!dynamite.skeleton });
       burst(x, y, 32, ['#ffdd7d', '#ff873b', '#e74d32', '#75665a'], 210, 0.55, 0.18);
       if (Math.hypot(player.x - x, player.y - y) < 9 * TS) Sound.explosion();
       shake(1.1);
@@ -3167,7 +4487,8 @@
       const tx = Math.floor(x / TS);
       const ty = Math.floor(y / TS);
       const ring = Math.max(Math.abs(px - tx), Math.abs(py - ty));
-      const damageFraction = [1, 0.7, 0.6, 0.5, 0.25][ring] || 0;
+      // Skeleton Prospectors throw a stronger but half-radius bomb.
+      const damageFraction = (dynamite.skeleton ? [1, 0.9, 0.75] : [1, 0.7, 0.6, 0.5, 0.25])[ring] || 0;
       if (damageFraction > 0) {
         // Blasts bypass ordinary contact invulnerability; the same-tile hit
         // must always be fatal, even immediately after another attack.
@@ -3218,13 +4539,27 @@
       player.walk = lerp(player.walk, player.walk % TAU, 1 - Math.pow(0.002, dt));
     }
 
-    const stepX = ix * BALANCE.playerSpeed * dt;
-    const stepY = iy * BALANCE.playerSpeed * dt;
-    if (stepX !== 0 && !collides(player.x + stepX, player.y)) player.x += stepX;
-    if (stepY !== 0 && !collides(player.x, player.y + stepY)) player.y += stepY;
-
-    player.x = clamp(player.x, TS, (level.w - 1) * TS);
-    player.y = clamp(player.y, TS, (level.h - 1) * TS);
+    const moveFor = (seconds) => {
+      const oldX = player.x, oldY = player.y;
+      const stepX = ix * BALANCE.playerSpeed * seconds;
+      const stepY = iy * BALANCE.playerSpeed * seconds;
+      if (stepX !== 0 && !collides(player.x + stepX, player.y)) player.x += stepX;
+      if (stepY !== 0 && !collides(player.x, player.y + stepY)) player.y += stepY;
+      player.x = clamp(player.x, TS, (level.w - 1) * TS);
+      player.y = clamp(player.y, TS, (level.h - 1) * TS);
+      return Math.hypot(player.x - oldX, player.y - oldY);
+    };
+    // Split the last frame at expiry, counting only voluntary travel that
+    // actually occurred before poison wore off (never walls or knockback).
+    const poisonedSeconds = Math.min(dt, state.poisonTime);
+    if (poisonedSeconds > 0) {
+      applyPlayerPoisonDistance(moveFor(poisonedSeconds));
+      state.poisonTime = Math.max(0, state.poisonTime - poisonedSeconds);
+      if (state.poisonTime <= 1e-9) { state.poisonTime = 0; state.poisonDistance = 0; }
+      syncPoisonUI();
+      if (state.mode !== 'playing') return;
+    }
+    if (dt > poisonedSeconds) moveFor(dt - poisonedSeconds);
 
     if (len > 0 && Math.random() < 0.16) {
       particles.push({
@@ -3248,7 +4583,10 @@
   function stairsUnderPlayer() {
     const p = playerTile();
     const t = getTile(p.tx, p.ty);
-    if (t === STAIRS_DOWN) return level.downTarget;
+    if (t === STAIRS_DOWN) {
+      if (level.secretTile && p.tx === level.secretTile.tx && p.ty === level.secretTile.ty) return 'special';
+      return level.downTarget;
+    }
     if (t === STAIRS_UP) return level.upTarget;
     return null;
   }
@@ -3273,6 +4611,12 @@
       stage5: { kicker: 'Stage 05', subtitle: 'Ancient stone guardians roam among the Bauxite' },
       stage6: { kicker: 'Stage 06', subtitle: 'A peaceful break from the monsters' },
       stage7: { kicker: 'Stage 07', subtitle: 'The pinnacle of circles' },
+      stage8: { kicker: 'Stage 08', subtitle: 'ooOOOOooo!! spoooOOOOoooky ghosts!' },
+      stage9: { kicker: 'Stage 09', subtitle: 'Its eerie in the darkness of this cave' },
+      stage10: { kicker: 'Stage 10', subtitle: 'The darkness waits at the heart of the cave' },
+      stage11: { kicker: 'Stage 11', subtitle: 'The shimmering purple crystals line the walls' },
+      stage12: { kicker: 'Stage 12', subtitle: 'This ancient place is strangely deep beneath the surface' },
+      stage13: { kicker: 'Stage 13', subtitle: 'The ancient people appeared to be miners, but something stopped them' },
       special: { kicker: 'Secret Area', subtitle: 'A secluded mercury paradise' },
     };
     const area = descriptions[lv.id];
@@ -3392,6 +4736,12 @@
     if (id === 'stage5' && !levels.stage5) levels.stage5 = buildStage5();
     if (id === 'stage6' && !levels.stage6) levels.stage6 = buildStage6();
     if (id === 'stage7' && !levels.stage7) levels.stage7 = buildStage7();
+    if (id === 'stage8' && !levels.stage8) levels.stage8 = buildStage8();
+    if (id === 'stage9' && !levels.stage9) levels.stage9 = buildStage9();
+    if (id === 'stage10' && !levels.stage10) levels.stage10 = buildStage10();
+    if (id === 'stage11' && !levels.stage11) levels.stage11 = buildStage11();
+    if (id === 'stage12' && !levels.stage12) levels.stage12 = buildStage12();
+    if (id === 'stage13' && !levels.stage13) levels.stage13 = buildStage13();
     if (id === 'special' && !levels.special) levels.special = buildSpecialCave();
     if (!levels[id]) return;
     if (prev && id !== prev.id) {
@@ -3404,8 +4754,11 @@
       // Live projectiles cannot follow the player to another level.
       prev.dynamites.length = 0;
       prev.explosions.length = 0;
+      prev.boneProjectiles.length = 0;
+      if (prev.id === 'stage10') warden = null; // an unfinished fight can be retried
     }
     level = levels[id];
+    syncWardenUI();
 
     if (!prev || id !== prev.id) {
       restoreTilesOnEntry(level);
@@ -3413,10 +4766,16 @@
       moles.length = 0;
       spiders.length = 0;
       golems.length = 0;
+      ghosts.length = 0;
+      graveDiggers.length = 0;
+      infectedSkeletons.length = 0;
       level.slimeTimer = 2.5;
       level.moleTimer = 1.8;
       level.spiderTimer = 1.8;
       level.golemTimer = 2;
+      level.ghostTimer = 3;
+      level.graveDiggerTimer = 5;
+      level.infectedSkeletonTimer = 1.5;
       if (!level.prospectorTimer) level.prospectorTimer = 2.5;
     }
 
@@ -3425,7 +4784,7 @@
 
     // Coming upstairs places you beside the downward stairs you just used.
     // The secret seam closes again on re-entry, so return beside that seam.
-    const exit = level.stairsDown || (prev && prev.id === 'special' ? level.secretTile : null);
+    const exit = prev && prev.id === 'special' && level.secretTile ? level.secretTile : level.stairsDown;
     if (exit && (id === 'home' || (prev && prev.upTarget === id))) {
       spawnX = (exit.tx + 0.5) * TS;
       spawnY = (exit.ty - 0.6) * TS;
@@ -3613,7 +4972,37 @@
     state.shack = Math.max(state.shack, amount);
   }
 
+  function updateNaturalHealing(dt) {
+    const before = state.healDelay;
+    state.healDelay = Math.max(0, before - dt);
+    if (state.healDelay < 1e-9) state.healDelay = 0;
+    const activeTime = Math.max(0, dt - before);
+    if (state.hp >= BALANCE.playerMaxHp) {
+      state.healProgress = 0; // never bank healing while already at full health
+    } else if (activeTime > 0) {
+      state.healProgress += activeTime;
+      const ticks = Math.floor((state.healProgress + 1e-9) / BALANCE.healingInterval);
+      if (ticks > 0) {
+        state.healProgress = Math.max(0, state.healProgress - ticks * BALANCE.healingInterval);
+        state.hp = Math.min(BALANCE.playerMaxHp, state.hp + ticks * BALANCE.healingAmount);
+        if (state.hp >= BALANCE.playerMaxHp) state.healProgress = 0;
+        syncVitals();
+      }
+    }
+    if (before > 0 && state.healDelay === 0) syncVitals();
+  }
+
   function update(dt) {
+    // Run recovery before enemy attacks so a hit later in this frame starts a
+    // full four-second wait, rather than immediately subtracting this frame.
+    updateNaturalHealing(dt);
+    if (state.voidPowerTime > 0 || state.voidPowerCooldown > 0) {
+      state.voidPowerTime = Math.max(0, state.voidPowerTime - dt);
+      state.voidPowerCooldown = Math.max(0, state.voidPowerCooldown - dt);
+      if (state.voidPowerTime < 1e-9) state.voidPowerTime = 0;
+      if (state.voidPowerCooldown < 1e-9) state.voidPowerCooldown = 0;
+      syncVoidUI();
+    }
     state.time += dt;
     if (state.cooldown > 0) state.cooldown = Math.max(0, state.cooldown - dt);
     if (state.invuln > 0) state.invuln = Math.max(0, state.invuln - dt);
@@ -3621,18 +5010,31 @@
     if (state.shack > 0) state.shack = Math.max(0, state.shack - dt * 3);
 
     updatePlayer(dt);
+    if (state.mode !== 'playing') return;
     updateSlimes(dt);
     if (state.mode !== 'playing') return;
     updateMoles(dt);
     if (state.mode !== 'playing') return;
     updateSpiders(dt);
     if (state.mode !== 'playing') return;
+    updateGolemShrine(dt);
     updateGolems(dt);
+    if (state.mode !== 'playing') return;
+    updateGhosts(dt);
+    if (state.mode !== 'playing') return;
+    updateGraveDiggers(dt);
+    if (state.mode !== 'playing') return;
+    updateInfectedSkeletons(dt);
+    if (state.mode !== 'playing') return;
+    updateBoneProjectiles(dt);
+    if (state.mode !== 'playing') return;
+    updateWarden(dt);
     if (state.mode !== 'playing') return;
     updateProspectors(dt);
     if (state.mode !== 'playing') return;
     updateDynamites(dt);
     if (state.mode !== 'playing') return; // an enemy or explosion may end the run
+    updateEnemyPoisons(dt);
     updatePickups(dt);
     updateMelterBursts(dt);
     updateParticles(dt);
@@ -3664,7 +5066,14 @@
     const pct = clamp(state.hp / BALANCE.playerMaxHp, 0, 1);
     el.hpFill.style.width = (pct * 100).toFixed(1) + '%';
     el.hpFill.classList.toggle('is-low', pct <= 0.3);
+    el.hpFill.classList.toggle('is-healing', state.hp < BALANCE.playerMaxHp && state.healDelay <= 0);
     el.hpText.textContent = String(Math.ceil(state.hp));
+  }
+
+  function syncPoisonUI() {
+    const active = state.poisonTime > 0;
+    el.poisonStatus.classList.toggle('is-hidden', !active);
+    if (active) el.poisonStatus.textContent = `POISONED · ${Math.ceil(state.poisonTime)}s`;
   }
 
   let toastTimer = 0;
@@ -3730,17 +5139,26 @@
     drawElevators(ox, oy);
     drawStations(ox, oy);
     drawDecor(ox, oy);
+    drawGolemShrine(ox, oy);
+    drawWardenPedestal(ox, oy);
     drawSlimes(ox, oy);
     drawMoles(ox, oy);
     drawSpiders(ox, oy);
     drawGolems(ox, oy);
     drawProspectors(ox, oy);
+    drawGhosts(ox, oy);
+    drawGraveDiggers(ox, oy);
+    drawInfectedSkeletons(ox, oy);
+    drawWarden(ox, oy);
     drawPlayer(ox, oy);
     drawParticles(ox, oy);
     drawFloaters(ox, oy);
     drawSwing(ox, oy);
     drawDarkness(ox, oy);
     drawGlow(ox, oy);
+    drawPoisonEffects(ox, oy);
+    drawWardenEffects(ox, oy); // danger indicators remain legible in the dark
+    drawBoneProjectiles(ox, oy);
     drawDynamites(ox, oy);
     drawMelterBursts(ox, oy);
     drawPickups(ox, oy);
@@ -3775,10 +5193,13 @@
 
   function drawStairCaption(x, y, tx, ty, down) {
     if (Math.hypot(player.x - (tx + 0.5) * TS, player.y - (ty + 0.5) * TS) > 110) return;
-    const target = down ? level.downTarget : level.upTarget;
+    const hidden = down && level.secretTile && tx === level.secretTile.tx && ty === level.secretTile.ty;
+    const target = hidden ? 'special' : down ? level.downTarget : level.upTarget;
     const name = { home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels',
       stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave',
-      stage6: 'Luscious Cave', stage7: 'Spiral Cavern', special: 'Special Cave' }[target];
+      stage6: 'Luscious Cave', stage7: 'Spiral Cavern', stage8: 'Haunted Descent',
+      stage9: 'Pitch-Black Depths', stage10: "Warden's Core", stage11: 'Amethyst Cavern',
+      stage12: 'Ancient Temple', stage13: 'Ancient Mine', special: 'Special Cave' }[target];
     if (!name) return;
     ctx.save();
     ctx.textAlign = 'center';
@@ -3801,7 +5222,14 @@
       ctx.fillStyle = 'rgba(255, 210, 150, 0.045)';
       ctx.fillRect(x + 3, y + 4 + (h * 12) % 14, 6, 2);
     } else {
-      ctx.fillStyle = level.id === 'stage6' ? (h > 0.5 ? '#294438' : '#21382f')
+      ctx.fillStyle = level.id === 'stage13' ? (h > 0.5 ? '#3b3b30' : '#30342a')
+        : level.id === 'stage12' && tx >= 40 ? (h > 0.5 ? '#4a4438' : '#403d34')
+        : level.id === 'stage12' ? (h > 0.5 ? '#303832' : '#29312d')
+        : level.id === 'stage11' ? (h > 0.5 ? '#382d47' : '#30263e')
+        : level.id === 'stage10' ? (h > 0.5 ? '#30283b' : '#282132')
+        : level.id === 'stage9' ? (h > 0.5 ? '#202c2b' : '#192322')
+        : level.id === 'stage8' ? (h > 0.5 ? '#282b37' : '#20232e')
+        : level.id === 'stage6' ? (h > 0.5 ? '#294438' : '#21382f')
         : level.id === 'stage7' ? (h > 0.5 ? '#292737' : '#242333')
         : level.id === 'special' ? (h > 0.5 ? '#294149' : '#22363e')
         : level.id === 'stage5' ? (h > 0.5 ? '#302824' : '#292320')
@@ -3959,8 +5387,13 @@
         ctx.arc(nx - r * 0.35, ny - r * 0.38, r * 0.28, 0, TAU);
         ctx.fill();
       }
-    } else if ([COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY].includes(t)) {
-      const palette = t === COBALT ? ['#244c9a', '#588de4', '#c7e5ff']
+    } else if ([COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY, RUBY, SAPPHIRE, BLACK_AMETHYST, AMETHYST, DIAMOND].includes(t)) {
+      const palette = t === DIAMOND ? ['#38626e', '#a4e9f1', '#ffffff']
+        : t === AMETHYST ? ['#593384', '#bd82ec', '#f7ddff']
+        : t === BLACK_AMETHYST ? ['#241235', '#78469c', '#d6b2f4']
+        : t === SAPPHIRE ? ['#163b87', '#4385e6', '#c9edff']
+        : t === RUBY ? ['#792d4a', '#de5276', '#ffd1df']
+        : t === COBALT ? ['#244c9a', '#588de4', '#c7e5ff']
         : t === QUARTZ ? ['#a58eaf', '#dfcce9', '#fff8ff']
         : t === IRIDIUM ? ['#5c408d', '#a37cda', '#e1c9ff']
         : t === TITANIUM ? ['#526f79', '#a2c8d0', '#efffff']
@@ -3983,6 +5416,25 @@
         ctx.fillStyle = palette[2];
         ctx.beginPath(); ctx.ellipse(nx - r * 0.3, ny - r * 0.35, r * 0.35, r * 0.22, -0.4, 0, TAU); ctx.fill();
       }
+    } else if (t === MOSSY_STONE) {
+      // The green covering is cosmetic: mining it yields ordinary Stone.
+      ctx.fillStyle = '#4e8054'; ctx.fillRect(x + 3, y + 5, 13, 4); ctx.fillRect(x + 17, y + 18, 11, 5);
+      ctx.fillStyle = '#82a96d'; ctx.fillRect(x + 6, y + 4, 5, 2); ctx.fillRect(x + 21, y + 17, 5, 2);
+    } else if (t === BASALT) {
+      // Dense blue-grey volcanic rock, with angular column-like fractures.
+      ctx.strokeStyle = '#798995'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x + 5, y + 7); ctx.lineTo(x + 12, y + 4);
+      ctx.lineTo(x + 18, y + 9); ctx.lineTo(x + 17, y + 16);
+      ctx.lineTo(x + 10, y + 21); ctx.lineTo(x + 4, y + 16); ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 18, y + 9); ctx.lineTo(x + 27, y + 6);
+      ctx.moveTo(x + 17, y + 16); ctx.lineTo(x + 26, y + 24); ctx.stroke();
+      ctx.fillStyle = 'rgba(196, 211, 219, 0.16)'; ctx.fillRect(x + 10, y + 7, 3, 2);
+    } else if (t === DARKSTONE) {
+      // Darkstone has dim cool-green seams, unlike ordinary grey stone.
+      ctx.strokeStyle = 'rgba(132, 174, 157, 0.3)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(x + 6, y + 8); ctx.lineTo(x + 13, y + 13);
+      ctx.lineTo(x + 10, y + 21); ctx.moveTo(x + 20, y + 5); ctx.lineTo(x + 24, y + 12);
+      ctx.lineTo(x + 19, y + 19); ctx.stroke();
     } else if (t === BAUXITE) {
       // Reddish clay-like clusters are distinct from copper and iron.
       for (let i = 0; i < 3; i++) {
@@ -4289,6 +5741,19 @@
         ctx.beginPath(); ctx.ellipse(x, y + 5, 9, 4, 0, 0, TAU); ctx.fill();
         ctx.strokeStyle = '#ffe4a2'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.ellipse(x, y + 4, 6, 2.5, 0, 0, TAU); ctx.stroke();
+      } else if (st.kind === 'polisher') {
+        // A bright spinning lap and a faceted stone distinguish the gem table.
+        ctx.fillStyle = '#514151'; ctx.fillRect(x - 22, y + 5, 44, 12);
+        ctx.fillStyle = '#92778a'; ctx.fillRect(x - 24, y + 2, 48, 5);
+        ctx.fillStyle = '#3e4f5b'; ctx.fillRect(x - 17, y - 17, 34, 19);
+        ctx.fillStyle = '#768f99';
+        ctx.beginPath(); ctx.ellipse(x - 4, y - 7, 12, 8, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#d1edf2'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(x - 4, y - 7, 8, 5, state.time * 1.8, 0, TAU); ctx.stroke();
+        ctx.fillStyle = '#e8a9eb';
+        ctx.beginPath(); ctx.moveTo(x + 8, y - 21); ctx.lineTo(x + 16, y - 15);
+        ctx.lineTo(x + 10, y - 7); ctx.lineTo(x + 4, y - 15); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff5ff'; ctx.fillRect(x + 9, y - 19, 2, 3);
       } else if (st.kind === 'trader') {
         // The trader stands behind a little coin-covered market counter.
         ctx.fillStyle = '#554535';
@@ -4375,6 +5840,67 @@
           ctx.fillStyle = i === 1 ? '#79b68a' : '#4f916d';
           ctx.beginPath(); ctx.ellipse(x + side * (4 + i), y + 3 - i * 5, 5, 2.2, side * 0.5, 0, TAU); ctx.fill();
         }
+      } else if (d.kind === 'crystal') {
+        ctx.fillStyle = 'rgba(9, 3, 20, 0.5)';
+        ctx.beginPath(); ctx.ellipse(x, y + 8, 15, 5, 0, 0, TAU); ctx.fill();
+        for (const [dx, width, height, color] of [[-7, 6, 14, '#a369d0'], [0, 8, 25, '#bb80ed'], [8, 5, 12, '#7954aa']]) {
+          ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x + dx - width, y + 7);
+          ctx.lineTo(x + dx, y - height); ctx.lineTo(x + dx + width, y + 7); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = '#e7c8ff'; ctx.lineWidth = 1; ctx.stroke();
+        }
+        const sparkle = 0.35 + 0.55 * Math.abs(Math.sin(state.time * 1.4 + d.phase));
+        ctx.fillStyle = `rgba(255, 237, 255, ${sparkle})`; ctx.fillRect(x + 2, y - 20, 2, 4);
+      } else if (d.kind === 'mineRail') {
+        ctx.save(); ctx.translate(x, y); if (d.vertical) ctx.rotate(Math.PI / 2);
+        ctx.strokeStyle = '#594834'; ctx.lineWidth = 4;
+        for (const dx of [-10, 0, 10]) { ctx.beginPath(); ctx.moveTo(dx, -9); ctx.lineTo(dx, 9); ctx.stroke(); }
+        ctx.strokeStyle = '#9d9784'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-16, -6); ctx.lineTo(16, -6); ctx.moveTo(-16, 6); ctx.lineTo(16, 6); ctx.stroke();
+        ctx.restore();
+      } else if (d.kind === 'mineSupport') {
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + 10, 18, 5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#5a4633'; ctx.fillRect(x - 15, y - 12, 5, 22); ctx.fillRect(x + 10, y - 12, 5, 22);
+        ctx.fillStyle = '#8e7350'; ctx.fillRect(x - 18, y - 16, 36, 6);
+        ctx.fillStyle = '#b8a27a'; ctx.fillRect(x - 13, y - 15, 3, 3); ctx.fillRect(x + 10, y - 15, 3, 3);
+      } else if (d.kind === 'ruinPillar') {
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(x, y + 10, 13, 5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#777063'; ctx.fillRect(x - 10, y - 13, 20, 24);
+        ctx.fillStyle = '#a99e86'; ctx.fillRect(x - 11, y - 15, 22, 5); ctx.fillRect(x - 11, y + 7, 22, 4);
+        ctx.fillStyle = '#647451'; ctx.fillRect(x - 8, y - 12, 6, 3);
+        ctx.strokeStyle = '#514e43'; ctx.lineWidth = 1.5; ctx.beginPath();
+        ctx.moveTo(x + 4, y - 9); ctx.lineTo(x + 1, y - 3); ctx.lineTo(x + 5, y + 3); ctx.stroke();
+      } else if (d.kind === 'ruinDebris') {
+        ctx.fillStyle = '#756d5d'; ctx.fillRect(x - 12, y + 2, 10, 6); ctx.fillRect(x + 1, y - 2, 8, 9);
+        ctx.fillStyle = '#a39a81'; ctx.fillRect(x - 10, y + 1, 6, 2); ctx.fillRect(x + 2, y - 3, 6, 2);
+      } else if (d.kind === 'taint') {
+        ctx.fillStyle = 'rgba(45, 102, 69, 0.5)';
+        ctx.beginPath(); ctx.ellipse(x, y + 5, 14, 6, 0.2, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(116, 180, 104, 0.55)';
+        ctx.beginPath(); ctx.arc(x - 5, y + 3, 2, 0, TAU); ctx.arc(x + 4, y + 6, 1.5, 0, TAU); ctx.fill();
+      } else if (d.kind === 'grave') {
+        // Gravestones are decorative, walkable, and visible against the floor.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.beginPath(); ctx.ellipse(x, y + 12, 15, 5, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#666e78';
+        ctx.beginPath(); ctx.moveTo(x - 11, y + 10); ctx.lineTo(x - 11, y - 7);
+        ctx.quadraticCurveTo(x - 11, y - 19, x, y - 19);
+        ctx.quadraticCurveTo(x + 11, y - 19, x + 11, y - 7);
+        ctx.lineTo(x + 11, y + 10); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = '#a8b3b7'; ctx.lineWidth = 1.3; ctx.stroke();
+        ctx.fillStyle = '#8c989b'; ctx.fillRect(x - 2, y - 13, 4, 15); ctx.fillRect(x - 6, y - 8, 12, 3);
+        ctx.strokeStyle = '#414b55'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(x + 7, y - 5); ctx.lineTo(x + 4, y - 1); ctx.lineTo(x + 6, y + 5); ctx.stroke();
+        ctx.fillStyle = '#526e60'; ctx.fillRect(x - 12, y + 7, 7, 3); ctx.fillRect(x + 6, y + 8, 6, 2);
+        if (infectedSkeletons.some((s) => !s.dead && s.hidden && level.graves[s.graveIndex] === d)) {
+          // This infected goop is the telltale disguise, not a visible body.
+          ctx.fillStyle = '#4f9b5a';
+          ctx.beginPath(); ctx.ellipse(x, y - 13, 12, 5, 0, 0, TAU); ctx.fill();
+          ctx.fillRect(x - 10, y - 12, 5, 10); ctx.fillRect(x + 3, y - 11, 5, 14);
+          ctx.fillStyle = '#9bd983';
+          ctx.beginPath(); ctx.arc(x - 4, y - 15, 2, 0, TAU); ctx.arc(x + 6, y - 11, 1.5, 0, TAU); ctx.fill();
+          ctx.fillStyle = 'rgba(81, 158, 90, 0.65)';
+          ctx.beginPath(); ctx.ellipse(x, y + 10, 15, 4, 0, 0, TAU); ctx.fill();
+        }
       } else if (d.kind === 'bones') {
         ctx.strokeStyle = 'rgba(214, 208, 190, 0.55)';
         ctx.lineWidth = 3;
@@ -4390,6 +5916,283 @@
         ctx.arc(x - 2, y + 9, 4, 0, TAU);
         ctx.fill();
       }
+    }
+  }
+
+  function drawGolemShrine(ox, oy) {
+    if (!level.golemShrine) return;
+    const x = level.golemShrine.x + ox, y = level.golemShrine.y + oy;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.ellipse(x, y + 15, 39, 12, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#645f52'; ctx.fillRect(x - 31, y - 8, 62, 24);
+    ctx.fillStyle = '#a59b80'; ctx.fillRect(x - 34, y + 11, 68, 6); ctx.fillRect(x - 27, y - 15, 54, 7);
+    ctx.fillStyle = '#454c42'; ctx.fillRect(x - 20, y - 28, 40, 16);
+    ctx.strokeStyle = '#bed0b2'; ctx.lineWidth = 2; ctx.strokeRect(x - 20, y - 28, 40, 16);
+    ctx.fillStyle = '#9be2dc'; ctx.shadowColor = '#75c3be'; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.moveTo(x, y - 26); ctx.lineTo(x + 7, y - 20); ctx.lineTo(x, y - 14); ctx.lineTo(x - 7, y - 20); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    const nearby = Math.hypot(player.x - level.golemShrine.x, player.y - level.golemShrine.y) <= 4 * TS;
+    if (nearby && !golems.some((g) => g.shrine && !g.dead)) {
+      ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+      ctx.fillStyle = '#e3f4dc'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+      ctx.fillText(level.shrineCooldown > 0 ? `Guardian returns in ${Math.ceil(level.shrineCooldown)}s`
+        : 'F / tap · summon the shrine guardian', x, y - 39);
+    }
+    ctx.restore();
+  }
+
+  function drawWardenPedestal(ox, oy) {
+    if (!level.pedestal) return;
+    const x = level.pedestal.x + ox, y = level.pedestal.y + oy;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.beginPath(); ctx.ellipse(x, y + 15, 39, 14, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#40364e'; ctx.beginPath(); ctx.ellipse(x, y + 7, 34, 13, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#9876bb'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#25202e'; ctx.fillRect(x - 19, y - 12, 38, 19);
+    ctx.fillStyle = '#675274'; ctx.beginPath(); ctx.ellipse(x, y - 12, 22, 9, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#c0a0d4'; ctx.lineWidth = 1.5; ctx.stroke();
+    const glow = state.wardenDefeated ? '#78647f' : '#d1a0ff';
+    ctx.shadowColor = glow; ctx.shadowBlur = 16; ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.moveTo(x, y - 34); ctx.lineTo(x + 9, y - 22);
+    ctx.lineTo(x, y - 13); ctx.lineTo(x - 9, y - 22); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (!warden && Math.hypot(player.x - level.pedestal.x, player.y - level.pedestal.y) <= 4 * TS) {
+      ctx.textAlign = 'center'; ctx.font = '800 11px ui-rounded, system-ui, sans-serif';
+      ctx.fillStyle = '#f0defc'; ctx.shadowColor = '#000'; ctx.shadowBlur = 6;
+      ctx.fillText(state.wardenDefeated ? 'Core claimed' : 'F / tap · awaken the Warden', x, y - 49);
+    }
+    ctx.restore();
+  }
+
+  function drawWarden(ox, oy) {
+    if (!warden || warden.dead) return;
+    const x = warden.x + ox, y = warden.y + oy;
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(0,0,0,0.58)'; ctx.beginPath(); ctx.ellipse(0, 22, 34, 12, 0, 0, TAU); ctx.fill();
+    ctx.shadowColor = warden.phase === 3 ? '#de70ff' : '#9563e8'; ctx.shadowBlur = 16;
+    ctx.fillStyle = warden.flash > 0 ? '#e8d8fa' : '#21182e';
+    ctx.beginPath(); ctx.moveTo(-20, -24); ctx.lineTo(-31, 22); ctx.lineTo(0, 16);
+    ctx.lineTo(31, 22); ctx.lineTo(20, -24); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = warden.flash > 0 ? '#f2e4ff' : '#554467';
+    ctx.beginPath(); ctx.moveTo(-18, -27); ctx.lineTo(0, -38); ctx.lineTo(18, -27);
+    ctx.lineTo(16, 7); ctx.lineTo(0, 16); ctx.lineTo(-16, 7); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#ad81d2'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#281f36'; ctx.fillRect(-16, -19, 32, 7); ctx.fillRect(-14, -7, 28, 5);
+    ctx.fillStyle = '#382c48'; ctx.fillRect(-18, 8, 12, 20); ctx.fillRect(6, 8, 12, 20);
+    ctx.fillStyle = '#2a2038'; ctx.beginPath(); ctx.arc(0, -39, 15, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#b29ac7'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#3d2b50'; ctx.beginPath(); ctx.moveTo(-15, -48); ctx.lineTo(-25, -65);
+    ctx.lineTo(-10, -53); ctx.lineTo(0, -62); ctx.lineTo(10, -53); ctx.lineTo(25, -65);
+    ctx.lineTo(15, -48); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#edc4ff'; ctx.shadowColor = '#df8cff'; ctx.shadowBlur = 10;
+    ctx.fillRect(-10, -42, 7, 3); ctx.fillRect(3, -42, 7, 3); ctx.shadowBlur = 0;
+    if (warden.action !== 'sword') {
+      ctx.save(); ctx.translate(25, -6); ctx.rotate(-0.5);
+      ctx.fillStyle = '#8d6ca8'; ctx.fillRect(-3, -2, 6, 20);
+      ctx.fillStyle = '#c4acd3'; ctx.fillRect(-9, -6, 18, 4);
+      ctx.fillStyle = '#c8c5d2'; ctx.beginPath(); ctx.moveTo(-5, -6); ctx.lineTo(0, -51);
+      ctx.lineTo(5, -6); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawWardenEffects(ox, oy) {
+    if (!warden) return;
+    const boss = warden, warning = boss.action.endsWith('Warning');
+    let length = 0, width = 0;
+    if (boss.action === 'chargeWarning') { length = BALANCE.wardenChargeLength; width = BALANCE.wardenChargeWidth; }
+    else if (boss.action === 'slamWarning' || boss.action === 'slamImpact') { length = BALANCE.wardenSlamLength; width = BALANCE.wardenSlamWidth; }
+    else if (boss.action === 'spikeWarning' || boss.action === 'spikes') { length = BALANCE.wardenSpikeLength; width = BALANCE.wardenSpikeWidth; }
+    else if (boss.action === 'swordWarning') { length = BALANCE.wardenSwordRange; width = 28; }
+    else if (boss.action === 'beamWarning' || boss.action === 'beam') { length = BALANCE.wardenBeamLength; width = BALANCE.wardenBeamWidth; }
+    if (length) {
+      ctx.save(); ctx.translate(boss.originX + ox, boss.originY + oy); ctx.rotate(boss.angle);
+      if (warning) {
+        const flash = Math.sin(state.time * 19) > 0;
+        ctx.fillStyle = flash ? 'rgba(255, 42, 54, 0.42)' : 'rgba(179, 20, 37, 0.22)';
+        ctx.strokeStyle = 'rgba(255, 112, 112, 0.95)'; ctx.lineWidth = 2;
+        ctx.fillRect(0, -width / 2, length, width); ctx.strokeRect(0, -width / 2, length, width);
+      } else if (boss.action === 'slamImpact') {
+        ctx.fillStyle = 'rgba(255, 76, 72, 0.52)'; ctx.fillRect(0, -width / 2, length, width);
+        ctx.strokeStyle = '#ffc4ae'; ctx.lineWidth = 3; ctx.strokeRect(0, -width / 2, length, width);
+      } else if (boss.action === 'spikes') {
+        const rise = boss.phase === 3 ? 0.3 : 0.65, total = rise + 3.2, elapsed = total - boss.timer;
+        const height = clamp(Math.min(elapsed / rise, boss.timer / 1.2), 0, 1);
+        ctx.fillStyle = 'rgba(99, 30, 129, 0.38)'; ctx.fillRect(0, -width / 2, length, width);
+        for (let x = 18; x < length; x += 28) {
+          const side = Math.sin(x * 0.1) * 14;
+          ctx.fillStyle = x % 56 < 28 ? '#ab6bd3' : '#694088';
+          ctx.beginPath(); ctx.moveTo(x - 9, side + 10); ctx.lineTo(x, side - 26 * height);
+          ctx.lineTo(x + 9, side + 10); ctx.closePath(); ctx.fill();
+          ctx.strokeStyle = 'rgba(238,190,255,0.65)'; ctx.lineWidth = 1; ctx.stroke();
+        }
+      } else if (boss.action === 'beam') {
+        ctx.shadowColor = '#e394ff'; ctx.shadowBlur = 20;
+        ctx.fillStyle = 'rgba(146, 54, 213, 0.7)'; ctx.fillRect(0, -width / 2, length, width);
+        ctx.fillStyle = 'rgba(250, 221, 255, 0.92)'; ctx.fillRect(0, -width / 7, length, width * 2 / 7);
+      }
+      ctx.restore();
+    }
+    if (boss.action === 'sword') {
+      ctx.save(); ctx.translate(boss.swordX + ox, boss.swordY + oy); ctx.rotate(state.time * 11);
+      ctx.shadowColor = '#d293ff'; ctx.shadowBlur = 12;
+      ctx.fillStyle = '#eee4f5'; ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(8, -5);
+      ctx.lineTo(18, 0); ctx.lineTo(8, 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#8553a5'; ctx.fillRect(-16, -9, 4, 18); ctx.fillRect(-25, -2, 11, 4); ctx.restore();
+    }
+  }
+
+  function drawGhosts(ox, oy) {
+    for (const ghost of ghosts) {
+      if (ghost.dead) continue;
+      const x = ghost.x + ox, y = ghost.y + oy, bob = Math.sin(ghost.bob) * 3;
+      if (x < -65 || y < -80 || x > W + 65 || y > H + 80) continue;
+      ctx.save();
+      ctx.fillStyle = 'rgba(4, 12, 18, 0.35)';
+      ctx.beginPath(); ctx.ellipse(x, y + 13, 13, 4, 0, 0, TAU); ctx.fill();
+      if (ghost.dashRemaining > 0) {
+        ctx.strokeStyle = 'rgba(156, 235, 239, 0.45)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x - ghost.dashX * 19, y - ghost.dashY * 19 + bob);
+        ctx.lineTo(x - ghost.dashX * 36, y - ghost.dashY * 36 + bob); ctx.stroke();
+      }
+      ctx.globalAlpha = ghost.flash > 0 ? 1 : 0.86;
+      ctx.fillStyle = ghost.flash > 0 ? '#ffffff' : '#b9e8ed';
+      ctx.beginPath(); ctx.moveTo(x - 13, y + 7 + bob); ctx.lineTo(x - 13, y - 7 + bob);
+      ctx.quadraticCurveTo(x - 12, y - 21 + bob, x, y - 21 + bob);
+      ctx.quadraticCurveTo(x + 12, y - 21 + bob, x + 13, y - 7 + bob);
+      ctx.lineTo(x + 13, y + 7 + bob); ctx.lineTo(x + 8, y + 3 + bob);
+      ctx.lineTo(x + 3, y + 8 + bob); ctx.lineTo(x - 2, y + 3 + bob);
+      ctx.lineTo(x - 7, y + 8 + bob); ctx.lineTo(x - 13, y + 7 + bob); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#355866';
+      ctx.beginPath(); ctx.ellipse(x - 4.5, y - 9 + bob, 2, 3, 0, 0, TAU);
+      ctx.ellipse(x + 4.5, y - 9 + bob, 2, 3, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y - 3 + bob, 2.3, 3, 0, 0, TAU); ctx.fill();
+      ctx.globalAlpha = 1;
+      if (ghost.hp < ghost.maxHp) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(x - 18, y - 31 + bob, 36, 5);
+        ctx.fillStyle = '#9de5e7'; ctx.fillRect(x - 17, y - 30 + bob, 34 * clamp(ghost.hp / ghost.maxHp, 0, 1), 3);
+      }
+      if (Math.hypot(player.x - ghost.x, player.y - ghost.y) < 150) {
+        ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5; ctx.fillStyle = '#d2f9f5';
+        ctx.fillText('Ghost', x, y - (ghost.hp < ghost.maxHp ? 38 : 29) + bob);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawGraveDiggers(ox, oy) {
+    for (const digger of graveDiggers) {
+      if (digger.dead) continue;
+      const x = digger.x + ox, y = digger.y + oy;
+      if (x < -90 || y < -100 || x > W + 90 || y > H + 100) continue;
+      ctx.save();
+      if (digger.spinWindup > 0 || digger.spinFlash > 0) {
+        const tx = Math.floor(digger.x / TS), ty = Math.floor(digger.y / TS);
+        ctx.fillStyle = digger.spinFlash > 0 ? 'rgba(255, 194, 108, 0.26)' : 'rgba(218, 124, 94, 0.16)';
+        ctx.fillRect((tx - 1) * TS + ox, (ty - 1) * TS + oy, TS * 3, TS * 3);
+        ctx.strokeStyle = digger.spinFlash > 0 ? '#ffe1a8' : 'rgba(255, 156, 113, 0.8)';
+        ctx.lineWidth = 2; ctx.strokeRect((tx - 1) * TS + ox, (ty - 1) * TS + oy, TS * 3, TS * 3);
+      }
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.beginPath(); ctx.ellipse(x, y + 13, 15, 5, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = digger.flash > 0 ? '#fff3d2' : '#66594d';
+      ctx.beginPath(); ctx.ellipse(x, y + 2, 11, 13, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#d2b393';
+      ctx.beginPath(); ctx.arc(x, y - 9, 8, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#363b3b';
+      ctx.fillRect(x - 13, y - 18, 26, 4); ctx.fillRect(x - 8, y - 25, 16, 9);
+      ctx.fillStyle = '#bba775'; ctx.fillRect(x - 8, y - 18, 16, 2);
+      ctx.fillStyle = digger.provoked ? '#e86459' : '#4b4843';
+      ctx.beginPath(); ctx.arc(x - 3, y - 10, 1.2, 0, TAU); ctx.arc(x + 3, y - 10, 1.2, 0, TAU); ctx.fill();
+      ctx.save(); ctx.translate(x + 10, y + 2);
+      const shovelAngle = digger.spinWindup > 0 ? state.time * 15 : digger.digWindup > 0 ? Math.sin(state.time * 10) * 0.7 : digger.facing * 0.2 - 0.5;
+      ctx.rotate(shovelAngle);
+      ctx.strokeStyle = '#b28b64'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(0, 14); ctx.stroke();
+      ctx.fillStyle = '#a5a8a3'; ctx.beginPath(); ctx.moveTo(-5, 12); ctx.lineTo(5, 12); ctx.lineTo(3, 19); ctx.lineTo(0, 22); ctx.lineTo(-3, 19); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      if (digger.hp < digger.maxHp) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(x - 19, y - 34, 38, 5);
+        ctx.fillStyle = '#e9b47d'; ctx.fillRect(x - 18, y - 33, 36 * clamp(digger.hp / digger.maxHp, 0, 1), 3);
+      }
+      if (Math.hypot(player.x - digger.x, player.y - digger.y) < 160) {
+        ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5; ctx.fillStyle = digger.provoked ? '#ffc7ae' : '#e4dcc4';
+        const action = digger.digWindup > 0 ? ' · digging' : digger.spinWindup > 0 ? ' · spin!' : digger.fleeing ? ' · fleeing' : '';
+        ctx.fillText('Grave Digger' + action, x, y - (digger.hp < digger.maxHp ? 41 : 31));
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawInfectedSkeletons(ox, oy) {
+    for (const skeleton of infectedSkeletons) {
+      if (skeleton.dead || skeleton.hidden) continue;
+      const x = skeleton.x + ox, y = skeleton.y + oy;
+      if (x < -70 || y < -80 || x > W + 70 || y > H + 80) continue;
+      const emerged = 1 - clamp(skeleton.emergeTimer / BALANCE.infectedSkeletonEmergeTime, 0, 1);
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.beginPath(); ctx.ellipse(x, y + 13, 14, 4, 0, 0, TAU); ctx.fill();
+      ctx.translate(x, y + (1 - emerged) * 14);
+      ctx.globalAlpha = 0.35 + emerged * 0.65;
+      ctx.strokeStyle = skeleton.flash > 0 ? '#ffffff' : '#d4dfc9';
+      ctx.lineWidth = 3; ctx.lineCap = 'round';
+      const stride = Math.sin(skeleton.walk) * 3;
+      ctx.beginPath();
+      ctx.moveTo(-3, 4); ctx.lineTo(-7 + stride, 13);
+      ctx.moveTo(3, 4); ctx.lineTo(7 - stride, 13);
+      ctx.moveTo(-7, -7); ctx.lineTo(-12, 1);
+      ctx.moveTo(7, -7); ctx.lineTo(12, 0); ctx.stroke();
+      ctx.fillStyle = skeleton.flash > 0 ? '#ffffff' : '#d6dfcd';
+      ctx.fillRect(-6, -10, 12, 15);
+      ctx.fillStyle = '#40564a';
+      ctx.fillRect(-4, -7, 8, 2); ctx.fillRect(-4, -3, 8, 2); ctx.fillRect(-4, 1, 8, 2);
+      ctx.fillStyle = skeleton.flash > 0 ? '#ffffff' : '#e0ead8';
+      ctx.beginPath(); ctx.arc(0, -18, 9, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#273d31';
+      ctx.beginPath(); ctx.ellipse(-3.5, -19, 2.2, 2.8, 0, 0, TAU);
+      ctx.ellipse(3.5, -19, 2.2, 2.8, 0, 0, TAU); ctx.fill();
+      ctx.fillRect(-4, -13, 8, 2);
+      if (skeleton.kind === 'infectedSkeleton') {
+        ctx.fillStyle = '#68b76e';
+        ctx.beginPath(); ctx.ellipse(0, -25, 9, 3.8, 0, 0, TAU); ctx.fill();
+        ctx.fillRect(-8, -24, 4, 8); ctx.fillRect(4, -23, 3, 7);
+        ctx.fillStyle = '#b1ee9b'; ctx.fillRect(-2, -26, 3, 2);
+      }
+      // The little bone in its hand hints at the ranged attack.
+      ctx.strokeStyle = '#f2f0dc'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(10, -4); ctx.lineTo(17, -10); ctx.stroke();
+      ctx.fillStyle = '#f2f0dc'; ctx.beginPath(); ctx.arc(18, -11, 2.5, 0, TAU); ctx.fill();
+      ctx.restore();
+      ctx.save();
+      if (skeleton.hp < skeleton.maxHp) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(x - 19, y - 38, 38, 5);
+        ctx.fillStyle = '#9edb9d'; ctx.fillRect(x - 18, y - 37, 36 * clamp(skeleton.hp / skeleton.maxHp, 0, 1), 3);
+      }
+      if (Math.hypot(player.x - skeleton.x, player.y - skeleton.y) < 165) {
+        ctx.textAlign = 'center'; ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5; ctx.fillStyle = '#d6f4cb';
+        ctx.fillText((skeleton.kind === 'skeleton' ? 'Skeleton' : 'Infected Skeleton') + (skeleton.emergeTimer > 0 ? ' · emerging' : ''),
+          x, y - (skeleton.hp < skeleton.maxHp ? 45 : 34));
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawBoneProjectiles(ox, oy) {
+    for (const bone of level.boneProjectiles) {
+      const x = bone.x + ox, y = bone.y + oy;
+      if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(bone.vy, bone.vx) + bone.age * 8);
+      ctx.shadowColor = 'rgba(191, 246, 176, 0.65)'; ctx.shadowBlur = 7;
+      ctx.strokeStyle = '#eef4dd'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.stroke();
+      ctx.fillStyle = '#eef4dd'; ctx.beginPath();
+      ctx.arc(-6, -2, 2.3, 0, TAU); ctx.arc(-6, 2, 2.3, 0, TAU);
+      ctx.arc(6, -2, 2.3, 0, TAU); ctx.arc(6, 2, 2.3, 0, TAU); ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -4499,25 +6302,25 @@
       if (golem.dead) continue;
       const x = golem.x + ox, y = golem.y + oy;
       if (x < -80 || y < -80 || x > W + 80 || y > H + 80) continue;
-      const disabled = golem.disabled > 0;
+      const disabled = golem.disabled > 0, scale = golem.shrine ? 1.5 : 1;
       ctx.fillStyle = 'rgba(0,0,0,0.48)';
-      ctx.beginPath(); ctx.ellipse(x + 2, y + 18, 24, 9, 0, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + 2, y + 18 * scale, 24 * scale, 9 * scale, 0, 0, TAU); ctx.fill();
       if (disabled) {
         ctx.strokeStyle = 'rgba(163, 214, 232, 0.7)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(x, y + 15, 27, 12, 0, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(x, y + 15 * scale, 27 * scale, 12 * scale, 0, 0, TAU); ctx.stroke();
       }
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(golem.facing + Math.PI / 2);
+      ctx.rotate(golem.facing + Math.PI / 2); ctx.scale(scale, scale);
       const stride = disabled ? 0 : Math.sin(golem.walk) * 2;
       // Arms and feet are separate rounded boulders around a wide torso.
-      ctx.fillStyle = golem.mercury ? '#405c63' : '#514c49';
+      ctx.fillStyle = golem.ancient ? '#3a4d37' : golem.mercury ? '#405c63' : '#514c49';
       ctx.beginPath(); ctx.ellipse(-13, 16 + stride, 9, 8, -0.2, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.ellipse(13, 16 - stride, 9, 8, 0.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = golem.mercury ? (disabled ? '#78949a' : '#82afb5') : disabled ? '#777e7e' : '#86776a';
+      ctx.fillStyle = golem.ancient ? (disabled ? '#7b8870' : '#70856a') : golem.mercury ? (disabled ? '#78949a' : '#82afb5') : disabled ? '#777e7e' : '#86776a';
       ctx.beginPath(); ctx.ellipse(-20, 1 + stride, 9, 14, -0.2, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.ellipse(20, 1 - stride, 9, 14, 0.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = golem.flash > 0 ? (golem.mercury ? '#f2ffff' : '#e4d9ca') : golem.mercury ? (disabled ? '#a7bdc1' : '#b6d9db') : disabled ? '#929b9a' : '#aa9987';
+      ctx.fillStyle = golem.flash > 0 ? (golem.mercury ? '#f2ffff' : '#e4d9ca') : golem.ancient ? (disabled ? '#9ca992' : '#a0ae91') : golem.mercury ? (disabled ? '#a7bdc1' : '#b6d9db') : disabled ? '#929b9a' : '#aa9987';
       ctx.beginPath();
       ctx.moveTo(-17, -13); ctx.lineTo(-11, -20); ctx.lineTo(12, -20);
       ctx.lineTo(18, -11); ctx.lineTo(16, 13); ctx.lineTo(9, 19);
@@ -4525,27 +6328,36 @@
       ctx.strokeStyle = golem.mercury ? '#6296a0' : '#554f4a'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(-13, -10); ctx.lineTo(-6, -4); ctx.lineTo(-9, 4);
       ctx.moveTo(11, -14); ctx.lineTo(6, -7); ctx.lineTo(10, 0); ctx.stroke();
+      if (golem.ancient) {
+        // Moss, vines and little ancient-gold runes distinguish this stone.
+        ctx.fillStyle = '#4c7441'; ctx.fillRect(-17, -19, 14, 5); ctx.fillRect(7, 7, 9, 5);
+        ctx.fillStyle = '#7ca85d'; ctx.fillRect(-14, -20, 7, 3); ctx.fillRect(9, 6, 5, 3);
+        ctx.strokeStyle = '#547b48'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-13, -15); ctx.quadraticCurveTo(-9, -7, -14, 3); ctx.stroke();
+        ctx.fillStyle = '#e2c979'; ctx.fillRect(-2, 3, 4, 2); ctx.fillRect(-1, 5, 2, 5);
+      }
       if (golem.mercury) {
         ctx.strokeStyle = 'rgba(247,255,255,0.65)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(-13, 7); ctx.quadraticCurveTo(0, 3, 13, 7); ctx.stroke();
       }
-      ctx.fillStyle = golem.mercury ? '#5e878e' : '#615b56';
+      ctx.fillStyle = golem.ancient ? '#50634a' : golem.mercury ? '#5e878e' : '#615b56';
       ctx.beginPath(); ctx.ellipse(0, -13, 12, 9, 0, 0, TAU); ctx.fill();
       ctx.fillStyle = disabled ? '#bac9c9' : golem.mercury ? '#a5f4fa' : '#ffbf79';
       ctx.fillRect(-8, -15, 5, 2.5); ctx.fillRect(3, -15, 5, 2.5);
       ctx.restore();
       if (golem.hp < golem.maxHp) {
-        const width = 42, pct = clamp(golem.hp / golem.maxHp, 0, 1);
-        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(x - width / 2, y - 36, width, 4);
-        ctx.fillStyle = golem.mercury ? '#9bdfe4' : '#df9b6e'; ctx.fillRect(x - width / 2, y - 36, width * pct, 4);
+        const width = 42 * scale, pct = clamp(golem.hp / golem.maxHp, 0, 1), barY = y - 36 * scale;
+        ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(x - width / 2, barY, width, 4);
+        ctx.fillStyle = golem.shrine ? '#9bd9cb' : golem.mercury ? '#9bdfe4' : '#df9b6e';
+        ctx.fillRect(x - width / 2, barY, width * pct, 4);
       }
       if (Math.hypot(player.x - golem.x, player.y - golem.y) < 150 || disabled) {
         ctx.save(); ctx.textAlign = 'center';
         ctx.font = '800 10px ui-rounded, system-ui, sans-serif';
         ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
         ctx.fillStyle = disabled ? '#c9ecf6' : golem.mercury ? '#cbf6f4' : '#ead0b4';
-        const name = golem.mercury ? 'Mercury Golem' : 'Golem';
-        ctx.fillText(disabled ? `${name} · disabled` : name, x, y - (golem.hp < golem.maxHp ? 42 : 34));
+        const name = golem.ancient ? 'Ancient Golem' : golem.shrine ? 'Shrine Golem' : golem.mercury ? 'Mercury Golem' : 'Golem';
+        ctx.fillText(disabled ? `${name} · disabled` : name, x, y - (golem.hp < golem.maxHp ? 42 : 34) * scale);
         ctx.restore();
       }
     }
@@ -4556,6 +6368,7 @@
       if (spider.dead) continue;
       const x = spider.x + ox, y = spider.y + oy;
       if (x < -50 || x > W + 50 || y < -50 || y > H + 50) continue;
+      if (spider.crabock) { drawCrabock(spider, x, y); continue; }
       ctx.fillStyle = 'rgba(0, 0, 0, 0.46)';
       ctx.beginPath();
       ctx.ellipse(x, y + 9, 14, 4.5, 0, 0, TAU);
@@ -4570,25 +6383,28 @@
         for (let i = 0; i < 4; i++) {
           const sy = -6 + i * 4;
           const twitch = Math.sin(spider.walk + i * 1.8 + (side < 0 ? Math.PI : 0)) * 2.5;
-          ctx.strokeStyle = '#241b2a';
+          ctx.strokeStyle = spider.venom ? '#293c25' : '#241b2a';
           ctx.lineWidth = 3.2;
           ctx.beginPath();
           ctx.moveTo(side * 4, sy);
           ctx.lineTo(side * (11 + twitch * 0.4), sy - 3 + twitch);
           ctx.lineTo(side * 16, sy + 3 + twitch);
           ctx.stroke();
-          ctx.strokeStyle = '#8d6b79';
+          ctx.strokeStyle = spider.venom ? '#9dcc76' : '#8d6b79';
           ctx.lineWidth = 1;
           ctx.stroke();
         }
       }
-      ctx.fillStyle = '#392b3d';
+      ctx.fillStyle = spider.venom ? '#344f2f' : '#392b3d';
       ctx.beginPath(); ctx.ellipse(0, 3, 8.5, 10, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#6d5065';
+      ctx.fillStyle = spider.venom ? '#83b95a' : '#6d5065';
       ctx.beginPath(); ctx.ellipse(-1.5, 1, 5.8, 7.2, -0.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#312438';
+      if (spider.venom) {
+        ctx.fillStyle = '#daf5a1'; ctx.beginPath(); ctx.arc(-2, 1, 2, 0, TAU); ctx.arc(2, 5, 2.4, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = spider.venom ? '#263b26' : '#312438';
       ctx.beginPath(); ctx.ellipse(0, -6, 6, 5.5, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = spider.bite > 0 ? '#ffedaa' : '#f49b86';
+      ctx.fillStyle = spider.bite > 0 ? '#ffedaa' : spider.venom ? '#d5ff9a' : '#f49b86';
       for (const side of [-1, 1]) {
         ctx.beginPath(); ctx.arc(side * 2.8, -8, 1.35, 0, TAU); ctx.fill();
       }
@@ -4603,6 +6419,45 @@
         ctx.fillStyle = 'rgba(0, 0, 0, 0.65)'; ctx.fillRect(x - width / 2, y - 19, width, 3);
         ctx.fillStyle = pct > 0.5 ? '#8ce09a' : '#ff9a7d'; ctx.fillRect(x - width / 2, y - 19, width * pct, 3);
       }
+      if (spider.venom && Math.hypot(player.x - spider.x, player.y - spider.y) < 140) {
+        ctx.save(); ctx.textAlign = 'center'; ctx.font = '800 9px ui-rounded, system-ui, sans-serif';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 5; ctx.fillStyle = '#c8f3a1';
+        ctx.fillText('Venom Spider', x, y - (spider.hp < spider.maxHp ? 27 : 20)); ctx.restore();
+      }
+    }
+  }
+
+  function drawCrabock(crabock, x, y) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.ellipse(x, y + 11, 19, 6, 0, 0, TAU); ctx.fill();
+    ctx.translate(x, y); ctx.rotate(crabock.facing + Math.PI / 2);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const twitch = Math.sin(crabock.walk + i * 1.8 + side) * 2;
+        ctx.strokeStyle = '#51465a'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(side * 9, -3 + i * 5);
+        ctx.lineTo(side * 17, -5 + i * 5 + twitch); ctx.lineTo(side * 20, i * 5 + twitch); ctx.stroke();
+      }
+      ctx.fillStyle = '#76617c'; ctx.beginPath(); ctx.ellipse(side * 18, -8, 6, 5, side * 0.35, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#ccb0cb'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    ctx.fillStyle = crabock.flash > 0 ? '#f5ecf7' : '#716b78';
+    ctx.beginPath(); ctx.moveTo(-14, 7); ctx.lineTo(-12, -7); ctx.lineTo(-5, -13);
+    ctx.lineTo(7, -12); ctx.lineTo(14, -5); ctx.lineTo(13, 8); ctx.lineTo(0, 12); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#c0a8bf'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = '#4d4654'; ctx.beginPath(); ctx.moveTo(-7, -8); ctx.lineTo(-2, -3);
+    ctx.lineTo(-5, 3); ctx.moveTo(7, -8); ctx.lineTo(3, -2); ctx.lineTo(8, 4); ctx.stroke();
+    ctx.fillStyle = '#efbfea'; ctx.fillRect(-7, -10, 3, 2); ctx.fillRect(4, -10, 3, 2);
+    ctx.restore();
+    if (crabock.hp < crabock.maxHp) {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - 18, y - 24, 36, 4);
+      ctx.fillStyle = '#ce9fe3'; ctx.fillRect(x - 18, y - 24, 36 * clamp(crabock.hp / crabock.maxHp, 0, 1), 4);
+    }
+    if (Math.hypot(player.x - crabock.x, player.y - crabock.y) < 130) {
+      ctx.save(); ctx.textAlign = 'center'; ctx.font = '800 9px ui-rounded, system-ui, sans-serif';
+      ctx.fillStyle = '#efd8f4'; ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
+      ctx.fillText('Crabock', x, y - (crabock.hp < crabock.maxHp ? 31 : 22)); ctx.restore();
     }
   }
 
@@ -4741,13 +6596,18 @@
       ctx.fillStyle = '#503d31'; ctx.fillRect(-7, 3, 14, 3);
       ctx.fillStyle = '#e7c16c'; ctx.fillRect(-1, 3, 3, 3);
 
-      // Face, beard and a broad prospector's hat.
-      ctx.fillStyle = '#dfb18c';
+      // A skeletal miner keeps the hat and pickaxe but has a skull for a face.
+      ctx.fillStyle = prospector.skeleton ? '#e4dfc7' : '#dfb18c';
       ctx.beginPath(); ctx.arc(0, -10, 7.4, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#684a35';
-      ctx.beginPath(); ctx.arc(0, -7.8, 5.1, 0.1, Math.PI - 0.1); ctx.fill();
+      if (!prospector.skeleton) {
+        ctx.fillStyle = '#684a35';
+        ctx.beginPath(); ctx.arc(0, -7.8, 5.1, 0.1, Math.PI - 0.1); ctx.fill();
+      } else {
+        ctx.fillStyle = '#e4dfc7'; ctx.fillRect(-4.5, -7, 9, 4);
+        ctx.fillStyle = '#746c58'; ctx.fillRect(-3, -4, 1, 2); ctx.fillRect(0, -4, 1, 2); ctx.fillRect(3, -4, 1, 2);
+      }
       ctx.fillStyle = '#241c19';
-      ctx.beginPath(); ctx.arc(-2.7, -10.3, 0.8, 0, TAU); ctx.arc(2.7, -10.3, 0.8, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(-2.7, -10.3, prospector.skeleton ? 1.7 : 0.8, 0, TAU); ctx.arc(2.7, -10.3, prospector.skeleton ? 1.7 : 0.8, 0, TAU); ctx.fill();
       ctx.fillStyle = '#563929'; ctx.fillRect(-9.5, -17, 19, 3.4);
       ctx.fillStyle = '#82603d';
       ctx.beginPath();
@@ -4786,7 +6646,8 @@
         ctx.font = '800 9px ui-rounded, system-ui, sans-serif';
         ctx.shadowColor = '#000'; ctx.shadowBlur = 5;
         ctx.fillStyle = prospector.chasing ? '#ff9d85' : '#ead4a8';
-        ctx.fillText(prospector.chasing ? 'Prospector !' : 'Prospector', x, y - (prospector.hp < prospector.maxHp ? 36 : 28));
+        const name = prospector.skeleton ? 'Skeleton Prospector' : 'Prospector';
+        ctx.fillText(prospector.chasing ? `${name} !` : name, x, y - (prospector.hp < prospector.maxHp ? 36 : 28));
         ctx.restore();
       }
     }
@@ -4959,16 +6820,25 @@
     // while keeping the same dungeon atmosphere and player lantern.
     lctx.globalCompositeOperation = 'source-over';
     lctx.fillStyle = level.isBase ? 'rgba(4, 7, 12, 0.5)'
+      : level.id === 'stage9' ? 'rgba(0, 2, 4, 0.97)'
+      : level.id === 'stage10' ? 'rgba(7, 3, 14, 0.72)'
+      : level.id === 'stage11' ? 'rgba(10, 4, 18, 0.76)'
+      : level.id === 'stage12' ? 'rgba(7, 10, 8, 0.78)'
+      : level.id === 'stage13' ? 'rgba(8, 11, 6, 0.82)'
       : level.id === 'stage6' ? 'rgba(3, 12, 10, 0.7)'
       : level.id === 'special' ? 'rgba(3, 9, 13, 0.76)'
       : 'rgba(3, 5, 10, 0.88)';
     lctx.fillRect(0, 0, W, H);
 
     lctx.globalCompositeOperation = 'destination-out';
-    punch(player.x + ox, player.y + oy, 320, 0.95);
+    punch(player.x + ox, player.y + oy, level.id === 'stage9' ? 245 : 320, 0.95);
+    if (level.pedestal) punch(level.pedestal.x + ox, level.pedestal.y + oy, 210, 0.5);
+    if (level.golemShrine) punch(level.golemShrine.x + ox, level.golemShrine.y + oy, 180, 0.48);
     for (const d of level.decor) {
       if (d.kind === 'lantern') punch(d.x + ox, d.y - 7 + oy, 165, 0.72);
+      else if (d.kind === 'crystal') punch(d.x + ox, d.y - 8 + oy, 90, 0.3);
     }
+    for (const ghost of ghosts) if (!ghost.dead) punch(ghost.x + ox, ghost.y + oy, 85, 0.4);
     for (const lift of level.elevators) {
       punch(lift.x + ox, lift.y - 8 + oy, 110, state.elevatorUnlocked || level.id === 'stage7' ? 0.55 : 0.3);
     }
@@ -5023,6 +6893,26 @@
     ctx.restore();
   }
 
+  function drawPoisonEffects(ox, oy) {
+    const marked = [...slimes, ...moles, ...spiders, ...golems, ...level.prospectors,
+      ...graveDiggers, ...infectedSkeletons, ...(warden ? [warden] : [])];
+    if (state.poisonTime > 0) marked.push({ x: player.x, y: player.y, r: BALANCE.playerRadius, poisonTime: state.poisonTime });
+    ctx.save();
+    for (const enemy of marked) {
+      if (enemy.dead || !(enemy.poisonTime > 0)) continue;
+      const x = enemy.x + ox, y = enemy.y + oy, r = enemy.r;
+      if (x < -70 || y < -80 || x > W + 70 || y > H + 80) continue;
+      ctx.strokeStyle = 'rgba(170, 229, 108, 0.7)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r + 5, (r + 5) * 0.38, 0, 0, TAU); ctx.stroke();
+      for (let i = 0; i < 3; i++) {
+        const phase = (state.time * 0.8 + i / 3) % 1;
+        ctx.fillStyle = `rgba(189, 249, 131, ${0.7 * (1 - phase)})`;
+        ctx.beginPath(); ctx.arc(x + Math.sin(i * 2.6 + state.time * 2) * (r * 0.7), y - r * 0.4 - phase * (r + 17), 2.1, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawDynamites(ox, oy) {
     for (const dynamite of level.dynamites) {
       const progress = clamp((dynamite.age - BALANCE.dynamiteFlight) / BALANCE.dynamiteFuse, 0, 1);
@@ -5032,14 +6922,15 @@
       const targetY = ty * TS + oy;
       const pulse = 0.16 + 0.12 * Math.abs(Math.sin(dynamite.age * 12));
       ctx.save();
-      // A red landing tile and subtle four-tile outline telegraph the blast.
+      // The dashed outline shows each bomb's actual tile-ring blast radius.
       ctx.fillStyle = `rgba(255, 55, 34, ${pulse})`;
       ctx.fillRect(targetX, targetY, TS, TS);
       ctx.strokeStyle = 'rgba(255, 111, 74, 0.9)'; ctx.lineWidth = 1.6;
       ctx.strokeRect(targetX + 1, targetY + 1, TS - 2, TS - 2);
       ctx.strokeStyle = 'rgba(255, 111, 74, 0.28)'; ctx.lineWidth = 1;
       ctx.setLineDash([5, 7]);
-      ctx.strokeRect(targetX - 4 * TS, targetY - 4 * TS, 9 * TS, 9 * TS);
+      const rings = dynamite.skeleton ? 2 : 4;
+      ctx.strokeRect(targetX - rings * TS, targetY - rings * TS, (rings * 2 + 1) * TS, (rings * 2 + 1) * TS);
       ctx.setLineDash([]);
 
       const flight = clamp(dynamite.age / BALANCE.dynamiteFlight, 0, 1);
@@ -5064,7 +6955,7 @@
       const t = clamp(explosion.age / explosion.duration, 0, 1);
       const x = explosion.x + ox;
       const y = explosion.y + oy;
-      const radius = 18 + t * 100;
+      const radius = 18 + t * (explosion.skeleton ? 56 : 100);
       ctx.save();
       ctx.globalAlpha = Math.pow(1 - t, 1.4);
       const glow = ctx.createRadialGradient(x, y, 1, x, y, radius);
@@ -5176,12 +7067,19 @@
           ctx.moveTo(-9, 5); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.lineTo(9, 5);
         } else if (ITEMS[p.item].isCoin) {
           ctx.arc(0, 0, 8, 0, TAU);
+        } else if (ITEMS[p.item].isPolished) {
+          ctx.moveTo(-9, -3); ctx.lineTo(-5, -8); ctx.lineTo(5, -8);
+          ctx.lineTo(9, -3); ctx.lineTo(0, 9); ctx.closePath();
         } else {
           ctx.moveTo(0, -9); ctx.lineTo(8, -4); ctx.lineTo(7, 4);
           ctx.lineTo(1, 8); ctx.lineTo(-7, 5); ctx.lineTo(-8, -3);
         }
         ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.shadowBlur = 0;
+        if (ITEMS[p.item].isPolished) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(-9, -3); ctx.lineTo(9, -3); ctx.moveTo(-4, -8); ctx.lineTo(0, 9); ctx.lineTo(4, -8); ctx.stroke();
+        }
         ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         if (ITEMS[p.item].isIngot) ctx.fillRect(-5, -3, 10, 2);
         else {
@@ -5250,6 +7148,12 @@
     levels.stage5 = null;
     levels.stage6 = null;
     levels.stage7 = null;
+    levels.stage8 = null;
+    levels.stage9 = null;
+    levels.stage10 = null;
+    levels.stage11 = null;
+    levels.stage12 = null;
+    levels.stage13 = null;
     levels.special = null;
 
     for (let i = 0; i < inventory.length; i++) inventory[i] = null;
@@ -5259,6 +7163,10 @@
     state.tools.sword = 1;
     state.mercurySword = false;
     state.elevatorUnlocked = false;
+    state.wardenDefeated = false;
+    state.voidPowerTime = state.voidPowerCooldown = 0;
+    warden = null;
+    syncWardenUI(); syncVoidUI();
     melter.coal = 0;
     melter.copper = 0;
     melter.iron = 0;
@@ -5275,11 +7183,18 @@
     moles.length = 0;
     spiders.length = 0;
     golems.length = 0;
+    ghosts.length = 0;
+    graveDiggers.length = 0;
+    infectedSkeletons.length = 0;
     particles.length = 0;
     floaters.length = 0;
     melterBursts.length = 0;
 
     state.hp = BALANCE.playerMaxHp;
+    state.healDelay = 0;
+    state.healProgress = 0;
+    state.poisonTime = state.poisonDistance = 0;
+    syncPoisonUI();
     state.invuln = 0;
     state.cooldown = 0;
     state.shack = 0;
@@ -5288,7 +7203,12 @@
     state.molesSlain = 0;
     state.prospectorsSlain = 0;
     state.spidersSlain = 0;
+    state.crabocksSlain = 0;
     state.golemsSlain = 0;
+    state.ghostsSlain = 0;
+    state.graveDiggersSlain = 0;
+    state.infectedSkeletonsSlain = 0;
+    state.skeletonsSlain = 0;
     state.time = 0;
     state.transitionLock = 0.3;
 
@@ -5350,8 +7270,14 @@
     el.overMoles.textContent = String(state.molesSlain);
     el.overProspectors.textContent = String(state.prospectorsSlain);
     if (el.overSpiders) el.overSpiders.textContent = String(state.spidersSlain);
+    if (el.overCrabocks) el.overCrabocks.textContent = String(state.crabocksSlain);
     if (el.overGolems) el.overGolems.textContent = String(state.golemsSlain);
-    const enemies = state.slimesSlain + state.molesSlain + state.prospectorsSlain + state.spidersSlain + state.golemsSlain;
+    if (el.overGhosts) el.overGhosts.textContent = String(state.ghostsSlain);
+    if (el.overGraveDiggers) el.overGraveDiggers.textContent = String(state.graveDiggersSlain);
+    if (el.overInfectedSkeletons) el.overInfectedSkeletons.textContent = String(state.infectedSkeletonsSlain);
+    if (el.overSkeletons) el.overSkeletons.textContent = String(state.skeletonsSlain);
+    const enemies = state.slimesSlain + state.molesSlain + state.prospectorsSlain + state.spidersSlain +
+      state.crabocksSlain + state.golemsSlain + state.ghostsSlain + state.graveDiggersSlain + state.infectedSkeletonsSlain + state.skeletonsSlain;
     el.overLine.textContent = enemies === 0
       ? 'The cave creatures got you before you could fight back.'
       : `You defeated ${enemies} cave creature${enemies === 1 ? '' : 's'} before they got you.`;
@@ -5368,14 +7294,22 @@
     moles.length = 0;
     spiders.length = 0;
     golems.length = 0;
+    ghosts.length = 0;
+    graveDiggers.length = 0;
+    infectedSkeletons.length = 0;
     particles.length = 0;
     floaters.length = 0;
     melterBursts.length = 0;
     state.hp = BALANCE.playerMaxHp;
+    state.healDelay = 0;
+    state.healProgress = 0;
+    state.poisonTime = state.poisonDistance = 0;
+    syncPoisonUI();
+    state.voidPowerTime = 0; // the Core remains unlocked after death
     state.invuln = 0;
     state.cooldown = 0;
     state.shack = 0;
-    syncVitals();
+    syncVitals(); syncVoidUI();
 
     el.over.classList.add('is-hidden');
     el.hud.classList.remove('is-hidden');
@@ -5399,11 +7333,15 @@
   // One deliberate browser save, plus portable JSON files. A new run never
   // overwrites the browser slot until the player explicitly saves again.
   const SAVE_FORMAT = 'mining-simulator-save';
-  const SAVE_VERSION = 3;
-  const SUPPORTED_SAVE_VERSIONS = [1, 2, SAVE_VERSION];
+  const SAVE_VERSION = 9;
+  const SUPPORTED_SAVE_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, SAVE_VERSION];
   // Keep the original browser key so existing manual slots remain visible.
   const SAVE_KEY = 'cuddly-train.mining-simulator.save.v1';
   const LEGACY_NEW_ITEMS = new Set(['cobalt', 'quartz', 'iridium', 'titanium', 'mercury', 'axolotl']);
+  const STAGE8_ITEMS = new Set(['ruby', 'polishedCobalt', 'polishedQuartz', 'polishedIridium', 'polishedRuby', 'polishedCalcite']);
+  const STAGE9_ITEMS = new Set(['sapphire', 'darkstone', 'polishedSapphire']);
+  const STAGE10_ITEMS = new Set(['blackAmethyst', 'polishedBlackAmethyst']);
+  const CAVERN_TEMPLE_ITEMS = new Set(['amethyst', 'polishedAmethyst', 'diamond', 'polishedDiamond']);
   const MAX_SAVE_SIZE = 2 * 1024 * 1024;
   const MAX_SAVED_COUNT = 1000000000;
   let saveLoadRevision = 0; // invalidate file reads if the player resumes or starts another run
@@ -5413,21 +7351,33 @@
   const AREA_BUILDERS = {
     home: buildHome, stage1: buildStage1, stage2: buildStage2,
     stage3: buildStage3, stage4: buildStage4, stage5: buildStage5,
-    stage6: buildStage6, stage7: buildStage7, special: buildSpecialCave,
+    stage6: buildStage6, stage7: buildStage7, stage8: buildStage8, stage9: buildStage9,
+    stage10: buildStage10, stage11: buildStage11, stage12: buildStage12, stage13: buildStage13, special: buildSpecialCave,
   };
   const AREA_NAMES = {
     home: 'Home Base', stage1: 'Cave Entrance', stage2: 'Dreadful Tunnels',
     stage3: 'Auag Cavern', stage4: 'Stalag Cavern', stage5: 'Alumina Cave',
-    stage6: 'Luscious Cave', stage7: 'Spiral Cavern', special: 'Special Cave',
+    stage6: 'Luscious Cave', stage7: 'Spiral Cavern', stage8: 'Haunted Descent',
+    stage9: 'Pitch-Black Depths', stage10: "Warden's Core", stage11: 'Amethyst Cavern',
+    stage12: 'Ancient Temple', stage13: 'Ancient Mine', special: 'Special Cave',
   };
-  const AREA_TIMERS = ['slimeTimer', 'moleTimer', 'spiderTimer', 'golemTimer', 'prospectorTimer'];
-  const SAVE_STATS = ['oreHauled', 'slimesSlain', 'molesSlain', 'prospectorsSlain', 'spidersSlain', 'golemsSlain'];
+  const WARDEN_SAVE_FIELDS = ['x', 'y', 'hp', 'flash', 'phase', 'action', 'timer', 'attackIndex',
+    'angle', 'originX', 'originY', 'travel', 'hit', 'spikeCooldown', 'swordX', 'swordY', 'swordReturning',
+    'poisonTime', 'poisonProgress'];
+  const AREA_TIMERS = ['slimeTimer', 'moleTimer', 'spiderTimer', 'golemTimer', 'prospectorTimer',
+    'ghostTimer', 'graveDiggerTimer', 'infectedSkeletonTimer'];
+  const SAVE_STATS = ['oreHauled', 'slimesSlain', 'molesSlain', 'prospectorsSlain', 'spidersSlain', 'crabocksSlain', 'golemsSlain',
+    'ghostsSlain', 'graveDiggersSlain', 'infectedSkeletonsSlain', 'skeletonsSlain'];
   const ENEMY_COMMON = ['x', 'y', 'hp', 'flash', 'attackCd', 'knockX', 'knockY', 'wanderAngle', 'wanderTimer'];
   const ENEMY_FIELDS = {
     slime: [...ENEMY_COMMON, 'hop', 'face', 'hopGround'],
     mole: [...ENEMY_COMMON, 'angle', 'drillSpin'],
     spider: [...ENEMY_COMMON, 'bite', 'facing', 'walk', 'stuckTime'],
     golem: [...ENEMY_COMMON, 'facing', 'walk', 'stuckTime', 'moved', 'disabled'],
+    ghost: [...ENEMY_COMMON, 'bob', 'dashCooldown', 'dashRemaining', 'dashX', 'dashY'],
+    graveDigger: [...ENEMY_COMMON, 'facing', 'walk', 'digCooldown', 'digWindup',
+      'spinCooldown', 'spinWindup', 'spinFlash'],
+    infectedSkeleton: [...ENEMY_COMMON, 'facing', 'walk', 'emergeTimer', 'throwCooldown', 'strafeTimer', 'strafeSign'],
     prospector: [...ENEMY_COMMON, 'throwCd', 'facing', 'walk', 'swingTime', 'mineProgress', 'mineTick', 'scanTimer', 'stuckTime'],
   };
 
@@ -5467,13 +7417,18 @@
 
   function snapshotEnemy(enemy, kind) {
     const saved = Object.fromEntries(ENEMY_FIELDS[kind].map((field) => [field, enemy[field]]));
+    saved.poisonTime = enemy.poisonTime; saved.poisonProgress = enemy.poisonProgress;
     if (kind === 'slime') {
       saved.tiny = enemy.tiny; saved.large = enemy.large;
-      saved.tropical = enemy.tropical; saved.provoked = enemy.provoked;
+      saved.tropical = enemy.tropical; saved.provoked = enemy.provoked; saved.purple = enemy.purple;
     }
-    if (kind === 'golem') { saved.mercury = enemy.mercury; saved.maxHp = enemy.maxHp; }
+    if (kind === 'spider') { saved.crabock = enemy.crabock; saved.venom = enemy.venom; }
+    if (kind === 'golem') { saved.mercury = enemy.mercury; saved.shrine = enemy.shrine; saved.ancient = enemy.ancient; saved.maxHp = enemy.maxHp; }
+    if (kind === 'graveDigger') { saved.graveIndex = enemy.graveIndex; saved.provoked = enemy.provoked; }
+    if (kind === 'infectedSkeleton') { saved.graveIndex = enemy.graveIndex; saved.hidden = enemy.hidden; saved.normal = enemy.kind === 'skeleton'; }
     if (kind === 'mole') { saved.lastTile = enemy.lastTile; saved.inWall = enemy.inWall; }
     if (kind === 'prospector') {
+      saved.skeleton = enemy.skeleton;
       saved.haul = { gold: enemy.haul.gold, silver: enemy.haul.silver };
       const target = enemy.oreTarget;
       saved.oreTarget = target ? {
@@ -5500,8 +7455,10 @@
       })),
       prospectors: lv.prospectors.filter((p) => !p.dead).map((p) => snapshotEnemy(p, 'prospector')),
       dynamites: lv.dynamites.map((d) => ({ fromX: d.fromX, fromY: d.fromY, x: d.x, y: d.y,
-        targetX: d.targetX, targetY: d.targetY, age: d.age })),
-      explosions: lv.explosions.map((e) => ({ x: e.x, y: e.y, age: e.age, duration: e.duration })),
+        targetX: d.targetX, targetY: d.targetY, age: d.age, skeleton: !!d.skeleton })),
+      explosions: lv.explosions.map((e) => ({ x: e.x, y: e.y, age: e.age, duration: e.duration, skeleton: !!e.skeleton })),
+      boneProjectiles: lv.boneProjectiles.map((b) => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, age: b.age })),
+      shrine: lv.golemShrine ? { activated: lv.shrineActivated, cooldown: lv.shrineCooldown } : null,
       timers: Object.fromEntries(AREA_TIMERS.map((name) => [name, lv[name]])),
     };
   }
@@ -5518,9 +7475,13 @@
       format: SAVE_FORMAT, version: SAVE_VERSION, savedAt: new Date().toISOString(),
       currentLevel: level.id,
       state: {
-        hp: state.hp, time: state.time, tool: state.tool,
+        hp: state.hp, healDelay: state.healDelay, healProgress: state.healProgress,
+        poisonTime: state.poisonTime, poisonDistance: state.poisonDistance,
+        time: state.time, tool: state.tool,
         tools: { pickaxe: state.tools.pickaxe, sword: state.tools.sword },
         mercurySword: state.mercurySword, elevatorUnlocked: state.elevatorUnlocked,
+        wardenDefeated: state.wardenDefeated, voidPowerTime: state.voidPowerTime,
+        voidPowerCooldown: state.voidPowerCooldown,
         invuln: state.invuln, cooldown: state.cooldown, transitionLock: state.transitionLock,
         swingDir: state.swingDir,
         stats: Object.fromEntries(SAVE_STATS.map((name) => [name, state[name]])),
@@ -5534,11 +7495,15 @@
       traderUnlocked: { copper: traderUnlocked.copper, silver: traderUnlocked.silver,
         gold: traderUnlocked.gold, aluminum: traderUnlocked.aluminum },
       areas,
+      warden: warden ? Object.fromEntries(WARDEN_SAVE_FIELDS.map((field) => [field, warden[field]])) : null,
       enemies: {
         slimes: slimes.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'slime')),
         moles: moles.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'mole')),
         spiders: spiders.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'spider')),
         golems: golems.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'golem')),
+        ghosts: ghosts.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'ghost')),
+        graveDiggers: graveDiggers.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'graveDigger')),
+        infectedSkeletons: infectedSkeletons.filter((e) => !e.dead).map((e) => snapshotEnemy(e, 'infectedSkeleton')),
       },
     };
     const text = JSON.stringify(save);
@@ -5577,6 +7542,13 @@
   }
   function savePosition(value, size) { return saveNumber(value, -256, size + 256); }
 
+  function restoreEnemyPoison(raw, enemy) {
+    enemy.poisonTime = saveNumber(raw.poisonTime, 0, BALANCE.enemyPoisonMaxDuration);
+    enemy.poisonProgress = saveNumber(raw.poisonProgress, 0, 1);
+    if (enemy.poisonProgress >= 1 || (enemy.poisonTime === 0 && enemy.poisonProgress !== 0) ||
+        ((enemy.kind === 'ghost' || enemy.venom) && (enemy.poisonTime > 0 || enemy.poisonProgress > 0))) saveError();
+  }
+
   function restoreEnemy(raw, kind, lv, version, legacyArmour = BALANCE.swordDamage) {
     saveObject(raw);
     const x = saveNumber(raw.x, 0, lv.w * TS), y = saveNumber(raw.y, 0, lv.h * TS);
@@ -5585,28 +7557,82 @@
       const tiny = saveBoolean(raw.tiny), large = saveBoolean(raw.large);
       const tropical = version >= 2 ? saveBoolean(raw.tropical) : false;
       const provoked = version >= 2 ? saveBoolean(raw.provoked) : false;
-      if ((tiny && large) || (tropical && large) || (!tropical && provoked)) saveError();
-      enemy = makeSlime(x, y, tiny, large, tropical);
+      const purple = version >= 7 ? saveBoolean(raw.purple) : false;
+      if ((tiny && large) || (tropical && large) || (!tropical && provoked) ||
+          (purple && (large || tropical || lv.id !== 'stage11'))) saveError();
+      enemy = makeSlime(x, y, tiny, large, tropical, purple);
       enemy.provoked = provoked;
     } else if (kind === 'mole') enemy = makeMole(x, y);
-    else if (kind === 'spider') enemy = makeSpider(x, y);
-    else if (kind === 'golem') {
+    else if (kind === 'spider') {
+      const crabock = version >= 7 ? saveBoolean(raw.crabock) : false;
+      const venom = version >= 8 ? saveBoolean(raw.venom) : false;
+      if ((crabock && lv.id !== 'stage11') || (venom && (lv.id !== 'stage13' || crabock))) saveError();
+      enemy = makeSpider(x, y, crabock, venom);
+    } else if (kind === 'ghost') enemy = makeGhost(x, y);
+    else if (kind === 'graveDigger') {
+      if (!['stage8', 'stage9'].includes(lv.id) || !lv.graves.length) saveError();
+      enemy = makeGraveDigger(x, y, saveInteger(raw.graveIndex, 0, lv.graves.length - 1));
+      enemy.provoked = saveBoolean(raw.provoked);
+    } else if (kind === 'infectedSkeleton') {
+      const normal = version >= 8 ? saveBoolean(raw.normal) : false;
+      if (normal) {
+        if (lv.id !== 'stage13' || raw.graveIndex !== -1 || raw.hidden !== false) saveError();
+        enemy = makeInfectedSkeleton(x, y, -1, true);
+      } else {
+        if (lv.id !== 'stage9' || !lv.graves.length) saveError();
+        enemy = makeInfectedSkeleton(x, y, saveInteger(raw.graveIndex, 0, lv.graves.length - 1));
+        enemy.hidden = saveBoolean(raw.hidden);
+      }
+    } else if (kind === 'golem') {
       const mercury = version >= 2 ? saveBoolean(raw.mercury) : false;
+      const shrine = version >= 7 ? saveBoolean(raw.shrine) : false;
+      const ancient = version >= 8 ? saveBoolean(raw.ancient) : false;
+      if ((shrine && (mercury || lv.id !== 'stage12' || !lv.golemShrine)) ||
+          (ancient && (lv.id !== 'stage13' || mercury || shrine))) saveError();
       const base = mercury ? BALANCE.mercuryGolemHp : BALANCE.golemHp;
+      const multiplier = shrine ? BALANCE.shrineGolemMultiplier : 1;
       let armour = legacyArmour;
-      if (version >= 3) {
-        const maxHp = saveNumber(raw.maxHp, base, base + 100);
-        const allowed = [1, 2, 3, 4].flatMap((tier) => [swordDamageFor(tier, false), swordDamageFor(tier, true)]);
-        armour = maxHp - base;
+      if (ancient) {
+        if (saveNumber(raw.maxHp) !== BALANCE.ancientGolemHp) saveError();
+      } else if (version >= 3) {
+        const oldBase = version < 6 ? base / 2 : base;
+        const maxHp = saveNumber(raw.maxHp, oldBase * multiplier,
+          (oldBase + (version < 6 ? 100 : 200)) * multiplier);
+        // A v7 Mercury upgrade added 15% to the armour at spawn. Continue
+        // accepting those historical values even after resaving them as v8.
+        const allowed = [1, 2, 3, 4].flatMap((tier) => [swordDamageFor(tier), legacySwordDamageFor(tier, true)]);
+        armour = (maxHp / multiplier - oldBase) / (version < 6 ? 1 : 2);
         if (!allowed.some((amount) => Math.abs(amount - armour) < 1e-8)) saveError();
-      } else if (saveNumber(raw.hp) > base) saveError();
-      // Old live Golems keep their exact current HP, rather than healing on migration.
-      enemy = makeGolem(x, y, mercury, armour);
-    } else enemy = makeProspector(x, y);
+      } else if (saveNumber(raw.hp) > base / 2) saveError();
+      enemy = makeGolem(x, y, mercury, armour, shrine, ancient);
+    } else {
+      const skeleton = version >= 8 ? saveBoolean(raw.skeleton) : false;
+      if (skeleton && lv.id !== 'stage13') saveError();
+      enemy = makeProspector(x, y, skeleton);
+    }
     for (const field of ENEMY_FIELDS[kind]) enemy[field] = saveNumber(raw[field]);
+    if (version >= 8) restoreEnemyPoison(raw, enemy);
+    // Keep the same fraction of remaining health in old runs while applying
+    // the doubled balance, including inactive Prospectors and both Golems.
+    if (version < 6 && !['ghost', 'graveDigger', 'infectedSkeleton'].includes(kind)) enemy.hp *= 2;
     if (enemy.hp <= 0 || enemy.hp > enemy.maxHp) saveError();
-    if (kind === 'golem' && (enemy.moved < 0 || enemy.moved > BALANCE.golemMoveLimit ||
+    if (kind === 'golem' && (enemy.moved < 0 || enemy.moved > enemy.moveLimit ||
         enemy.disabled < 0 || enemy.disabled > BALANCE.golemDisabledTime)) saveError();
+    if (kind === 'ghost' && (!['stage8', 'stage9'].includes(lv.id) || enemy.dashRemaining < 0 ||
+        enemy.dashRemaining > BALANCE.ghostDashDistance || enemy.dashCooldown < 0 ||
+        enemy.dashCooldown > BALANCE.ghostDashCooldown || Math.abs(enemy.dashX) > 1 || Math.abs(enemy.dashY) > 1 ||
+        (enemy.dashRemaining > 0 && Math.abs(Math.hypot(enemy.dashX, enemy.dashY) - 1) > 1e-6))) saveError();
+    if (kind === 'graveDigger' && (enemy.digCooldown < 0 || enemy.digCooldown > BALANCE.graveDiggerDigCooldown ||
+        enemy.digWindup < 0 || enemy.digWindup > BALANCE.graveDiggerDigWindup ||
+        enemy.spinCooldown < 0 || enemy.spinCooldown > BALANCE.graveDiggerSpinCooldown ||
+        enemy.spinWindup < 0 || enemy.spinWindup > BALANCE.graveDiggerSpinWindup ||
+        enemy.spinFlash < 0 || enemy.spinFlash > 0.3 || (enemy.digWindup > 0 && enemy.spinWindup > 0))) saveError();
+    if (kind === 'infectedSkeleton' && (enemy.emergeTimer < 0 ||
+        enemy.emergeTimer > BALANCE.infectedSkeletonEmergeTime || enemy.throwCooldown < 0 ||
+        enemy.throwCooldown > BALANCE.infectedSkeletonThrowCooldown || enemy.strafeTimer < 0 ||
+        enemy.strafeTimer > 3 || ![-1, 1].includes(enemy.strafeSign) ||
+        (enemy.hidden && (enemy.emergeTimer > 0 || enemy.throwCooldown > 0 ||
+          Math.hypot(enemy.x - lv.graves[enemy.graveIndex].x, enemy.y - lv.graves[enemy.graveIndex].y) > 1e-6)))) saveError();
     if (kind === 'mole') {
       saveTileKey(raw.lastTile, lv);
       enemy.lastTile = raw.lastTile;
@@ -5620,12 +7646,14 @@
         const target = saveObject(raw.oreTarget);
         const tx = saveInteger(target.tx, 0, lv.w - 1), ty = saveInteger(target.ty, 0, lv.h - 1);
         const goalTx = saveInteger(target.goalTx, 0, lv.w - 1), goalTy = saveInteger(target.goalTy, 0, lv.h - 1);
-        if (![STONE, GOLD, SILVER].includes(target.tile)) saveError();
+        if (version < 9 && target.tile === BASALT) saveError();
+        const targetTile = version === 8 && lv.id === 'stage13' && target.tile === STONE ? BASALT : target.tile;
+        if (![STONE, MOSSY_STONE, BASALT, GOLD, SILVER].includes(targetTile)) saveError();
         const route = saveArray(target.route, lv.w * lv.h).map((point) => {
           saveObject(point);
           return { tx: saveInteger(point.tx, 0, lv.w - 1), ty: saveInteger(point.ty, 0, lv.h - 1) };
         });
-        enemy.oreTarget = { tx, ty, tile: target.tile, goalTx, goalTy, route,
+        enemy.oreTarget = { tx, ty, tile: targetTile, goalTx, goalTy, route,
           routeIndex: saveInteger(target.routeIndex, 0, route.length) };
       }
     }
@@ -5656,18 +7684,85 @@
     // Version 2's chamber layout remains playable until the player leaves.
     // The fresh open-cavern baseline will be applied on the next re-entry.
     const redesignedStage6 = version < 3 && id === 'stage6' ? lv.originalTiles.slice() : null;
+    const legacyHome = version < 4 && id === 'home';
+    const expandedHome = legacyHome ? lv.originalTiles.slice() : null;
     function tiles(values) {
-      if (!Array.isArray(values) || values.length !== size) saveError();
+      const oldW = 19, oldH = 13;
+      if (!Array.isArray(values) || values.length !== (legacyHome ? oldW * oldH : size)) saveError();
       for (const t of values) {
-        if (!Number.isInteger(t) || !Object.hasOwn(TILES, t) || t === STALAGMITE) saveError();
+        if (!Number.isInteger(t) || !Object.hasOwn(TILES, t) || t === STALAGMITE ||
+            (version < 9 && t === BASALT)) saveError();
       }
-      return Uint8Array.from(values);
+      if (!legacyHome) return Uint8Array.from(values);
+      // Expand an authentic old Home without scaling coordinates. Its old
+      // interior (including the stairs) is retained; the old enclosing walls
+      // disappear so the larger room and new stations are accessible.
+      for (let x = 0; x < oldW; x++) {
+        if (values[x] !== WALL || values[(oldH - 1) * oldW + x] !== WALL) saveError();
+      }
+      for (let y = 0; y < oldH; y++) {
+        if (values[y * oldW] !== WALL || values[y * oldW + oldW - 1] !== WALL) saveError();
+      }
+      if (values[9 * oldW + 9] !== STAIRS_DOWN) saveError();
+      const expanded = expandedHome.slice();
+      for (let y = 2; y <= 10; y++) for (let x = 2; x <= 16; x++) {
+        expanded[idx(lv, x, y)] = values[y * oldW + x];
+      }
+      return expanded;
     }
     lv.tiles = tiles(raw.tiles);
     lv.originalTiles = tiles(raw.originalTiles);
+    // Version 8 generated the Ancient Mine before its intended resources were
+    // specified. Replace only its old ore types in both terrain snapshots:
+    // Stone becomes Basalt, Titanium becomes Diamond, and Quartz becomes Iron.
+    // Mined floor, cracks, Gold, Mossy Stone, loot and all other areas stay put.
+    if (version === 8 && id === 'stage13') {
+      for (const map of [lv.tiles, lv.originalTiles]) {
+        for (let i = 0; i < map.length; i++) {
+          if (map[i] === STONE) map[i] = BASALT;
+          else if (map[i] === TITANIUM) map[i] = DIAMOND;
+          else if (map[i] === QUARTZ) map[i] = IRON;
+        }
+      }
+    }
     // Version 1 predates the Stage 5 exit. Add it to both the current terrain
     // and its reset snapshot, preserving every other tile and all progress.
     if (version === 1 && id === 'stage5') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    // Before version 4 the ordinary Stage 8 stair was an empty floor tile;
+    // the separate Titanium seam and any revealed secret entrance are untouched.
+    if (version < 4 && id === 'stage7') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    // Version 4's Haunted Descent ended on open floor. Keep its original
+    // terrain, cracks, enemies and loot while adding the new downward stair.
+    if (version < 5 && id === 'stage8') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    // Pitch-Black Depths ended on open floor before Stage 10 existed. Add the
+    // stairs to both snapshots without changing mining damage or pickups.
+    if (version < 6 && id === 'stage9') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    // Version 6 ended the Warden arena at an open floor tile. Preserve its
+    // current encounter and terrain while adding the new Stage 11 exit.
+    if (version < 7 && id === 'stage10') {
+      const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
+      if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
+      lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
+    }
+    // Stage 12's old lower hall was open floor. Add the exit in both the
+    // live and reset terrain without rebuilding or losing a single ore tile.
+    if (version < 8 && id === 'stage12') {
       const exit = idx(lv, lv.stairsDown.tx, lv.stairsDown.ty);
       if (lv.tiles[exit] !== FLOOR || lv.originalTiles[exit] !== FLOOR) saveError();
       lv.tiles[exit] = lv.originalTiles[exit] = STAIRS_DOWN;
@@ -5710,18 +7805,46 @@
     lv.prospectors = saveArray(raw.prospectors, 1024).map((p) => restoreEnemy(p, 'prospector', lv, version));
     lv.dynamites = saveArray(raw.dynamites, 1024).map((d) => {
       saveObject(d);
+      const skeleton = version >= 8 ? saveBoolean(d.skeleton) : false;
+      if (skeleton && lv.id !== 'stage13') saveError();
       return { fromX: savePosition(d.fromX, lv.w * TS), fromY: savePosition(d.fromY, lv.h * TS),
         x: savePosition(d.x, lv.w * TS), y: savePosition(d.y, lv.h * TS),
         targetX: savePosition(d.targetX, lv.w * TS), targetY: savePosition(d.targetY, lv.h * TS),
-        age: saveNumber(d.age, 0) };
+        age: saveNumber(d.age, 0), skeleton };
     });
     lv.explosions = saveArray(raw.explosions, 1024).map((e) => {
       saveObject(e);
+      const skeleton = version >= 8 ? saveBoolean(e.skeleton) : false;
+      if (skeleton && lv.id !== 'stage13') saveError();
       return { x: savePosition(e.x, lv.w * TS), y: savePosition(e.y, lv.h * TS),
-        age: saveNumber(e.age, 0), duration: saveNumber(e.duration, 0.001, 1000) };
+        age: saveNumber(e.age, 0), duration: saveNumber(e.duration, 0.001, 1000), skeleton };
     });
+    if (version >= 5) {
+      lv.boneProjectiles = saveArray(raw.boneProjectiles, 1024).map((b) => {
+        saveObject(b);
+        const bone = { x: saveNumber(b.x, 0, lv.w * TS), y: saveNumber(b.y, 0, lv.h * TS),
+          vx: saveNumber(b.vx, -BALANCE.boneSpeed, BALANCE.boneSpeed),
+          vy: saveNumber(b.vy, -BALANCE.boneSpeed, BALANCE.boneSpeed),
+          age: saveNumber(b.age, 0, BALANCE.boneLifetime) };
+        if (!['stage9', 'stage13'].includes(lv.id) || Math.abs(Math.hypot(bone.vx, bone.vy) - BALANCE.boneSpeed) > 1e-6 ||
+            bone.age >= BALANCE.boneLifetime) saveError();
+        return bone;
+      });
+    }
     saveObject(raw.timers);
-    for (const name of AREA_TIMERS) lv[name] = saveNumber(raw.timers[name]);
+    for (const name of AREA_TIMERS) {
+      if (version < 4 && (name === 'ghostTimer' || name === 'graveDiggerTimer')) continue;
+      if (version < 5 && name === 'infectedSkeletonTimer') continue;
+      lv[name] = saveNumber(raw.timers[name]);
+    }
+    if (version >= 7) {
+      if (lv.golemShrine) {
+        const shrine = saveObject(raw.shrine);
+        lv.shrineActivated = saveBoolean(shrine.activated);
+        lv.shrineCooldown = saveNumber(shrine.cooldown, 0, BALANCE.shrineRespawnTime);
+        if (!lv.shrineActivated && lv.shrineCooldown > 0) saveError();
+      } else if (raw.shrine !== null) saveError();
+    }
     if (redesignedStage6) {
       lv.originalTiles = redesignedStage6;
       lv.originalStalagmites = new Set();
@@ -5730,6 +7853,39 @@
     const expectedElevators = id === 'special' ? 0 : Number(!!lv.stairsUp) + Number(!!lv.stairsDown);
     if (lv.elevators.length !== expectedElevators) saveError('An elevator entrance is blocked in this save.');
     return lv;
+  }
+
+  function restoreWarden(raw, lv, version) {
+    if (raw === null) return null;
+    saveObject(raw);
+    if (lv.id !== 'stage10' || !lv.pedestal || !WARDEN_ACTIONS.includes(raw.action)) saveError();
+    const boss = makeWarden(saveNumber(raw.x, 0, lv.w * TS), saveNumber(raw.y, 0, lv.h * TS));
+    const oldMax = version < 7 ? BALANCE.wardenHp / 2 : BALANCE.wardenHp;
+    boss.hp = saveNumber(raw.hp, 0.000001, oldMax) * (version < 7 ? 2 : 1);
+    boss.flash = saveNumber(raw.flash, 0, 0.15);
+    boss.phase = saveInteger(raw.phase, 1, 3);
+    boss.action = raw.action;
+    boss.timer = saveNumber(raw.timer, 0, 8);
+    boss.attackIndex = saveInteger(raw.attackIndex, 0, MAX_SAVED_COUNT);
+    boss.angle = saveNumber(raw.angle, -Math.PI, Math.PI);
+    boss.originX = saveNumber(raw.originX, 0, lv.w * TS);
+    boss.originY = saveNumber(raw.originY, 0, lv.h * TS);
+    boss.travel = saveNumber(raw.travel, 0, BALANCE.wardenSwordRange + 4);
+    boss.hit = saveBoolean(raw.hit);
+    boss.spikeCooldown = version >= 7 ? saveNumber(raw.spikeCooldown, 0, BALANCE.wardenSpikeTick)
+      : (boss.action === 'spikes' && boss.hit ? BALANCE.wardenSpikeTick : 0);
+    boss.swordX = saveNumber(raw.swordX, 0, lv.w * TS);
+    boss.swordY = saveNumber(raw.swordY, 0, lv.h * TS);
+    boss.swordReturning = saveBoolean(raw.swordReturning);
+    if (version >= 8) restoreEnemyPoison(raw, boss);
+    const phaseOne = ['approach', 'chargeWarning', 'charge', 'slamWarning', 'slamImpact'];
+    const later = ['idle', 'spikeWarning', 'spikes', 'swordWarning', 'sword', 'beamWarning', 'beam'];
+    if (boss.phase !== wardenPhaseFor(boss.hp) ||
+        (boss.phase === 1 ? !phaseOne.includes(boss.action) : !later.includes(boss.action)) ||
+        (boss.phase < 3 && ['beamWarning', 'beam'].includes(boss.action)) ||
+        (boss.phase > 1 && Math.hypot(boss.x - lv.pedestal.x, boss.y - lv.pedestal.y) > 1e-6) ||
+        collidesInLevel(lv, boss.x, boss.y, boss.r)) saveError();
+    return boss;
   }
 
   function prepareSaveText(text) {
@@ -5746,15 +7902,34 @@
     if (!['pickaxe', 'sword'].includes(savedState.tool)) saveError();
     const nextState = {
       hp: saveNumber(savedState.hp, 0.000001, BALANCE.playerMaxHp),
+      // Old saves have no history of the last hit; start a fresh safe wait.
+      healDelay: data.version >= 5 ? saveNumber(savedState.healDelay, 0, BALANCE.healingDelay)
+        : (savedState.hp < BALANCE.playerMaxHp ? BALANCE.healingDelay : 0),
+      healProgress: data.version >= 5 ? saveNumber(savedState.healProgress, 0, BALANCE.healingInterval) : 0,
+      poisonTime: data.version >= 8 ? saveNumber(savedState.poisonTime, 0, BALANCE.playerPoisonDuration) : 0,
+      poisonDistance: data.version >= 8 ? saveNumber(savedState.poisonDistance, 0, TS) : 0,
       time: saveNumber(savedState.time, 0), tool: savedState.tool,
       tools: { pickaxe: saveInteger(tools.pickaxe, 1, data.version === 1 ? 3 : MAX_TIER),
         sword: saveInteger(tools.sword, 1, data.version === 1 ? 3 : MAX_TIER) },
       mercurySword: data.version >= 2 ? saveBoolean(savedState.mercurySword) : false,
       elevatorUnlocked: data.version >= 3 ? saveBoolean(savedState.elevatorUnlocked) : false,
+      wardenDefeated: data.version >= 6 ? saveBoolean(savedState.wardenDefeated) : false,
+      voidPowerTime: data.version >= 6 ? saveNumber(savedState.voidPowerTime, 0, BALANCE.voidPowerDuration) : 0,
+      voidPowerCooldown: data.version >= 6 ? saveNumber(savedState.voidPowerCooldown, 0, BALANCE.voidPowerCooldown) : 0,
       invuln: saveNumber(savedState.invuln, 0), cooldown: saveNumber(savedState.cooldown, 0),
       transitionLock: saveNumber(savedState.transitionLock, -1, 1000), swingDir: saveNumber(savedState.swingDir),
-      stats: Object.fromEntries(SAVE_STATS.map((name) => [name, saveInteger(stats[name], 0, MAX_SAVED_COUNT)])),
+      stats: Object.fromEntries(SAVE_STATS.map((name) => [name,
+        ((data.version < 4 && (name === 'ghostsSlain' || name === 'graveDiggersSlain')) ||
+          (data.version < 5 && name === 'infectedSkeletonsSlain') ||
+          (data.version < 7 && name === 'crabocksSlain') ||
+          (data.version < 8 && name === 'skeletonsSlain'))
+          ? 0 : saveInteger(stats[name], 0, MAX_SAVED_COUNT)])),
     };
+    if (nextState.healProgress >= BALANCE.healingInterval ||
+        nextState.poisonDistance >= TS || (nextState.poisonTime === 0 && nextState.poisonDistance !== 0) ||
+        (nextState.healDelay > 0 && nextState.healProgress > 0) ||
+        (!nextState.wardenDefeated && (nextState.voidPowerTime > 0 || nextState.voidPowerCooldown > 0)) ||
+        nextState.voidPowerTime > nextState.voidPowerCooldown + 1e-7) saveError();
     const rawPlayer = saveObject(data.player);
     const nextPlayer = { x: saveNumber(rawPlayer.x, 0), y: saveNumber(rawPlayer.y, 0),
       faceX: saveNumber(rawPlayer.faceX, -1, 1), faceY: saveNumber(rawPlayer.faceY, -1, 1),
@@ -5768,7 +7943,9 @@
     });
     const rawStorage = saveObject(data.storage);
     const nextStorage = Object.fromEntries(Object.keys(ITEMS).map((item) =>
-      [item, data.version === 1 && LEGACY_NEW_ITEMS.has(item) && !Object.hasOwn(rawStorage, item)
+      [item, ((data.version === 1 && LEGACY_NEW_ITEMS.has(item)) || (data.version < 4 && STAGE8_ITEMS.has(item)) ||
+        (data.version < 5 && STAGE9_ITEMS.has(item)) || (data.version < 6 && STAGE10_ITEMS.has(item)) ||
+        (data.version < 7 && CAVERN_TEMPLE_ITEMS.has(item)) || (data.version < 9 && item === 'basalt')) && !Object.hasOwn(rawStorage, item)
         ? 0 : saveInteger(rawStorage[item], 0, MAX_SAVED_COUNT)]));
     const rawMelter = saveObject(data.melter);
     if (typeof rawMelter.selectedOre !== 'string' || !Object.hasOwn(INGOT_FOR_ORE, rawMelter.selectedOre)) saveError();
@@ -5782,22 +7959,34 @@
     if (!nextUnlocks.copper) saveError();
 
     const savedAreas = saveObject(data.areas), nextLevels = {};
+    if (data.version < 8 && Object.hasOwn(savedAreas, 'stage13')) saveError();
     for (const id of Object.keys(AREA_BUILDERS)) {
       nextLevels[id] = Object.hasOwn(savedAreas, id) ? restoreArea(savedAreas[id], id, data.version) : null;
     }
-    if (!nextLevels.home || !nextLevels[data.currentLevel] || (nextState.elevatorUnlocked && !nextLevels.stage7)) saveError();
+    if (!nextLevels.home || !nextLevels[data.currentLevel] || (nextState.elevatorUnlocked && !nextLevels.stage7) ||
+        (nextState.wardenDefeated && !nextLevels.stage10)) saveError();
     const lv = nextLevels[data.currentLevel];
+    const nextWarden = data.version >= 6 ? restoreWarden(data.warden, lv, data.version) : null;
+    if (nextState.wardenDefeated && nextWarden) saveError();
     if (nextPlayer.x > lv.w * TS || nextPlayer.y > lv.h * TS ||
         collidesInLevel(lv, nextPlayer.x, nextPlayer.y, BALANCE.playerRadius)) saveError('The saved player position is invalid.');
     const rawEnemies = saveObject(data.enemies);
     const nextEnemies = {};
-    const legacyArmour = swordDamageFor(nextState.tools.sword, nextState.mercurySword);
-    for (const [list, kind] of [['slimes', 'slime'], ['moles', 'mole'], ['spiders', 'spider'], ['golems', 'golem']]) {
-      nextEnemies[list] = saveArray(rawEnemies[list], 1024).map((enemy) => restoreEnemy(enemy, kind, lv, data.version, legacyArmour));
+    const legacyArmour = legacySwordDamageFor(nextState.tools.sword, nextState.mercurySword);
+    for (const [list, kind] of [['slimes', 'slime'], ['moles', 'mole'], ['spiders', 'spider'],
+      ['golems', 'golem'], ['ghosts', 'ghost'], ['graveDiggers', 'graveDigger'],
+      ['infectedSkeletons', 'infectedSkeleton']]) {
+      if ((data.version < 4 && (list === 'ghosts' || list === 'graveDiggers')) ||
+          (data.version < 5 && list === 'infectedSkeletons')) nextEnemies[list] = [];
+      else nextEnemies[list] = saveArray(rawEnemies[list], 1024).map((enemy) => restoreEnemy(enemy, kind, lv, data.version, legacyArmour));
     }
+    if (nextEnemies.ghosts.length > BALANCE.maxGhosts || nextEnemies.graveDiggers.length > BALANCE.maxGraveDiggers ||
+        nextEnemies.infectedSkeletons.length > BALANCE.maxInfectedSkeletons) saveError();
+    const guardians = nextEnemies.golems.filter((g) => g.shrine);
+    if (guardians.length > 1 || (guardians.length && (!lv.shrineActivated || lv.shrineCooldown > 0))) saveError();
     return { currentLevel: data.currentLevel, state: nextState, player: nextPlayer,
       inventory: nextInventory, storage: nextStorage, melter: nextMelter,
-      traderUnlocked: nextUnlocks, levels: nextLevels, enemies: nextEnemies };
+      traderUnlocked: nextUnlocks, levels: nextLevels, enemies: nextEnemies, warden: nextWarden };
   }
 
   function applyPreparedSave(saved) {
@@ -5807,22 +7996,32 @@
     browserSaveForRun = null;
     for (const id of Object.keys(AREA_BUILDERS)) levels[id] = saved.levels[id];
     level = levels[saved.currentLevel];
+    warden = saved.warden;
     for (let i = 0; i < inventory.length; i++) inventory[i] = saved.inventory[i];
     for (const item of Object.keys(ITEMS)) storage[item] = saved.storage[item];
     for (const key of ['coal', 'copper', 'iron', 'bauxite', 'selectedOre']) melter[key] = saved.melter[key];
     for (const kind of Object.keys(COINS)) traderUnlocked[kind] = saved.traderUnlocked[kind];
     for (const [list, values] of [[slimes, saved.enemies.slimes], [moles, saved.enemies.moles],
-      [spiders, saved.enemies.spiders], [golems, saved.enemies.golems]]) {
+      [spiders, saved.enemies.spiders], [golems, saved.enemies.golems],
+      [ghosts, saved.enemies.ghosts], [graveDiggers, saved.enemies.graveDiggers],
+      [infectedSkeletons, saved.enemies.infectedSkeletons]]) {
       list.length = 0;
       list.push(...values);
     }
     particles.length = floaters.length = melterBursts.length = 0;
     state.hp = saved.state.hp;
+    state.healDelay = saved.state.healDelay;
+    state.healProgress = saved.state.healProgress;
+    state.poisonTime = saved.state.poisonTime;
+    state.poisonDistance = saved.state.poisonDistance;
     state.time = saved.state.time;
     state.tools.pickaxe = saved.state.tools.pickaxe;
     state.tools.sword = saved.state.tools.sword;
     state.mercurySword = saved.state.mercurySword;
     state.elevatorUnlocked = saved.state.elevatorUnlocked;
+    state.wardenDefeated = saved.state.wardenDefeated;
+    state.voidPowerTime = saved.state.voidPowerTime;
+    state.voidPowerCooldown = saved.state.voidPowerCooldown;
     state.invuln = saved.state.invuln;
     state.cooldown = saved.state.cooldown;
     state.transitionLock = saved.state.transitionLock;
@@ -5847,7 +8046,7 @@
     stage.classList.remove('is-playing');
     showAreaName(level);
     selectTool(saved.state.tool);
-    syncBag(); syncVitals(); refreshStation(); clearToast();
+    syncBag(); syncVitals(); syncPoisonUI(); syncWardenUI(); syncVoidUI(); refreshStation(); clearToast();
     if (el.resume.focus) el.resume.focus({ preventScroll: true });
     last = 0;
   }
@@ -6029,6 +8228,7 @@
   bind(el.upgradeMercury, 'click', upgradeMercurySword);
   bind(el.tradeAxolotl, 'click', sellAxolotl);
   bind(el.elevatorActivate, 'click', activateElevator);
+  bind(el.voidPower, 'click', activateVoidPower);
   bind(el.depositAll, 'click', depositEverything);
   bind(el.withdrawAll, 'click', withdrawEverything);
   if (document.querySelectorAll) {
@@ -6081,6 +8281,7 @@
     buildStorage();
     buildToolbelt();
     buildElevatorUI();
+    buildGemUI();
     levels.home = buildHome();
     level = levels.home;
     player.x = level.spawn.x;
@@ -6088,7 +8289,7 @@
     camera.x = player.x;
     camera.y = player.y;
     showAreaName(level);
-    syncVitals();
+    syncVitals(); syncWardenUI(); syncVoidUI();
     refreshTierBadges();
     refreshStation();
     refreshSaveMenu();
@@ -6107,15 +8308,21 @@
     moles,
     spiders,
     golems,
+    ghosts,
+    graveDiggers,
+    infectedSkeletons,
+    get warden() { return warden; },
     melterBursts,
     get prospectors() { return level.prospectors; },
     get dynamites() { return level.dynamites; },
+    get boneProjectiles() { return level.boneProjectiles; },
     get pickups() { return level.pickups; },
     BALANCE,
     TILES,
     ITEMS,
     FLOOR, WALL, STONE, COAL, COPPER, IRON, GOLD, SILVER, STALAGMITE, BAUXITE,
-    WET, COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY, STAIRS_DOWN, STAIRS_UP,
+    WET, COBALT, QUARTZ, IRIDIUM, TITANIUM, MERCURY, RUBY, SAPPHIRE, DARKSTONE, BLACK_AMETHYST,
+    AMETHYST, MOSSY_STONE, DIAMOND, BASALT, STAIRS_DOWN, STAIRS_UP,
     get level() { return level; },
     levels,
     getTile,
@@ -6132,10 +8339,15 @@
     useElevator,
     activateElevator,
     travelByElevator,
+    useWardenPedestal,
+    useGolemShrine,
+    activateVoidPower,
     melt,
     pressCoin,
     tradeCoin,
     sellAxolotl,
+    polishGem,
+    sellPolishedGem,
     upgradeTool,
     upgradeMercurySword,
     selectMelterOre,
@@ -6155,6 +8367,9 @@
     spawnMoleAwayFromPlayer,
     spawnSpiderAwayFromPlayer,
     spawnGolemAwayFromPlayer,
+    spawnGhostAwayFromPlayer,
+    spawnGraveDiggerAwayFromPlayer,
+    spawnInfectedSkeletonAwayFromPlayer,
     spawnProspectorAwayFromPlayer,
     buildStage1,
     buildStage2,
@@ -6163,11 +8378,20 @@
     buildStage5,
     buildStage6,
     buildStage7,
+    buildStage8,
+    buildStage9,
+    buildStage10,
+    buildStage11,
+    buildStage12,
+    buildStage13,
     buildSpecialCave,
     makeSlime,
     makeMole,
     makeSpider,
     makeGolem,
+    makeGhost,
+    makeGraveDigger,
+    makeInfectedSkeleton,
     makeProspector,
     pointer,
     pickaxeTarget,
